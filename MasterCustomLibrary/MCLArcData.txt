@@ -1,0 +1,520 @@
+﻿Imports System.Math
+Imports Autodesk.AutoCAD.Geometry
+Imports Autodesk.AutoCAD.Runtime
+
+Public Class ArcData : Inherits CollectionBase
+    Implements IDisposable
+    Private c_pt1 As Point3d
+    Private c_pt2 As Point3d
+    Private c_pt3 As Point3d
+    Private c_midP As Point3d
+    Private c_radius As Double
+    Private c_h As Double
+    Private c_k As Double
+    Private c_Chord As Double
+    Private c_midChord As Double
+    Private c_midX As Double
+    Private c_midY As Double
+    Private c_midPt As Point3d
+    Private c_midPt2D As Point2d
+    Private c_subChord1 As Double
+    Private c_subchord2 As Double
+    Private c_SubAngle As Double
+    Private c_IsClockwise As Boolean
+    Private c_Sag As Double
+    Private c_blg As Double
+    Private c_subBlg1 As Double
+    Private c_subBlg2 As Double
+    Private c_midBlg As Double
+    Private c_textAngle As Double
+    Private c_center3d As Point3d
+    Private c_center2d As Point2d
+    Private c_Delta As Double
+    Private c_subDelta1 As Double
+    Private c_subDelta2 As Double
+    Private c_midDelta As Double
+    Private c_startAngle As Double
+    Private c_endAngle As Double
+    Private c_midAngle As Double
+    Private c_length As Double
+    Private c_CtrToMidAngle As Double
+    Private c_CurveNumber As Double
+
+    'Private x1 As Double
+    'Private x2 As Double
+    'Private x3 As Double
+    'Private y1 As Double
+    'Private y2 As Double
+    'Private y3 As Double
+    'Private z1 As Double
+    'Private z2 As Double
+    'Private z3 As Double
+    Private disposedValue As Boolean
+
+    Public Sub New()
+        MyBase.New
+    End Sub
+
+    Public Sub New(pt1 As Point3d, pt2 As Point3d, pt3 As Point3d)
+
+        c_pt1 = pt1
+        c_pt2 = pt2
+        c_pt3 = pt3
+
+        Call GetArcData(pt1, pt2, pt3)
+
+    End Sub
+    Public Sub New(acArc As CircularArc2d, pt1Z As Double)
+
+        Dim arcLen As Double = acArc.GetDistanceTo(acArc.EndPoint)
+        Dim arcPts() As Point2d = acArc.GetSamplePoints(3)
+
+        'create 2D points from acArc
+        Dim tPt1 As Point2d = acArc.StartPoint
+        Dim tpt2 As Point2d = arcPts(1)
+        Dim tPt3 As Point2d = acArc.EndPoint
+
+        'make 3d
+        c_pt1 = New Point3d(tPt1.X, tPt1.Y, pt1Z)
+        c_pt2 = New Point3d(tpt2.X, tpt2.Y, pt1Z)
+        c_pt3 = New Point3d(tPt3.X, tPt3.Y, pt1Z)
+
+        'If c_Delta < 0 Then c_Delta += (2 * PI)
+        'If c_Delta >= (2 * PI) Then c_Delta -= (2 * PI)
+
+        'x1 = c_pt1.X
+        'x2 = c_pt2.X
+        'x3 = c_pt3.X
+        'y1 = c_pt1.Y
+        'y2 = c_pt2.Y
+        'y3 = c_pt3.Y
+        'z1 = c_pt1.Z
+        'z2 = c_pt2.Z
+        'z3 = c_pt3.Z
+
+        Call GetArcData(c_pt1, c_pt2, c_pt3)
+    End Sub
+    Public ReadOnly Property Radius As Double
+        Get
+            Return c_radius
+        End Get
+    End Property
+
+    Public ReadOnly Property H As Double
+        Get
+            Return c_h
+        End Get
+    End Property
+
+    Public ReadOnly Property K As Double
+        Get
+            Return c_k
+        End Get
+    End Property
+
+    Public Property CurveNo As Integer
+        Set(value As Integer)
+            c_CurveNumber = value
+        End Set
+        Get
+            Return c_CurveNumber
+        End Get
+    End Property
+    Public ReadOnly Property Chord As Double
+        Get
+            Return c_Chord
+        End Get
+    End Property
+
+    Public ReadOnly Property IsClockwise As Boolean
+        Get
+            Return c_IsClockwise
+        End Get
+    End Property
+
+    Public ReadOnly Property SubChord1 As Double
+        Get
+            Return c_subChord1
+        End Get
+    End Property
+    Public ReadOnly Property SubChord2 As Double
+        Get
+            Return c_subchord2
+        End Get
+    End Property
+    Public ReadOnly Property MidChord As Double
+        Get
+            Return c_midChord
+        End Get
+    End Property
+    Public ReadOnly Property StartAngle As Double
+        Get
+            Return c_startAngle
+        End Get
+    End Property
+    Public ReadOnly Property SubAngle As Double
+        Get
+            Return c_SubAngle
+        End Get
+    End Property
+    Public ReadOnly Property MidAngle As Double
+        Get
+            Return c_midAngle
+        End Get
+    End Property
+    Public ReadOnly Property EndAngle As Double
+        Get
+            Return c_endAngle
+        End Get
+    End Property
+    Public ReadOnly Property Sag As Double
+        Get
+            Return c_Sag
+        End Get
+    End Property
+    Public ReadOnly Property Bulge As Double
+        Get
+            Return c_blg
+        End Get
+    End Property
+    Public ReadOnly Property SubBulge1 As Double
+        Get
+            Return c_subBlg1
+        End Get
+    End Property
+    Public ReadOnly Property SubBulge2 As Double
+        Get
+            Return c_subBlg2
+        End Get
+    End Property
+    Public ReadOnly Property MidBulge As Double
+        Get
+            Return c_midBlg
+        End Get
+    End Property
+    Public ReadOnly Property Textangle As Double
+        Get
+            Return c_textAngle
+        End Get
+    End Property
+    Public ReadOnly Property StartPoint As Point3d
+        Get
+            Return c_pt1
+        End Get
+    End Property
+    Public ReadOnly Property EndPoint As Point3d
+        Get
+            Return c_pt3
+        End Get
+    End Property
+    Public ReadOnly Property SubPoint As Point3d
+        Get
+            Return c_pt2
+        End Get
+    End Property
+    Public ReadOnly Property MidPoint As Point3d
+        Get
+            Return c_midPt
+        End Get
+    End Property
+    Public ReadOnly Property MidPoint2D As Point2d
+        Get
+            Return c_midPt2D
+        End Get
+    End Property
+    Public ReadOnly Property Center3d As Point3d
+        Get
+            Return c_center3d
+        End Get
+    End Property
+    Public ReadOnly Property Center2d As Point2d
+        Get
+            Return c_center2d
+        End Get
+    End Property
+    Public ReadOnly Property Delta As Double
+        Get
+            Return c_Delta
+        End Get
+    End Property
+    Public ReadOnly Property SubDelta1 As Double
+        Get
+            Return c_subDelta1
+        End Get
+    End Property
+    Public ReadOnly Property SubDelta2 As Double
+        Get
+            Return c_subDelta2
+        End Get
+    End Property
+    Public ReadOnly Property MidDelta As Double
+        Get
+            Return c_midDelta
+        End Get
+    End Property
+    Public ReadOnly Property Length As Double
+        Get
+            Return Abs(c_radius * c_Delta)
+        End Get
+    End Property
+    Public ReadOnly Property MidLength As Double
+        Get
+            Return Abs(c_radius * c_midDelta)
+        End Get
+    End Property
+
+    Public ReadOnly Property SubLength1 As Double
+        Get
+            Return Abs(c_radius * c_subDelta1)
+        End Get
+    End Property
+
+    Public ReadOnly Property SubLength2 As Double
+        Get
+            Return Abs(c_radius * c_subDelta2)
+        End Get
+    End Property
+    Public ReadOnly Property Tangent As Double
+        Get
+            Return Abs(c_radius * Tan(c_Delta * 0.5))
+        End Get
+    End Property
+    Public ReadOnly Property SubTangent1 As Double
+        Get
+            Return Abs(c_radius * Tan(c_subDelta1 * 0.5))
+        End Get
+    End Property
+
+    Public ReadOnly Property SubTangent2 As Double
+        Get
+            Return Abs(c_radius * Tan(c_subDelta2 * 0.5))
+        End Get
+    End Property
+    Public ReadOnly Property MidTangent As Double
+        Get
+            Return Abs(c_radius * Tan(c_midDelta * 0.5))
+        End Get
+    End Property
+    Public ReadOnly Property MidOrdinate As Double
+        Get
+            Return Abs(c_radius * (1 - Cos(c_Delta / 2)))
+        End Get
+    End Property
+    Public ReadOnly Property CtrMidAngle As Double
+        Get
+            Return c_CtrToMidAngle
+        End Get
+    End Property
+    Public ReadOnly Property MidOrdinateMid As Double
+        Get
+            Return Abs(c_radius * (1 - Cos(c_midDelta / 2)))
+        End Get
+    End Property
+    Public ReadOnly Property MidOrdinate1 As Double
+        Get
+            Return Abs(c_radius * (1 - Cos(c_subDelta1 / 2)))
+        End Get
+    End Property
+    Public ReadOnly Property MidOrdinate2 As Double
+        Get
+            Return Abs(c_radius * (1 - Cos(c_subDelta2 / 2)))
+        End Get
+    End Property
+
+    Private Sub GetArcData(pt1 As Point3d, pt2 As Point3d, pt3 As Point3d, Optional hasDelta As Boolean = False)
+        'by David Eisenbeisz
+
+        Dim x1 As Double = pt1.X
+        Dim x2 As Double = pt2.X
+        Dim x3 As Double = pt3.X
+        Dim y1 As Double = pt1.Y
+        Dim y2 As Double = pt2.Y
+        Dim y3 As Double = pt3.Y
+        Dim z1 As Double = pt1.Z
+        Dim z2 As Double = pt2.Z
+        Dim z3 As Double = pt3.Z
+
+        Try
+
+            'calculate determinant and k,h terms
+            Dim hdterm As Double = ((y2 - y3) * (x1 ^ 2 + y1 ^ 2)) + ((y3 - y1) * (x2 ^ 2 + y2 ^ 2)) + ((y1 - y2) * (x3 ^ 2 + y3 ^ 2))
+            Dim comdet As Double = ((x1 * y2) + (x3 * y1) + (x2 * y3)) - ((x2 * y1) + (x1 * y3) + (x3 * y2))
+            Dim kdterm As Double = ((x3 - x2) * (x1 ^ 2 + y1 ^ 2)) + ((x1 - x3) * (x2 ^ 2 + y2 ^ 2)) + ((x2 - x1) * (x3 ^ 2 + y3 ^ 2))
+
+            'if the determinant is zero, the points are collinear
+            If comdet = 0 Then
+                MsgBox("Error in ArcData.  Referenced points are collinear.  Exit function.")
+            End If
+
+            'store center coordinates
+            c_h = hdterm / (comdet * 2)
+            c_k = kdterm / (comdet * 2)
+
+            'calc radius
+            Dim rdterm1 As Double = ((x2 * y3) - (x3 * y2)) * (x1 ^ 2 + y1 ^ 2)
+            Dim rdterm2 As Double = ((x3 * y1) - (x1 * y3)) * (x2 ^ 2 + y2 ^ 2)
+            Dim rdterm3 As Double = ((x1 * y2) - (x2 * y1)) * (x3 ^ 2 + y3 ^ 2)
+            Dim rdterm As Double = rdterm1 + rdterm2 + rdterm3
+            Dim rsqd As Double = (rdterm / comdet) + (c_h ^ 2) + (c_k ^ 2)
+            Dim r As Double = rsqd ^ 0.5
+
+            'create new temporary 2d points from data
+            Dim tPt1 As New Point2d(x1, y1)
+            Dim tpt2 As New Point2d(x2, y2)
+            Dim tPt3 As New Point2d(x3, y3)
+            Dim cPt As New Point3d(c_h, c_k, pt1.Z)
+
+            Using acArc As New CircularArc2d(tPt1, tpt2, tPt3)
+
+                'create vectors from center to begin, end of arc.  Get chord vectors and store lengths
+                Dim vectPt1 As Vector3d = cPt.GetVectorTo(pt1)
+                Dim vectPt2 As Vector3d = cPt.GetVectorTo(pt2)
+                Dim vectPt3 As Vector3d = cPt.GetVectorTo(pt3)
+                'Dim vect13 As Vector2d = tPt1.GetVectorTo(tPt3)
+                'Dim chrd As Double = vect13.Length
+                'Dim vect12 As Vector2d = tPt1.GetVectorTo(tpt2)
+                'Dim subchrd1 As Double = vect12.Length
+                'Dim vect23 As Vector2d = tpt2.GetVectorTo(tPt3)
+                c_Chord = tPt1.GetDistanceTo(tPt3)
+                c_subChord1 = tPt1.GetDistanceTo(tpt2)
+                c_subchord2 = tpt2.GetDistanceTo(tPt3)
+
+                'creae a circular arc obje3ct from the three points
+                'get arc delta
+                'c_Delta = (acArc.EndAngle - acArc.StartAngle)
+                'get subdeltas
+
+                With acArc
+                    c_center2d = .Center
+                    'c_center3d = New Point3d(c_center2d.X, c_center2d.Y, z1)
+                    c_center3d = cPt
+                    c_radius = .Radius
+                End With
+
+                'Debug.Print(vbLf & "Delta: " & c_Delta.ToString)
+                'Debug.Print("Bulge: " & Tan(c_Delta / 4).ToString)
+
+                'calculate bulge and sag
+                c_IsClockwise = acArc.IsClockWise
+
+                Dim startV As Vector2d = tPt1.GetVectorTo(c_center2d)
+                Dim subV As Vector2d = tpt2.GetVectorTo(c_center2d)
+                Dim endV As Vector2d = tPt3.GetVectorTo(c_center2d)
+                Dim perpVstart As Vector2d
+                Dim perpVsub As Vector2d
+                Dim perpVend As Vector2d
+                Dim perpVmid As Vector2d
+                Dim midV As Vector2d
+
+                If acArc.IsClockWise Then
+                    c_Delta = (2 * PI) - vectPt1.GetAngleTo(vectPt3, Vector3d.ZAxis)
+                    c_subDelta1 = (2 * PI) - vectPt2.GetAngleTo(vectPt1, Vector3d.ZAxis)
+                    c_subDelta2 = (2 * PI) - vectPt3.GetAngleTo(vectPt2, Vector3d.ZAxis)
+                    c_blg = -Tan(c_Delta / 4)
+                    c_subBlg1 = -Tan(c_subDelta1 / 4)
+                    c_subBlg2 = -Tan(c_subDelta2 / 4)
+                    perpVsub = subV.RotateBy(PI / 2)
+                    perpVend = endV.RotateBy(PI / 2)
+                    'Debug.Print(startV.ToString)
+                    perpVstart = startV.RotateBy(PI / 2)
+                    'Debug.Print(perpVstart.ToString)
+                    c_midChord = -2 * c_radius * Sin(c_Delta / 4)
+                    c_midX = c_pt1.X - c_midChord * Cos(c_Delta / 4)
+                    c_midY = c_pt1.Y - (c_Chord / 2) * Tan(c_Delta / 4)
+                    c_midPt2D = New Point2d(c_midX, c_midY).RotateBy(perpVstart.Angle, tPt1)
+                    midV = c_midPt2D.GetVectorTo(c_center2d)
+                    perpVmid = midV.RotateBy(PI / 2)
+                    c_midBlg = -Tan(c_midDelta / 4)
+
+                Else
+                    c_Delta = vectPt1.GetAngleTo(vectPt3, Vector3d.ZAxis)
+                    c_subDelta1 = vectPt1.GetAngleTo(vectPt2, Vector3d.ZAxis)
+                    c_subDelta2 = vectPt2.GetAngleTo(vectPt3, Vector3d.ZAxis)
+                    c_blg = Tan(c_Delta / 4)
+                    c_subBlg1 = Tan(c_subDelta1 / 4)
+                    c_subBlg2 = Tan(c_subDelta2 / 4)
+                    c_blg = Tan(c_Delta / 4)
+                    c_subBlg1 = Tan(c_subDelta1 / 4)
+                    c_subBlg2 = Tan(c_subDelta2 / 4)
+                    c_IsClockwise = False
+                    perpVsub = subV.RotateBy(-PI / 2)
+                    perpVend = endV.RotateBy(-PI / 2)
+                    perpVstart = startV.RotateBy(-PI / 2)
+                    c_midChord = 2 * c_radius * Sin(c_Delta / 4)
+                    c_midX = c_pt1.X + c_midChord * Cos(c_Delta / 4)
+                    c_midY = c_pt1.Y + (c_Chord / 2) * Tan(c_Delta / 4)
+                    c_midPt2D = New Point2d(c_midX, c_midY).RotateBy(perpVstart.Angle, tPt1)
+                    midV = c_midPt2D.GetVectorTo(c_center2d)
+                    perpVmid = midV.RotateBy(-PI / 2)
+                    c_midBlg = Tan(c_midDelta / 4)
+                End If
+
+                'Debug.Print("Bulge After: " & c_blg.ToString)
+
+                c_Sag = c_Chord * c_blg
+
+                Dim tAngle As Double
+
+                c_Sag = c_Chord * c_blg
+
+                c_startAngle = perpVstart.Angle
+                c_midAngle = perpVmid.Angle
+                c_SubAngle = perpVsub.Angle
+                c_endAngle = perpVend.Angle
+                c_midPt = New Point3d(c_midPt2D.X, c_midPt2D.Y, z1)
+                Dim vectMid As Vector3d = cPt.GetVectorTo(c_midPt)
+                c_midDelta = vectPt1.GetAngleTo(vectMid, Vector3d.ZAxis)
+
+                Dim refangle As Double = midV.Angle
+                Dim textTempAngle = Vector2d.XAxis.GetAngleTo(midV)
+                'textAngle = Vector3d.XAxis.GetAngleTo(vectmid) - PI / 2
+
+                c_CtrToMidAngle = refangle
+
+                If refangle >= PI And refangle < 2 * PI Then
+                    tAngle = -textTempAngle + PI / 2
+                    'ElseIf refangle >= PI And refangle < 3 * PI / 2 Then
+                    'tAngle = textTempAngle + 3 * PI / 2
+                Else
+                    tAngle = textTempAngle - PI / 2
+                End If
+
+                'Dim mPt As New Point3d(c_h + vectmid.X, c_k + vectmid.Y, 0)
+
+                'tAngle = -PI / 2
+
+                c_textAngle = tAngle
+
+            End Using
+
+        Catch ex As Exception
+            MsgBox("Error. " & vbLf & ex.Message & vbLf & "ArcData object not created.")
+        End Try
+
+    End Sub
+
+    Protected Overridable Sub Dispose(disposing As Boolean)
+        If Not disposedValue Then
+            If disposing Then
+                ' TODO: dispose managed state (managed objects)
+            End If
+
+            ' TODO: free unmanaged resources (unmanaged objects) and override finalizer
+            ' TODO: set large fields to null
+            disposedValue = True
+        End If
+    End Sub
+
+    ' ' TODO: override finalizer only if 'Dispose(disposing As Boolean)' has code to free unmanaged resources
+    ' Protected Overrides Sub Finalize()
+    '     ' Do not change this code. Put cleanup code in 'Dispose(disposing As Boolean)' method
+    '     Dispose(disposing:=False)
+    '     MyBase.Finalize()
+    ' End Sub
+
+    Public Sub Dispose() Implements IDisposable.Dispose
+        ' Do not change this code. Put cleanup code in 'Dispose(disposing As Boolean)' method
+        Dispose(disposing:=True)
+        GC.SuppressFinalize(Me)
+    End Sub
+End Class

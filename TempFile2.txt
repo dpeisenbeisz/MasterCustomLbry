@@ -1,0 +1,15 @@
+radian angle object
+Decimal Degrees: 263.542430555556
+Radians:  4.59968313190295
+DMS:  263°32'32.75"
+Surveyors:  S6°27'27.25"W
+Degs:  263
+Minutes:  32
+Seconds:  32.75
+Autocad DMS: 263d32'32.75"
+Azimuth:  173.542430555555
+RadAzimuth:  3.02888680510805
+BaseAngle:  270
+RadBase:  4.71238898038469
+
+

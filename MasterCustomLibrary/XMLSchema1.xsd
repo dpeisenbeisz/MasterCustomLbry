@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema id="XMLSchema1"
+    targetNamespace="http://tempuri.org/XMLSchema1.xsd"
+    elementFormDefault="qualified"
+    xmlns="http://tempuri.org/XMLSchema1.xsd"
+    xmlns:mstns="http://tempuri.org/XMLSchema1.xsd"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+>
+  <xs:element name="AcdLayers">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="AcdLayer" minOccurs="1" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:attribute name="Name" type="xs:string"/>
+            <xs:attribute name="IsUsed" type="xs:boolean"/>
+            <xs:attribute name="HasEntities" type="xs:boolean"/>
+            <xs:attribute name="EntityCount" type="xs:integer"/>
+            <xs:attribute name="VpVisDefault" type="xs:string"/>
+            <xs:attribute name="IsOff" type="xs:boolean"/>
+            <xs:attribute name="IsFrozen" type="xs:boolean"/>
+            <xs:attribute name="IsLocked" type="xs:boolean"/>
+            <xs:attribute name="IsPlottable" type="xs:boolean"/>
+            <xs:attribute name="IsHidden" type="xs:boolean"/>
+            <xs:attribute name="NewViewportFreeze" type="xs:boolean"/>
+            <xs:attribute name="Color" type="xs:string"/>
+            <xs:attribute name="Linetype" type="xs:string"/>
+            <xs:attribute name="Lineweight" type="xs:string"/>
+            <xs:attribute name="Transparency" type="xs:string"/>
+            <xs:attribute name="PlotStyle" type="xs:string"/>
+            <xs:attribute name="Description" type="xs:string"/>
+            <xs:attribute name="Remove" type="xs:boolean"/>
+            <xs:attribute name="MergeWith" type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+
+
+
+
