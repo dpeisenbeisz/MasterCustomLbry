@@ -60,15 +60,19 @@ Public Class BlockViewPanel
                 refCount = 0
             Next
 
+            Dim blkCol As New Collection
+
             For Each id As ObjectId In blkIds
                 'For Each bi As BlkInfo In blkArray
                 Dim bRef As BlockReference = TryCast(acTrans.GetObject(id, OpenMode.ForRead), BlockReference)
-                Dim blkInf As New BlkInfo(id)
+                Dim blkInf As New BlkInfo(id, refNumberDic(bRef.Name))
                 Dim curLine() As String = blkInf.CsvStr
-                curLine(2) = refNumberDic(bRef.Name)
-                DGV1.Rows.Add(curLine)
+                blkCol.Add(blkInf)
+                'curLine(2) = refNumberDic(bRef.Name)
+                'DGV1.Rows.Add(curLine)
             Next
 
+            dgv.DataSource = blkCol
 
             'Dim bCount As New Dictionary(Of String, Long)
             'Dim x As Long = -1
@@ -100,6 +104,10 @@ Public Class BlockViewPanel
     Private Sub BlockViewPanel_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
         Call getBlocks()
+
+    End Sub
+
+    Private Sub DGV1_CellContentClick(sender As Object, e As DataGridViewCellEventArgs) Handles DGV1.CellContentClick
 
     End Sub
 End Class

@@ -5,16 +5,17 @@ Imports Autodesk.AutoCAD.Geometry
 Public Class BlkInfo : Inherits CollectionBase
 
     Private x_Bname As String
-    Private ReadOnly x_BlockName As String
+    Private x_BlockName As String
     Private x_refObjId As ObjectId
-    Private ReadOnly x_bTRid As ObjectId
+    Private x_bTRid As ObjectId
     Private x_blkIndex As Long
     Private x_insPt As Point3d
     Private x_rot As Double
-    Private ReadOnly x_hasAttr As Boolean
-    Private ReadOnly x_attrCol As AttributeCollection
-    Private ReadOnly x_isDynamic As Boolean
-    Private ReadOnly x_properties As Collection
+    Private x_hasAttr As Boolean
+    Private x_attrCol As AttributeCollection
+    Private x_isDynamic As Boolean
+    Private x_properties As DynamicBlockReferencePropertyCollection
+    Private x_blkCount As Long
 
     Public Sub New()
         MyBase.New
@@ -32,13 +33,13 @@ Public Class BlkInfo : Inherits CollectionBase
         End If
         If blkRef.IsDynamicBlock Then
             x_isDynamic = True
-            For Each prop As DynamicBlockReferenceProperty In blkRef.DynamicBlockReferencePropertyCollection
-                x_properties.Add(prop.PropertyName)
-            Next
+            x_properties = blkRef.DynamicBlockReferencePropertyCollection
+        Else
+            x_isDynamic = False
         End If
     End Sub
 
-    Public Sub New(ByRef blkRefID As ObjectId)
+    Public Sub New(ByRef blkRefID As ObjectId, Optional refs As Long = 1)
 
         Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = CurDwg.Database
@@ -59,10 +60,11 @@ Public Class BlkInfo : Inherits CollectionBase
                 End If
                 If bRef.IsDynamicBlock Then
                     x_isDynamic = True
-                    For Each prop As DynamicBlockReferenceProperty In bRef.DynamicBlockReferencePropertyCollection
-                        x_properties.Add(prop.PropertyName)
-                    Next
+                    x_properties = bRef.DynamicBlockReferencePropertyCollection
+                Else
+                    x_isDynamic = False
                 End If
+                x_blkCount = refs
                 actrans.Commit()
             End Using
         End If
@@ -77,7 +79,7 @@ Public Class BlkInfo : Inherits CollectionBase
         End Set
     End Property
 
-    Public ReadOnly Property Attributes As AttributeCollection
+    Public Property Attributes As AttributeCollection
         Get
             If x_attrCol IsNot Nothing Then
                 Return x_attrCol
@@ -85,9 +87,12 @@ Public Class BlkInfo : Inherits CollectionBase
                 Return Nothing
             End If
         End Get
+        Set(value As AttributeCollection)
+            x_attrCol = value
+        End Set
     End Property
 
-    Public ReadOnly Property DynamicProperties As Collection
+    Public Property DynamicProperties As DynamicBlockReferencePropertyCollection
         Get
             If x_properties IsNot Nothing Then
                 Return x_properties
@@ -95,16 +100,25 @@ Public Class BlkInfo : Inherits CollectionBase
                 Return Nothing
             End If
         End Get
+        Set(value As DynamicBlockReferencePropertyCollection)
+            x_properties = value
+        End Set
     End Property
-    Public ReadOnly Property HasAttributes As Boolean
+    Public Property HasAttributes As Boolean
         Get
             Return x_hasAttr
         End Get
+        Set(value As Boolean)
+            x_hasAttr = value
+        End Set
     End Property
-    Public ReadOnly Property IsDynmaic As Boolean
+    Public Property IsDynmaic As Boolean
         Get
             Return x_isDynamic
         End Get
+        Set(value As Boolean)
+            x_isDynamic = value
+        End Set
     End Property
 
     Public Property Insertion As Point3d
@@ -143,22 +157,33 @@ Public Class BlkInfo : Inherits CollectionBase
         End Set
     End Property
 
-    Public ReadOnly Property BtrID As ObjectId
+    Public Property BtrID As ObjectId
         Get
             Return x_bTRid
         End Get
+        Set(value As ObjectId)
+            x_bTRid = value
+        End Set
     End Property
     Public ReadOnly Property CsvStr As String()
         Get
             Return GetCSVstr()
         End Get
     End Property
+    Public Property BlkCount As Long
+        Get
+            Return x_blkCount
+        End Get
+        Set(value As Long)
+            x_blkCount = value
+        End Set
+    End Property
+
 
     Private Function GetCSVstr() As String()
         Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = CurDwg.Database
         Dim csvStr(9) As String
-
         csvStr(0) = x_Bname
         csvStr(1) = x_refObjId.ToString
         csvStr(3) = x_BlockName

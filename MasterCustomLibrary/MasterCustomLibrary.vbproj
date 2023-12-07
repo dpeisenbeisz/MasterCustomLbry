@@ -75,14 +75,6 @@
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2017\acmgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="AecBaseMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2017\ACA\AecBaseMgd.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="AeccDbMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2017\C3D\AeccDbMgd.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
@@ -110,6 +102,7 @@
     <Compile Include="AngleObj.vb" />
     <Compile Include="ArcData.vb" />
     <Compile Include="BlkInfo.vb" />
+    <Compile Include="ArrowObj.vb" />
     <Compile Include="FontPicker.designer.vb">
       <DependentUpon>FontPicker.vb</DependentUpon>
     </Compile>
@@ -120,6 +113,12 @@
       <DependentUpon>BlockPanel.vb</DependentUpon>
     </Compile>
     <Compile Include="BlockPanel.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ArrowTypeBox.Designer.vb">
+      <DependentUpon>ArrowTypeBox.vb</DependentUpon>
+    </Compile>
+    <Compile Include="ArrowTypeBox.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="LayoutPicker.Designer.vb">
@@ -164,6 +163,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="BlockPanel.resx">
       <DependentUpon>BlockPanel.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ArrowTypeBox.resx">
+      <DependentUpon>ArrowTypeBox.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="LayoutPicker.resx">
       <DependentUpon>LayoutPicker.vb</DependentUpon>

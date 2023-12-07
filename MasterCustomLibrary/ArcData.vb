@@ -370,19 +370,9 @@ Public Class ArcData : Inherits CollectionBase
                 Dim vectPt1 As Vector3d = cPt.GetVectorTo(pt1)
                 Dim vectPt2 As Vector3d = cPt.GetVectorTo(pt2)
                 Dim vectPt3 As Vector3d = cPt.GetVectorTo(pt3)
-                'Dim vect13 As Vector2d = tPt1.GetVectorTo(tPt3)
-                'Dim chrd As Double = vect13.Length
-                'Dim vect12 As Vector2d = tPt1.GetVectorTo(tpt2)
-                'Dim subchrd1 As Double = vect12.Length
-                'Dim vect23 As Vector2d = tpt2.GetVectorTo(tPt3)
                 c_Chord = tPt1.GetDistanceTo(tPt3)
                 c_subChord1 = tPt1.GetDistanceTo(tpt2)
                 c_subchord2 = tpt2.GetDistanceTo(tPt3)
-
-                'creae a circular arc obje3ct from the three points
-                'get arc delta
-                'c_Delta = (acArc.EndAngle - acArc.StartAngle)
-                'get subdeltas
 
                 With acArc
                     c_center2d = .Center
@@ -391,10 +381,6 @@ Public Class ArcData : Inherits CollectionBase
                     c_radius = .Radius
                 End With
 
-                'Debug.Print(vbLf & "Delta: " & c_Delta.ToString)
-                'Debug.Print("Bulge: " & Tan(c_Delta / 4).ToString)
-
-                'calculate bulge and sag
                 c_IsClockwise = acArc.IsClockWise
 
                 Dim startV As Vector2d = tPt1.GetVectorTo(c_center2d)

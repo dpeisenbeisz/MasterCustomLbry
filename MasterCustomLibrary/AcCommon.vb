@@ -7,8 +7,8 @@ Imports Autodesk.AutoCAD.EditorInput
 Imports Autodesk.AutoCAD.Runtime
 Imports Autodesk.AutoCAD.Geometry
 'Imports Autodesk.AutoCAD.GraphicsInterface
-Imports C3dAs = Autodesk.Civil.ApplicationServices
-Imports C3dDb = Autodesk.Civil.DatabaseServices
+'Imports C3dAs = Autodesk.Civil.ApplicationServices
+'Imports C3dDb = Autodesk.Civil.DatabaseServices
 'Imports SD = System.Drawing
 'Imports System.Runtime
 Imports System.Xml
@@ -79,7 +79,6 @@ Public Module Layers
         Return result
 
     End Function
-
 
     Friend Sub FormLayersXML(lyrs As AcdLayers)
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -338,9 +337,6 @@ Public Module Layers
 
             If acLyrTbl.Has(lName) Then
 
-                'Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
-                'Dim mdlspace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
-
                 Dim purgeColl As New ObjectIdCollection
 
                 Dim DelList As ObjectIdCollection
@@ -440,6 +436,63 @@ End Module
 
 
 Public Module Blocks
+
+    Public Sub ClearBlk(bName As String)
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+
+        Try
+            If Not String.IsNullOrEmpty(bName) Then
+                If BlkExists(bName) Then
+                    Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                        Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                        Dim myBTR As BlockTableRecord = acTrans.GetObject(blkTbl(bName), OpenMode.ForWrite)
+                        For Each id As ObjectId In myBTR
+                            Dim dbobj As DBObject = acTrans.GetObject(id, OpenMode.ForWrite)
+                            If TypeOf dbobj Is Entity Then
+                                Dim ent As Entity = TryCast(dbobj, Entity)
+                                If ent IsNot Nothing Then ent.Erase()
+                            End If
+                        Next
+                        acTrans.Commit()
+                    End Using
+                End If
+            End If
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+        End Try
+
+    End Sub
+
+    Public Function ClearBlk(bName As String, acTrans As Transaction) As ObjectId
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+
+        Try
+            If Not String.IsNullOrEmpty(bName) Then
+                If BlkExists(bName) Then
+                    Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim myBTR As BlockTableRecord = acTrans.GetObject(blkTbl(bName), OpenMode.ForWrite)
+                    For Each id As ObjectId In myBTR
+                        Dim dbobj As DBObject = acTrans.GetObject(id, OpenMode.ForWrite)
+                        If TypeOf dbobj Is Entity Then
+                            Dim ent As Entity = TryCast(dbobj, Entity)
+                            If ent IsNot Nothing Then ent.Erase()
+                        End If
+                    Next
+                    Return myBTR.ObjectId
+                Else
+                    Return Nothing
+                End If
+            Else
+                Return Nothing
+            End If
+
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+        End Try
+
+    End Function
 
     Private Function BTRfromRef(bRefId As ObjectId) As ObjectId
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -718,7 +771,7 @@ Public Module Blocks
 
     End Function
 
-    Public Function GetNewFileName(fName As String) As String
+    Public Function GetNewFileName(fName As String, Optional filetype As String = "") As String
 
         Dim fi As New FileInfo(fName)
         Dim di As New DirectoryInfo(fi.DirectoryName)
@@ -727,14 +780,26 @@ Public Module Blocks
         Dim outName As String
 
         If System.IO.File.Exists(fName) Then
-            Dim newfile As String = di.FullName & "\" & stripName & "-2.png"
+            Dim newfile As String
+            If String.IsNullOrEmpty(filetype) Then
+                newfile = di.FullName & "\" & stripName & "-2.png"
+            Else
+                newfile = di.FullName & "\" & stripName & "." & filetype
+            End If
+
             Dim j As Integer = 3
 
-            Do While System.IO.File.Exists(newfile)
-                newfile = di.FullName & "\" & stripName & "-" & j.ToString & ".png"
-                j += 1
-            Loop
-
+            If String.IsNullOrEmpty(filetype) Then
+                Do While System.IO.File.Exists(newfile)
+                    newfile = di.FullName & "\" & stripName & "-" & j.ToString & ".png"
+                    j += 1
+                Loop
+            Else
+                Do While System.IO.File.Exists(newfile)
+                    newfile = di.FullName & "\" & stripName & "-" & j.ToString & "." & filetype
+                    j += 1
+                Loop
+            End If
             outName = newfile
         Else
             outName = fName
@@ -743,8 +808,6 @@ Public Module Blocks
         Return outName
 
     End Function
-
-
 
     Public Function SelBlockRef() As ObjectId
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -769,14 +832,6 @@ Public Module Blocks
             Exit Function
         End If
 
-        'Dim blkRef As BlockReference
-        'Dim blkName As String
-
-        'Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
-        '    blkRef = DirectCast(acTrans.GetObject(blkobjID, OpenMode.ForRead), BlockReference)
-        '    blkName = blkRef.Name
-        '    acTrans.Commit()
-        'End Using
         Return blkobjID
     End Function
 
@@ -872,10 +927,6 @@ Public Module Blocks
         Return retValue
 
     End Function
-
-
-
-
 
 End Module
 
@@ -1640,8 +1691,8 @@ Public Module MathGeometry
     'Private FntName As String
     'Private StylNm As String
 
-    Const AutoCADver As String = "AutoCAD.Application.21"
-    Const Civil3dVer As String = "AeccXUiLand.Aeccapplication.11.0"
+    'Const AutoCADver As String = "AutoCAD.Application.21"
+    'Const Civil3dVer As String = "AeccXUiLand.Aeccapplication.11.0"
 
     Public Function GetTangentPoints(ptP As Point3d, c1 As Circle) As Point2dCollection
 
@@ -1707,13 +1758,176 @@ Public Module MathGeometry
 
     End Function
 
+
     Public Function GetAngleFromXaxis(StartPt As Point3d, RefPt As Point3d) As Double
         'Function returns the angle defined by the x-axis and a vector defined by two 3D points
         Try
             Dim SP2d = New Point2d(StartPt.X, StartPt.Y)
             Dim RP2D = New Point2d(RefPt.X, RefPt.Y)
-            Dim InsAng As Double = SP2d.GetVectorTo(RP2D).Angle
+            Dim vect2d As Vector2d = SP2d.GetVectorTo(RP2D)
+            'Dim v3d As Vector3d = StartPt.GetVectorTo(RefPt)
+            Dim InsAng As Double = vect2d.Angle
             Return InsAng
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+            Return Nothing
+        End Try
+    End Function
+
+    Public Function ExtTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject) As Point2dCollection
+
+        Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = CurDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        Dim c1 As Circle
+        Dim c2 As Circle
+
+        Try
+
+            If TypeOf dbObj1 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
+                c1 = CType(dbObj1, Circle)
+            ElseIf TypeOf dbObj1 Is Arc Then
+                Dim a1 As Arc = CType(dbObj1, Arc)
+                c1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
+                a1.Dispose()
+            Else
+                ed.WriteMessage(vbLf & "C1 is not a circle or circular arc.  Command ended.")
+                Return Nothing
+                Exit Function
+            End If
+
+
+            If TypeOf DBObj2 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
+                c2 = CType(DBObj2, Circle)
+            ElseIf TypeOf DBObj2 Is Arc Then
+                Dim a2 As Arc = CType(DBObj2, Arc)
+                c2 = New Circle(a2.Center, Vector3d.ZAxis, a2.Radius)
+                a2.Dispose()
+            Else
+                ed.WriteMessage(vbLf & "C2 is not a circle or circular arc.  Command ended.")
+                Return Nothing
+                Exit Function
+            End If
+
+            If c1.Radius > c2.Radius Then
+                Return Nothing
+                Exit Function
+            End If
+
+            Dim c12D As New Point2d(c1.Center.X, c1.Center.Y)
+            Dim c22D As New Point2d(c2.Center.X, c2.Center.Y)
+
+            Dim v2d As Vector2d = c12D.GetVectorTo(c22D)
+            Dim rotangle = v2d.Angle
+            Dim cenDist As Double = c12D.GetDistanceTo(c22D)
+
+            Dim tangents As Integer
+
+            If cenDist < c2.Radius - c1.Radius Then
+                tangents = 0
+                ed.WriteMessage(vbLf & "C1 is inside of C2. Circles have no common tangents.")
+                Return Nothing
+                Exit Function
+            ElseIf cenDist = c2.Radius - c1.Radius Then
+                tangents = 1
+            ElseIf cenDist > c2.Radius - c1.Radius AndAlso cenDist < c2.Radius + c1.Radius Then
+                tangents = 2
+            ElseIf cenDist = c1.Radius + c2.Radius Then
+                tangents = 3
+            ElseIf cenDist > c1.Radius + c2.Radius Then
+                tangents = 4
+            End If
+
+            'If c1.Radius > c2.Radius Then cenDist *= -1
+
+            Dim r1 As Double = c1.Radius
+            Dim r2 As Double = c2.Radius
+
+            Dim tc1 As New Circle(New Point3d(0, 0, c1.Center.Z), Vector3d.ZAxis, r1)
+            Dim tc2 As New Circle(New Point3d(cenDist, 0, c2.Center.Z), Vector3d.ZAxis, r2)
+
+            Dim tc1x As Double = tc1.Center.X
+            Dim tc1y As Double = tc1.Center.Y
+            Dim tc2x As Double = tc2.Center.X
+            Dim tc2y As Double = tc2.Center.Y
+
+            'Dim gamma As Double = -Atan2(0, tc2x)
+            Dim alpha As Double = Asin((r2 - r1) / cenDist)
+            If alpha < 0 Then alpha = Asin((r1 - r2) / cenDist)
+
+            Dim cen1 As New Point2d(tc1x, tc1y)
+            Dim cen2 As New Point2d(tc2x, tc2y)
+
+            Dim p1 As Point2d
+            Dim p2 As Point2d
+            Dim p3 As Point2d
+            Dim p4 As Point2d
+
+            Dim x3a As Double = tc2x - r2 * Sin(alpha)
+            Dim y3a As Double = tc2y + r2 * Cos(alpha)
+            p1 = New Point2d(x3a, y3a)
+            Dim x3b As Double = tc1x - r1 * Sin(alpha)
+            Dim y3b As Double = tc1y + r1 * Cos(alpha)
+            p2 = New Point2d(x3b, y3b)
+            p3 = New Point2d(x3a, -y3a)
+            p4 = New Point2d(x3b, -y3b)
+
+            Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
+
+                Dim blkTbl As BlockTable = actrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                Dim mdlSpace As BlockTableRecord = actrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+
+                Dim dbp1 As New DBPoint(New Point3d(p1.X, p1.Y, c1.Center.Z))
+                Dim dbp2 As New DBPoint(New Point3d(p2.X, p2.Y, c2.Center.Z))
+                Dim dbp3 As New DBPoint(New Point3d(p3.X, p3.Y, c1.Center.Z))
+                Dim dbp4 As New DBPoint(New Point3d(p4.X, p4.Y, c2.Center.Z))
+
+                mdlSpace.AppendEntity(dbp1)
+                actrans.AddNewlyCreatedDBObject(dbp1, True)
+
+                mdlSpace.AppendEntity(dbp2)
+                actrans.AddNewlyCreatedDBObject(dbp2, True)
+
+                mdlSpace.AppendEntity(dbp3)
+                actrans.AddNewlyCreatedDBObject(dbp3, True)
+
+                mdlSpace.AppendEntity(dbp4)
+                actrans.AddNewlyCreatedDBObject(dbp4, True)
+
+                Dim dispVect1 As Vector3d = tc1.Center.GetVectorTo(c1.Center)
+                dbp1.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp2.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp3.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp4.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp1.TransformBy(Matrix3d.Displacement(dispVect1))
+                dbp2.TransformBy(Matrix3d.Displacement(dispVect1))
+                dbp3.TransformBy(Matrix3d.Displacement(dispVect1))
+                dbp4.TransformBy(Matrix3d.Displacement(dispVect1))
+
+                Dim p12d As New Point2d(dbp1.Position.X, dbp1.Position.Y)
+                Dim p22d As New Point2d(dbp2.Position.X, dbp2.Position.Y)
+                Dim p32d As New Point2d(dbp3.Position.X, dbp3.Position.Y)
+                Dim p42d As New Point2d(dbp4.Position.X, dbp4.Position.Y)
+
+                Dim tPts As New Point2dCollection
+                With tPts
+                    .Add(p12d)
+                    .Add(p22d)
+                    .Add(p32d)
+                    .Add(p42d)
+                End With
+
+                Return tPts
+
+                dbp1.Dispose()
+                dbp2.Dispose()
+                dbp3.Dispose()
+                dbp4.Dispose()
+                tc1.Dispose()
+                tc2.Dispose()
+            End Using
+
         Catch ex As Exception
             MessageBox.Show(ex.Message)
             Return Nothing
@@ -1740,6 +1954,171 @@ Public Module MathGeometry
         End Using
 
     End Function
+    Public Function IntTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject) As Point2dCollection
+
+        Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = CurDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        Dim c1 As Circle
+        Dim c2 As Circle
+
+        Try
+
+            If TypeOf dbObj1 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
+                c1 = CType(dbObj1, Circle)
+            ElseIf TypeOf dbObj1 Is Arc Then
+                Dim a1 As Arc = CType(dbObj1, Arc)
+                c1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
+                a1.Dispose()
+            Else
+                ed.WriteMessage(vbLf & "C1 is not a circle or circular arc.  Command ended.")
+                Return Nothing
+                Exit Function
+            End If
+
+
+            If TypeOf DBObj2 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
+                c2 = CType(DBObj2, Circle)
+            ElseIf TypeOf DBObj2 Is Arc Then
+                Dim a2 As Arc = CType(DBObj2, Arc)
+                c2 = New Circle(a2.Center, Vector3d.ZAxis, a2.Radius)
+                a2.Dispose()
+            Else
+                ed.WriteMessage(vbLf & "C2 is not a circle or circular arc.  Command ended.")
+                Return Nothing
+                Exit Function
+            End If
+
+            If c1.Radius > c2.Radius Then
+                Return Nothing
+                Exit Function
+            End If
+
+            Dim c12D As New Point2d(c1.Center.X, c1.Center.Y)
+            Dim c22D As New Point2d(c2.Center.X, c2.Center.Y)
+
+            Dim v2d As Vector2d = c12D.GetVectorTo(c22D)
+            Dim rotangle = v2d.Angle
+            Dim cenDist As Double = c12D.GetDistanceTo(c22D)
+
+            Dim tangents As Integer
+
+            If cenDist < c2.Radius - c1.Radius Then
+                tangents = 0
+                ed.WriteMessage(vbLf & "C1 is inside of C2. Circles have no common tangents.")
+                Return Nothing
+                Exit Function
+            ElseIf cenDist = c2.Radius - c1.Radius Then
+                tangents = 1
+            ElseIf cenDist > c2.Radius - c1.Radius AndAlso cenDist < c2.Radius + c1.Radius Then
+                tangents = 2
+            ElseIf cenDist = c1.Radius + c2.Radius Then
+                tangents = 3
+            ElseIf cenDist > c1.Radius + c2.Radius Then
+                tangents = 4
+            End If
+
+            'If c1.Radius > c2.Radius Then cenDist *= -1
+
+            Dim r1 As Double = c1.Radius
+            Dim r2 As Double = c2.Radius
+
+            Dim tc1 As New Circle(New Point3d(0, 0, c1.Center.Z), Vector3d.ZAxis, r1)
+            Dim tc2 As New Circle(New Point3d(cenDist, 0, c2.Center.Z), Vector3d.ZAxis, r2)
+
+            Dim tc1x As Double = tc1.Center.X
+            Dim tc1y As Double = tc1.Center.Y
+            Dim tc2x As Double = tc2.Center.X
+            Dim tc2y As Double = tc2.Center.Y
+
+            'Dim gamma As Double = -Atan2(0, tc2x)
+            Dim siX As Double = ((r1 * tc2x) + (r2 * tc1x)) / (r1 + r2)
+            Dim l3 As Double = tc2x - siX
+            Dim l1 = siX - tc1x
+            Dim beta As Double = Atan2(r2, l3)
+            Dim alpha As Double = Asin((r2 - r1) / cenDist)
+            If alpha < 0 Then alpha = Asin((r1 - r2) / cenDist)
+
+            Dim cen1 As New Point2d(tc1x, tc1y)
+            Dim cen2 As New Point2d(tc2x, tc2y)
+
+            Dim p1 As Point2d
+            Dim p2 As Point2d
+            Dim p3 As Point2d
+            Dim p4 As Point2d
+
+            Dim tpc2x As Double = tc2x - r2 * Sin(beta)
+            Dim tpc2y As Double = tc2y + r2 * Cos(beta)
+            Dim tpc1x As Double = tc1x + r1 * Sin(beta)
+            Dim tpc1y As Double = tc1y + r1 * Cos(beta)
+            p1 = New Point2d(tpc1x, tpc1y)
+            p2 = New Point2d(tpc2x, tpc2y)
+            p3 = New Point2d(tpc1x, -tpc1y)
+            p4 = New Point2d(tpc2x, -tpc2y)
+
+            Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
+
+                Dim blkTbl As BlockTable = actrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                Dim mdlSpace As BlockTableRecord = actrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+
+                Dim dbp1 As New DBPoint(New Point3d(p1.X, p1.Y, c1.Center.Z))
+                Dim dbp2 As New DBPoint(New Point3d(p2.X, p2.Y, c2.Center.Z))
+                Dim dbp3 As New DBPoint(New Point3d(p3.X, p3.Y, c1.Center.Z))
+                Dim dbp4 As New DBPoint(New Point3d(p4.X, p4.Y, c2.Center.Z))
+
+                mdlSpace.AppendEntity(dbp1)
+                actrans.AddNewlyCreatedDBObject(dbp1, True)
+
+                mdlSpace.AppendEntity(dbp2)
+                actrans.AddNewlyCreatedDBObject(dbp2, True)
+
+                mdlSpace.AppendEntity(dbp3)
+                actrans.AddNewlyCreatedDBObject(dbp3, True)
+
+                mdlSpace.AppendEntity(dbp4)
+                actrans.AddNewlyCreatedDBObject(dbp4, True)
+
+                Dim dispVect1 As Vector3d = tc1.Center.GetVectorTo(c1.Center)
+                dbp1.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp2.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp3.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp4.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
+                dbp1.TransformBy(Matrix3d.Displacement(dispVect1))
+                dbp2.TransformBy(Matrix3d.Displacement(dispVect1))
+                dbp3.TransformBy(Matrix3d.Displacement(dispVect1))
+                dbp4.TransformBy(Matrix3d.Displacement(dispVect1))
+
+                Dim p12d As New Point2d(dbp1.Position.X, dbp1.Position.Y)
+                Dim p22d As New Point2d(dbp2.Position.X, dbp2.Position.Y)
+                Dim p32d As New Point2d(dbp3.Position.X, dbp3.Position.Y)
+                Dim p42d As New Point2d(dbp4.Position.X, dbp4.Position.Y)
+
+                Dim tPts As New Point2dCollection
+                With tPts
+                    .Add(p12d)
+                    .Add(p22d)
+                    .Add(p32d)
+                    .Add(p42d)
+                End With
+
+                Return tPts
+
+                dbp1.Dispose()
+                dbp2.Dispose()
+                dbp3.Dispose()
+                dbp4.Dispose()
+                tc1.Dispose()
+                tc2.Dispose()
+            End Using
+
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+            Return Nothing
+        End Try
+    End Function
+
+
     Public Function Arc2poly(arcID As ObjectId) As ObjectId
 
         'converts an arc to an equivalent polyline
@@ -1948,140 +2327,6 @@ Public Module MathGeometry
             radlong = CLng(numb + (rMult - remRad))
         End If
         Return radlong
-
-    End Function
-
-    Public Function GetPolyfromFeatureline(flineId As ObjectId) As Entity
-
-        Dim docCol As Autodesk.AutoCAD.ApplicationServices.DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
-        Dim curDwg As Document = docCol.MdiActiveDocument
-        Dim dwgDB As Database = curDwg.Database
-        Dim ed As Editor = curDwg.Editor
-
-        Dim oPline As New Object
-
-        Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
-            Dim flineObj As Object = actrans.GetObject(flineId, OpenMode.ForRead)
-            Dim fEnt As Autodesk.Civil.DatabaseServices.Entity = TryCast(flineObj, Autodesk.Civil.DatabaseServices.Entity)
-            Dim flineLayer As String = fEnt.Layer
-            Dim cv As Curve = flineObj.BaseCurve
-
-            Dim refType As String = cv.GetType().ToString
-
-            Select Case refType
-                Case Is = "Autodesk.AutoCAD.DatabaseServices.Polyline3d"
-                    'MsgBox("this is polyline3d")
-                    oPline = TryCast(cv, Polyline3d)
-                Case Is = "Autodesk.AutoCAD.DatabaseServices.Polyline"
-                    'MsgBox("this is a polyline")
-                    oPline = TryCast(cv, Autodesk.AutoCAD.DatabaseServices.Polyline)
-                Case Is = "Autodesk.AutoCAD.DatabaseServices.Polyline2d"
-                    'MsgBox("this is polyline2d")
-                    oPline = TryCast(cv, Polyline2d)
-                Case Else
-                    MsgBox("object of type " & flineObj.GetType().ToString & " cannot be cast as a polyline entity.")
-                    Return Nothing
-                    Exit Function
-            End Select
-
-            Dim blkTbl As BlockTable = actrans.GetObject(dwgDB.BlockTableId, OpenMode.ForWrite)
-            Dim mdlSpace As BlockTableRecord = actrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
-
-            If oPline IsNot Nothing Then
-                mdlSpace.AppendEntity(oPline)
-                actrans.AddNewlyCreatedDBObject(oPline, True)
-                oPline.layer = flineLayer
-            End If
-            actrans.Commit()
-        End Using
-
-        Return oPline
-
-    End Function
-    Public Function Fig2Poly2D(objID As ObjectId) As ObjectId
-
-        Dim docCol As Autodesk.AutoCAD.ApplicationServices.DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
-        Dim curDwg As Document = docCol.MdiActiveDocument
-        Dim dwgDB As Database = curDwg.Database
-        Dim cvlDwg As C3dAs.CivilDocument = Autodesk.Civil.ApplicationServices.CivilApplication.ActiveDocument()
-        Dim ed As Editor = curDwg.Editor
-
-        Dim sPolyID As ObjectId
-
-        Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-
-            Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForWrite)
-            Dim curSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
-
-            Dim sFig As C3dDb.SurveyFigure = acTrans.GetObject(objID, OpenMode.ForWrite)
-            Dim tempColl As DBObjectCollection = sFig.GetOffsetCurves(1)
-            Dim tempLay As String = sFig.Layer
-            Dim tempPoly As Autodesk.AutoCAD.DatabaseServices.Polyline = TryCast(tempColl(0), Autodesk.AutoCAD.DatabaseServices.Polyline)
-            tempColl = Nothing
-            tempColl = tempPoly.GetOffsetCurves(-1)
-            Dim sPoly As New Autodesk.AutoCAD.DatabaseServices.Polyline
-            sPoly = TryCast(tempColl(0), Autodesk.AutoCAD.DatabaseServices.Polyline)
-            'sFeat = DirectCast(sFig.Clone, FeatureLine)
-            sPoly.Layer = tempLay
-            curSpace.AppendEntity(sPoly)
-            acTrans.AddNewlyCreatedDBObject(sPoly, True)
-            sPolyID = sPoly.ObjectId
-            acTrans.Commit()
-        End Using
-
-        Return sPolyID
-
-    End Function
-
-
-    Public Function SF2Feat(sfID As ObjectId, eraseOrigObj As Boolean) As ObjectId
-        Dim docCol As Autodesk.AutoCAD.ApplicationServices.DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
-        Dim curDwg As Document = docCol.MdiActiveDocument
-        Dim dwgDB As Database = curDwg.Database
-        Dim cvlDwg As C3dAs.CivilDocument = Autodesk.Civil.ApplicationServices.CivilApplication.ActiveDocument()
-        Dim ed As Editor = curDwg.Editor
-        Dim newFeatID As ObjectId
-
-        Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-            If Not IsDBNull(sfID) Then
-                Dim tempObj As Object = acTrans.GetObject(sfID, OpenMode.ForRead)
-                If TypeOf tempObj Is C3dDb.SurveyFigure Then
-
-                    Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForWrite)
-                    Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
-
-                    Dim lineObj As C3dDb.SurveyFigure = TryCast(acTrans.GetObject(sfID, OpenMode.ForRead), C3dDb.SurveyFigure)
-
-                    If lineObj IsNot Nothing Then
-                        Dim LinePts As Point3dCollection = lineObj.GetPoints(0)
-                        Dim objSite As ObjectId = lineObj.SiteId
-                        Dim newPolyId As ObjectId = Fig2Poly2D(sfID)
-                        Dim tempFlId As ObjectId
-                        tempFlId = C3dDb.FeatureLine.Create(newPolyId.ToString, newPolyId)
-                        Dim newPoly As Autodesk.AutoCAD.DatabaseServices.Entity = acTrans.GetObject(newPolyId, OpenMode.ForWrite)
-                        newPoly.Erase()
-                        Dim noOfPts As Integer = LinePts.Count
-                        Dim newFeat As C3dDb.FeatureLine = acTrans.GetObject(tempFlId, OpenMode.ForWrite)
-                        For i = 0 To noOfPts - 1
-                            newFeat.SetPointElevation(i, LinePts(i).Z)
-                        Next
-                        mdlSpace.AppendEntity(newFeat)
-                        acTrans.AddNewlyCreatedDBObject(newFeat, True)
-                        newFeatID = newFeat.ObjectId
-                    End If
-                Else
-                End If
-            Else
-            End If
-
-            If eraseOrigObj = True Then
-                Dim origFig As Autodesk.AutoCAD.DatabaseServices.Entity = TryCast(acTrans.GetObject(sfID, OpenMode.ForWrite), Autodesk.AutoCAD.DatabaseServices.Entity)
-                If origFig IsNot Nothing Then origFig.Erase()
-            End If
-
-            Return newFeatID
-            acTrans.Commit()
-        End Using
 
     End Function
 

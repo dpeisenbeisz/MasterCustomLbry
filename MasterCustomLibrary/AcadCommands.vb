@@ -1,45 +1,18 @@
 ﻿Imports System.IO
-'Imports System.Xml.Serialization
-'Imports System.Xml
 Imports System.Math
 Imports System.Text
-'Imports System.Reflection
 Imports System.Windows.Forms
 Imports Autodesk.AutoCAD.ApplicationServices
 Imports Autodesk.AutoCAD.DatabaseServices
 Imports Autodesk.AutoCAD.EditorInput
 Imports Autodesk.AutoCAD.Geometry
 Imports Autodesk.AutoCAD.Runtime
-'Imports Autodesk.AutoCAD.GraphicsInterface
-Imports C3dAs = Autodesk.Civil.ApplicationServices
-Imports C3dDb = Autodesk.Civil.DatabaseServices
-'Imports Autodesk.AutoCAD.Colors
 Imports Autodesk.AutoCAD.PlottingServices
 Imports System.Xml
 Imports Autodesk.AutoCAD.Colors
 Imports System.Xml.Serialization
 Imports System.Runtime.CompilerServices
 Imports GI = Autodesk.AutoCAD.GraphicsInterface
-
-
-'Imports System.Collections.Specialized
-'Imports Autodesk.AutoCAD.GraphicsInterface
-'Imports System.Runtime.CompilerServices
-
-
-'Module StringExtension
-'    <Extension()>
-'    Function RemoveInvalidChars(ByVal originalString As String) As String
-'        Dim finalString As String = String.Empty
-
-'        If Not String.IsNullOrEmpty(originalString) Then
-'            Return String.Concat(originalString.Split(Path.GetInvalidFileNameChars()))
-'        End If
-
-'        Return finalString
-'    End Function
-'End Module
-
 
 Public Module ArcCommands
 
@@ -144,17 +117,6 @@ Public Module BlockCommands
     Public Sub SetDwgsBase()
 
         Dim filepath As String = ""
-        'If BlkFolder <> "" Then
-        '    Dim uResp1 As Integer = MsgBox("Does this folder contain the dwg files you want to change?" & vbLf &
-        '       BlkFolder, vbYesNoCancel)
-        '    If uResp1 = vbCancel Then Exit Sub
-
-        '    If uResp1 = vbYes Then
-        '        filepath = BlkFolder
-        '        GoTo skipit
-        '    End If
-        'End If
-
         Dim blkFolder As String
 
         Dim folderpicker As New FolderBrowserDialog
@@ -350,9 +312,6 @@ SkipIt:
             Directory.CreateDirectory(saveFldr)
         End If
 
-        'dim dv As DwgVersion
-        'dv = DwgVersion(curDwg.Name)
-
         Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
             Dim blktbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
             For Each bID As ObjectId In blktbl
@@ -366,6 +325,7 @@ SkipIt:
                         Dim tdb As Database
                         tdb = dwgDB.Wblock(btr.ObjectId)
                         tdb.SaveAs(fName, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027)
+                        ed.WriteMessage(vbLf & btr.Name & " written to output folder")
                     End If
                 End If
             Next
@@ -472,10 +432,6 @@ SkipIt:
         ed.WriteMessage(vbLf & "All blocks updated")
     End Sub
 
-
-
-
-
     <CommandMethod("CPMLT", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
     Public Sub ChangePvmntMarkingsLineTypes()
         'by David Eisenbeisz (c)2023
@@ -483,16 +439,6 @@ SkipIt:
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = curDwg.Database
         Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
-
-        'Dim SelResult As PromptSelectionResult = ed.SelectImplied()
-        'If SelResult.Status = PromptStatus.Error Then
-        '    Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select dynamic pavment marking blocks to change:")}
-        '    SelResult = ed.GetSelection(Seloptions)
-        'Else
-        '    ed.SetImpliedSelection(New ObjectId(-1) {})
-        'End If
-
-        'If SelResult.Status = PromptStatus.OK Then
 
         Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction()
             Dim blkTbl As BlockTable = actrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
@@ -674,9 +620,9 @@ SkipIt:
         Dim DwgDB As Database = CurDwg.Database
         Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
 
-        Dim pso As New PromptStringOptions(vbLf & "Input the word to be created (no spaces allowed). ")
+        Dim pso As New PromptStringOptions(vbLf & "Input the word to be created (numbers and spaces Ok, no symbols allowed). ")
         With pso
-            .AllowSpaces = False
+            .AllowSpaces = True
         End With
 
         Dim psr As PromptResult = ed.GetString(pso)
@@ -704,104 +650,234 @@ SkipIt:
         If pkr.Status = PromptStatus.OK Then
             vis = pkr.StringResult
         Else
+            ed.WriteMessage(vbLf & "Command ended.")
             Exit Sub
         End If
 
-        Dim wrdName As String = "P-" & myStr
+        Dim wrdBlkName As String = "P-" & myStr
+        Dim repBlk As Boolean
 
-        If BlkExists(wrdName) Then
-            ed.WriteMessage(vbLf & "Block with that name already exists. Ending command.")
-            Exit Sub
+        If BlkExists(wrdBlkName) Then
+            Dim pko2 As New PromptKeywordOptions(vbLf & "block " & wrdBlkName & " already exists.  Do you want to replace existing block?")
+            With pko2
+                .Keywords.Add("Y")
+                .Keywords.Add("N")
+                .AppendKeywordsToMessage = True
+                .AllowNone = False
+                .AllowArbitraryInput = False
+            End With
+
+            Dim pkr2 As PromptResult = ed.GetKeywords(pko2)
+            If pkr2.Status = PromptStatus.OK Then
+
+                If pkr2.StringResult = "N" Then
+
+                    repBlk = False
+                    Dim newName As String
+
+                    Dim pso2 As New PromptStringOptions(vbLf & "Input alternate block name to be created.")
+                    With pso2
+                        .AllowSpaces = False
+                    End With
+
+                    Dim psr2 As PromptResult = ed.GetString(pso2)
+
+                    If psr2.Status = PromptStatus.OK Then
+                        newName = psr2.StringResult
+                    Else
+
+                        Exit Sub
+                    End If
+
+                    If BlkExists(newName) Then
+                        ed.WriteMessage(vbLf & "Block with that name already exists. Ending Command.")
+                        Exit Sub
+                    Else
+                        wrdBlkName = newName
+                    End If
+
+                Else
+                    repBlk = True
+                End If
+            Else
+                ed.WriteMessage(vbLf & "Command ended.")
+                Exit Sub
+            End If
         End If
 
-        Dim blkPath As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design\"
+
+        Dim letBlkPath As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design"
+
+TryAgain:
+
+        If Not My.Computer.FileSystem.DirectoryExists(letBlkPath) Then
+            MessageBox.Show("Default folder does not exist.  Select the folder where the individual letter blocks are stored.")
+            letBlkPath = GetMyFolderName()
+            If String.IsNullOrEmpty(letBlkPath) OrElse Not My.Computer.FileSystem.DirectoryExists(letBlkPath) Then
+                ed.WriteMessage(vbLf & "Invalid Path.  Ending Command.")
+                Exit Sub
+            Else
+                GoTo TryAgain
+            End If
+        End If
+
+        letBlkPath &= "\"
+
+        If Not My.Computer.FileSystem.FileExists(letBlkPath & "P-A.dwg") Then
+            ed.WriteMessage(vbLf & "Invalid Path.  Letter files not found.  Ending Command.")
+            Exit Sub
+        End If
 
         Dim letters(myStr.Length - 1) As String
         For j As Integer = 1 To myStr.Length
             letters(j - 1) = Mid(myStr, j, 1)
         Next
 
-        Dim cPos As Double = 0.0
-        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
-            Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-            Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
-            Dim newBlk As New BlockTableRecord With {.Name = "P-" & myStr}
-            Dim MidDist As Double
+        Try
 
-            For i = 0 To myStr.Length - 1
-                Dim blkName As String = "P-" & letters(i)
-                Dim blkFullName As String = blkPath & blkName & ".dwg"
+            Dim cPos As Double = 0.0
+
+            Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
+                Dim newWrdBlk As BlockTableRecord
+
+                If repBlk Then
+                    Dim wbID As ObjectId = ClearBlk(wrdBlkName, acTrans)
+                    newWrdBlk = acTrans.GetObject(wbID, OpenMode.ForWrite)
+                Else
+                    newWrdBlk = New BlockTableRecord With {.Name = wrdBlkName}
+                End If
+
+                Dim midDist As Double
                 Dim ltrID As ObjectId
 
-                If Not BlkExists(blkName) Then
-                    ltrID = InsertDwg(blkFullName, blkName)
-                Else
-                    ltrID = blkTbl(blkName)
-                End If
+                For i = 0 To myStr.Length - 1
 
-                Dim inspt As New Point3d(cPos, 0, 0)
+                    If Not letters(i) = " " Then
+                        Dim letBlkName As String = "P-" & letters(i)
+                        Dim letBlkFullName As String = letBlkPath & letBlkName & ".dwg"
 
-                Dim bDef As BlockTableRecord = acTrans.GetObject(ltrID, OpenMode.ForRead)
-                Dim bRef As New BlockReference(inspt, ltrID)
+                        If Not BlkExists(letBlkName) Then
+                            If My.Computer.FileSystem.FileExists(letBlkFullName) Then
+                                ltrID = InsertDwg(letBlkFullName, letBlkName, acTrans)
+                            Else
+                                ed.WriteMessage("Letter block file " & letBlkName & " does not exist at the provided path.")
+                                Exit Sub
+                            End If
+                        Else
+                            ltrID = blkTbl(letBlkName)
+                        End If
 
-                newBlk.AppendEntity(bRef)
-                'acTrans.AddNewlyCreatedDBObject(bRef, True)
+                        Dim inspt As New Point3d(cPos, 0, 0)
 
-                If Not letters(i).ToUpper = "I" Then
-                    cPos += 0.33333 * 5
-                Else
-                    cPos += 0.33333 * 2
-                End If
+                        'Dim letBlkDef As BlockTableRecord = acTrans.GetObject(ltrID, OpenMode.ForRead)
+                        Dim letbRef As New BlockReference(inspt, ltrID)
 
-                MidDist = (cPos - 0.33333) / 2
-            Next
+                        If repBlk Then
+                            newWrdBlk.AppendEntity(letbRef)
+                            acTrans.AddNewlyCreatedDBObject(letbRef, True)
+                        Else
+                            newWrdBlk.AppendEntity(letbRef)
+                        End If
 
-            blkTbl.UpgradeOpen()
-            Dim wrdblkId As ObjectId = blkTbl.Add(newBlk)
 
-            For Each id As ObjectId In newBlk
-                Dim obj As DBObject = acTrans.GetObject(id, OpenMode.ForRead)
-                If TypeOf obj Is BlockReference Then
-                    Dim ltrBlk As BlockReference = CType(obj, BlockReference)
-                    ltrBlk.UpgradeOpen()
-
-                    Dim orgPt As New Point3d(0, 0, 0)
-                    Dim cPt As New Point3d(MidDist, 4, 0)
-
-                    Dim dispVect As Vector3d = cPt.GetVectorTo(orgPt)
-                    ltrBlk.TransformBy(Matrix3d.Displacement(dispVect))
-
-                    Dim ltrID As ObjectId = ltrBlk.ObjectId
-                    If vis = "Existing" Then
-                        ChangeVisState(ltrID, "Existing", "Visibility1")
-                    ElseIf vis = "Proposed" Then
-                        ChangeVisState(ltrID, "Proposed", "Visibility1")
-                    ElseIf vis = "Remove" Then
-                        ChangeVisState(ltrID, "Remove", "Visibility1")
                     End If
+
+                    If IsNumeric(letters(i)) Then
+                        Select Case letters(i)
+                            Case Is = "1"
+                                cPos += 0.33333 * 7
+                            Case Is = "2"
+                                cPos += 0.33333 * 9
+                            Case Is = "4"
+                                cPos += 0.33333 * 9
+                            Case Else
+                                cPos += 0.33333 * 8
+                        End Select
+
+                        midDist = (cPos - 0.666667) / 2
+
+                    Else
+                        Select Case letters(i).ToUpper
+                            Case Is = "I"
+                                cPos += 0.33333 * 2
+                            Case Is = " "
+                                cPos += 0.33333 * 4
+                            Case Else
+                                cPos += 0.33333 * 5
+                        End Select
+
+                        midDist = (cPos - 0.33333) / 2
+
+                    End If
+                Next
+
+                blkTbl.UpgradeOpen()
+                Dim wrdBlkId As ObjectId
+
+                If repBlk Then
+                    wrdBlkId = blkTbl(wrdBlkName)
+                Else
+                    wrdBlkId = blkTbl.Add(newWrdBlk)
                 End If
-            Next
 
+                newWrdBlk = acTrans.GetObject(wrdBlkId, OpenMode.ForWrite)
 
-            Dim ppo As New PromptPointOptions(vbLf & "Pick point for location of pavement marking.")
+                For Each id As ObjectId In newWrdBlk
+                    Dim obj As DBObject = acTrans.GetObject(id, OpenMode.ForRead)
+                    If TypeOf obj Is BlockReference Then
+                        Dim ltrRef As BlockReference = CType(obj, BlockReference)
+                        ltrRef.UpgradeOpen()
 
-            Dim ppr As PromptPointResult = ed.GetPoint(ppo)
-            Dim iP As Point3d
+                        Dim orgPt As New Point3d(0, 0, 0)
+                        Dim cPt As New Point3d(midDist, 4, 0)
 
-            If ppr.Status = PromptStatus.OK Then
-                iP = ppr.Value
-            Else
-                Exit Sub
-            End If
+                        Dim dispVect As Vector3d = cPt.GetVectorTo(orgPt)
+                        ltrRef.TransformBy(Matrix3d.Displacement(dispVect))
 
-            Dim wrdBref As New BlockReference(iP, wrdblkId)
+                        Dim bId As ObjectId = ltrRef.ObjectId
 
-            curSpace.UpgradeOpen()
-            curSpace.AppendEntity(wrdBref)
-            acTrans.AddNewlyCreatedDBObject(wrdBref, True)
+                        If vis = "Existing" Then
+                            ChangeVisState(bId, "Existing", "Visibility1")
+                        ElseIf vis = "Proposed" Then
+                            ChangeVisState(bId, "Proposed", "Visibility1")
+                        ElseIf vis = "Remove" Then
+                            ChangeVisState(bId, "Remove", "Visibility1")
+                        End If
+                    End If
+                Next
 
-            acTrans.Commit()
-        End Using
+                If repBlk Then
+                    Dim bRefIds As ObjectIdCollection = newWrdBlk.GetBlockReferenceIds(False, True)
+                    For Each brefid As ObjectId In bRefIds
+                        Dim br As BlockReference = acTrans.GetObject(brefid, OpenMode.ForWrite, False, True)
+                        br.RecordGraphicsModified(True)
+                    Next
+                End If
+
+                Dim ppo As New PromptPointOptions(vbLf & "Pick point for location of pavement marking.")
+
+                Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+                Dim iP As Point3d
+
+                If ppr.Status = PromptStatus.OK Then
+                    iP = ppr.Value
+                    Dim wrdBref As New BlockReference(iP, wrdBlkId)
+
+                    curSpace.UpgradeOpen()
+                    curSpace.AppendEntity(wrdBref)
+                    acTrans.AddNewlyCreatedDBObject(wrdBref, True)
+                End If
+
+                acTrans.Commit()
+
+            End Using
+
+        Catch ex As Exception
+            Dim msgStr As String = "Fatal Error:" & vbLf & ex.Message & vbLf & ex.Source.ToString & vbLf 
+            MessageBox.Show(msgStr)
+        End Try
 
     End Sub
 
@@ -809,7 +885,6 @@ End Module
 
 Public Module GeometryCommands
 
-    <CommandMethod("ETAN")>
     Public Sub ExtTangent2Circles()
         Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = CurDwg.Database
@@ -846,31 +921,36 @@ Public Module GeometryCommands
                 dbObId2 = pr2.ObjectId
             End If
 
-            Dim c1 As Circle
-            Dim c2 As Circle
+            Dim tc1 As Circle
+            Dim tc2 As Circle
 
             Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
                 Dim dbObj1 As DBObject = acTrans.GetObject(dbObId, OpenMode.ForRead)
                 If TypeOf dbObj1 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
-                    c1 = CType(dbObj1, Circle)
+                    tc1 = CType(dbObj1, Circle)
                 ElseIf TypeOf dbObj1 Is Arc Then
                     Dim a1 As Arc = CType(dbObj1, Arc)
-                    c1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
-                    a1.Dispose()
+                    tc1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
+                    'a1.Dispose()
                 Else
                     Exit Sub
                 End If
 
                 Dim dbObj2 As DBObject = acTrans.GetObject(dbObId2, OpenMode.ForRead)
                 If TypeOf dbObj2 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
-                    c2 = CType(dbObj2, Circle)
+                    tc2 = CType(dbObj2, Circle)
                 ElseIf TypeOf dbObj2 Is Arc Then
                     Dim a2 As Arc = CType(dbObj2, Arc)
-                    c2 = New Circle(a2.Center, Vector3d.ZAxis, a2.Radius)
-                    a2.Dispose()
+                    tc2 = New Circle(a2.Center, Vector3d.ZAxis, a2.Radius)
+                    'a2.Dispose()
                 Else
                     Exit Sub
                 End If
+
+                Dim cen1 As New Point3d(tc1.Center.X, tc1.Center.Y, 0)
+                Dim cen2 As New Point3d(tc2.Center.X, tc2.Center.Y, 0)
+                Dim c1 As New Circle(cen1, Vector3d.ZAxis, tc1.Radius)
+                Dim c2 As New Circle(cen2, Vector3d.ZAxis, tc2.Radius)
 
                 If c1.Radius > c2.Radius Then
                     Dim tempC As Circle = c1
@@ -884,23 +964,26 @@ Public Module GeometryCommands
 
                 Dim ctLine As New Line(c2.Center, c1.Center)
                 Dim halfline As Double = ctLine.Length / 2
-                Dim quarterline As Double = ctLine.Length / 4
+                'Dim quarterline As Double = ctLine.Length / 4
                 Dim midpt As Point3d = ctLine.GetPointAtDist(halfline)
-                Dim pointS As Point3d = ctLine.GetPointAtDist(quarterline)
+                'Dim pointS As Point3d = ctLine.GetPointAtDist(raddiff)
+                'Dim c3 As New Circle(c2.Center, Vector3d.ZAxis, c1.Radius)
                 Dim c4 As New Circle(midpt, Vector3d.ZAxis, halfline)
-                Dim pointJ As New Point3dCollection
 
+                Dim pointJ As New Point3dCollection
                 c4.IntersectWith(c3, Intersect.OnBothOperands, pointJ, IntPtr.Zero, IntPtr.Zero)
+
+                If pointJ.Count = 0 Then Exit Sub
+
                 Dim line1 As New Line(c2.Center, pointJ(0))
                 Dim line2 As New Line(c2.Center, pointJ(1))
 
-                Dim testpt1 As New Point3d
-                Dim testpt2 As New Point3d
-
                 Dim pointL1 As New Point3dCollection
                 line1.IntersectWith(c2, Intersect.ExtendThis, pointL1, IntPtr.Zero, IntPtr.Zero)
-                testpt1 = pointL1(0)
-                testpt2 = pointL1(1)
+
+                If pointL1.Count = 0 Then Exit Sub
+                Dim testpt1 As Point3d = pointL1(0)
+                Dim testpt2 As Point3d = pointL1(1)
 
                 Dim pTanC2A As Point3d
 
@@ -911,7 +994,10 @@ Public Module GeometryCommands
                 End If
 
                 Dim pointL2 As New Point3dCollection
+
                 line2.IntersectWith(c2, Intersect.ExtendThis, pointL2, IntPtr.Zero, IntPtr.Zero)
+
+                If pointL2.Count = 0 Then Exit Sub
                 testpt1 = pointL2(0)
                 testpt2 = pointL2(1)
 
@@ -923,10 +1009,11 @@ Public Module GeometryCommands
                     pTanC2B = testpt2
                 End If
 
-                Dim clPtS As Point3d = ctLine.GetPointAtDist(c3.Radius)
-                Dim ptSptJ As Double = clPtS.GetVectorTo(pointJ(0)).Length
+                Dim clPtS As Point3d = ctLine.GetPointAtDist(raddiff)
+                Dim distSJ As Double = clPtS.GetVectorTo(pointJ(0)).Length
 
-                Dim C5 As New Circle(c1.Center, Vector3d.ZAxis, c3.Radius)
+                Dim C5 As New Circle(c1.Center, Vector3d.ZAxis, raddiff)
+
                 Dim ctrlineC5 As New Point3dCollection
                 ctLine.IntersectWith(C5, Intersect.ExtendThis, ctrlineC5, IntPtr.Zero, IntPtr.Zero)
 
@@ -941,23 +1028,27 @@ Public Module GeometryCommands
                     ptZ = testpt1
                 End If
 
-                Dim c6 As New Circle(ptZ, Vector3d.ZAxis, ptSptJ)
+                Dim c6 As New Circle(ptZ, Vector3d.ZAxis, distSJ)
 
                 Dim pointT As New Point3dCollection
 
-                C5.IntersectWith(c6, Intersect.OnBothOperands, pointT, IntPtr.Zero, IntPtr.Zero)
+                c6.IntersectWith(C5, Intersect.OnBothOperands, pointT, IntPtr.Zero, IntPtr.Zero)
+
+                If pointT.Count = 0 Then Exit Sub
                 Dim line3 As New Line(c1.Center, pointT(0))
                 Dim line4 As New Line(c1.Center, pointT(1))
 
                 Dim c1L3 As New Point3dCollection
                 line3.IntersectWith(c1, Intersect.OnBothOperands, c1L3, IntPtr.Zero, IntPtr.Zero)
 
+                If c1L3.Count = 0 Then Exit Sub
                 testpt1 = c1L3(0)
-                testpt2 = c1L3(1)
+                'testpt2 = c1L3(1)
 
                 Dim pTanC1A As New Point3d
+                pTanC1A = New Point3d(testpt1.X, testpt1.Y, 0)
 
-                If c2.Center.GetVectorTo(testpt1).Length < c1.Center.GetVectorTo(testpt2).Length Then
+                If c2.Center.GetVectorTo(testpt1).Length < c2.Center.GetVectorTo(testpt2).Length Then
                     pTanC1A = testpt2
                 Else
                     pTanC1A = testpt1
@@ -966,16 +1057,20 @@ Public Module GeometryCommands
                 Dim c1L4 As New Point3dCollection
                 line4.IntersectWith(c1, Intersect.OnBothOperands, c1L4, IntPtr.Zero, IntPtr.Zero)
 
+                If c1L4.Count = 0 Then Exit Sub
                 testpt1 = c1L4(0)
-                testpt2 = c1L4(1)
+                'testpt2 = c1L4(1)
+
+
 
                 Dim pTanC1B As New Point3d
+                pTanC1B = New Point3d(testpt1.X, testpt1.Y, 0)
 
-                If c2.Center.GetVectorTo(testpt1).Length < c1.Center.GetVectorTo(testpt2).Length Then
-                    pTanC1B = testpt2
-                Else
-                    pTanC1B = testpt1
-                End If
+                'If c2.Center.GetVectorTo(testpt1).Length < c2.Center.GetVectorTo(testpt2).Length Then
+                '    pTanC1B = testpt2
+                'Else
+                '    pTanC1B = testpt1
+                'End If
 
                 Dim test1 As New Line(pTanC1A, pTanC2A)
                 Dim test2 As New Line(pTanC1B, pTanC2B)
@@ -983,27 +1078,39 @@ Public Module GeometryCommands
                 Dim finals As New Point3dCollection
                 test1.IntersectWith(test2, Intersect.OnBothOperands, finals, IntPtr.Zero, IntPtr.Zero)
 
-                Dim intPt As Point3d
+                Dim test3 As New Line(pTanC1A, pTanC2B)
+                Dim test4 As New Line(pTanC1B, pTanC2A)
+
                 Dim final1 As Line
                 Dim final2 As Line
 
-                Try
-                    intPt = finals(0)
+                If finals.Count > 0 Then
                     final1 = New Line(pTanC1A, pTanC2B)
                     final2 = New Line(pTanC1B, pTanC2A)
-                Catch
+                Else
                     final1 = test1
                     final2 = test2
-                End Try
-
+                End If
 
                 Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
 
-                curspace.AppendEntity(final1)
-                acTrans.AddNewlyCreatedDBObject(final1, True)
+                curspace.AppendEntity(test1)
+                acTrans.AddNewlyCreatedDBObject(test1, True)
 
-                curspace.AppendEntity(final2)
-                acTrans.AddNewlyCreatedDBObject(final2, True)
+                curspace.AppendEntity(test2)
+                acTrans.AddNewlyCreatedDBObject(test2, True)
+
+                curspace.AppendEntity(test3)
+                acTrans.AddNewlyCreatedDBObject(test3, True)
+
+                curspace.AppendEntity(test4)
+                acTrans.AddNewlyCreatedDBObject(test4, True)
+
+                'curspace.AppendEntity(final1)
+                'acTrans.AddNewlyCreatedDBObject(final1, True)
+
+                'curspace.AppendEntity(final2)
+                'acTrans.AddNewlyCreatedDBObject(final2, True)
 
                 acTrans.Commit()
 
@@ -1012,6 +1119,165 @@ Public Module GeometryCommands
         Catch ex As Exception
             MessageBox.Show(ex.Message)
         End Try
+    End Sub
+
+
+    <CommandMethod("ETAN")>
+    Public Sub ETangent2Circles()
+        Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = CurDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        'Try
+        Dim peo1 As New PromptEntityOptions(vbLf & "Select first circle or arc")
+
+        With peo1
+            .SetRejectMessage(vbLf & "Must pick a circle or arc.")
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Circle), True)
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Arc), True)
+            .AllowNone = False
+        End With
+
+        Dim dbObId As ObjectId
+
+            Dim pr1 As PromptEntityResult = ed.GetEntity(peo1)
+        If pr1.Status = PromptStatus.OK Then
+            dbObId = pr1.ObjectId
+        Else
+            Exit Sub
+        End If
+
+            Dim peo2 As New PromptEntityOptions(vbLf & "Select second circle or arc")
+
+        With peo2
+            .SetRejectMessage(vbLf & "Must pick a circle or arc.")
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Circle), True)
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Arc), True)
+            .AllowNone = False
+        End With
+
+        Dim dbObId2 As ObjectId
+
+        Dim pr2 As PromptEntityResult = ed.GetEntity(peo2)
+        If pr2.Status = PromptStatus.OK Then
+            dbObId2 = pr2.ObjectId
+        Else
+            Exit Sub
+        End If
+
+        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            Dim dbObj1 As DBObject = acTrans.GetObject(dbObId, OpenMode.ForRead)
+            Dim dbObj2 As DBObject = acTrans.GetObject(dbObId2, OpenMode.ForRead)
+            Dim pCol As Point2dCollection = ExtTan2Circles(dbObj1, dbObj2)
+
+            If pCol Is Nothing OrElse pCol.Count < 4 Then
+                MessageBox.Show("Radius of entity 1 must be smaller than radius of entity 2.  Cancel and try again.")
+                Exit Sub
+            End If
+
+            Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+            Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+            Dim pline1 As New Polyline
+            With pline1
+                .AddVertexAt(0, pCol(0), 0, 0, 0)
+                .AddVertexAt(1, pCol(1), 0, 0, 0)
+            End With
+            mdlSpace.AppendEntity(pline1)
+            acTrans.AddNewlyCreatedDBObject(pline1, True)
+
+            Dim pline2 As New Polyline
+            With pline2
+                .AddVertexAt(0, pCol(2), 0, 0, 0)
+                .AddVertexAt(1, pCol(3), 0, 0, 0)
+            End With
+            mdlSpace.AppendEntity(pline2)
+            acTrans.AddNewlyCreatedDBObject(pline2, True)
+            acTrans.Commit()
+        End Using
+
+        'Catch
+
+        'End Try
+
+    End Sub
+
+    <CommandMethod("ITAN")>
+    Public Sub IntenalTangent2Circles()
+        Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = CurDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        'Try
+        Dim peo1 As New PromptEntityOptions(vbLf & "Select first circle or arc")
+
+        With peo1
+            .SetRejectMessage(vbLf & "Must pick a circle or arc.")
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Circle), True)
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Arc), True)
+            .AllowNone = False
+        End With
+
+        Dim dbObId As ObjectId
+
+        Dim pr1 As PromptEntityResult = ed.GetEntity(peo1)
+        If pr1.Status = PromptStatus.OK Then
+            dbObId = pr1.ObjectId
+        Else
+            Exit Sub
+        End If
+
+        Dim peo2 As New PromptEntityOptions(vbLf & "Select second circle or arc")
+
+        With peo2
+            .SetRejectMessage(vbLf & "Must pick a circle or arc.")
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Circle), True)
+            .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Arc), True)
+            .AllowNone = False
+        End With
+
+        Dim dbObId2 As ObjectId
+
+        Dim pr2 As PromptEntityResult = ed.GetEntity(peo2)
+        If pr2.Status = PromptStatus.OK Then
+            dbObId2 = pr2.ObjectId
+        Else
+            Exit Sub
+        End If
+
+        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            Dim dbObj1 As DBObject = acTrans.GetObject(dbObId, OpenMode.ForRead)
+            Dim dbObj2 As DBObject = acTrans.GetObject(dbObId2, OpenMode.ForRead)
+            Dim pCol As Point2dCollection = IntTan2Circles(dbObj1, dbObj2)
+
+            If pCol Is Nothing OrElse pCol.Count < 4 Then
+                MessageBox.Show("Radius of entity 1 must be smaller than radius of entity 2.  Cancel and try again.")
+                Exit Sub
+            End If
+
+            Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+            Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+            Dim pline1 As New Polyline
+            With pline1
+                .AddVertexAt(0, pCol(0), 0, 0, 0)
+                .AddVertexAt(1, pCol(3), 0, 0, 0)
+            End With
+            mdlSpace.AppendEntity(pline1)
+            acTrans.AddNewlyCreatedDBObject(pline1, True)
+
+            Dim pline2 As New Polyline
+            With pline2
+                .AddVertexAt(0, pCol(1), 0, 0, 0)
+                .AddVertexAt(1, pCol(2), 0, 0, 0)
+            End With
+            mdlSpace.AppendEntity(pline2)
+            acTrans.AddNewlyCreatedDBObject(pline2, True)
+            acTrans.Commit()
+        End Using
+
+        'Catch
+
+        'End Try
+
     End Sub
 
 
@@ -1285,51 +1551,6 @@ NextPoint:
 
     End Sub
 
-    '<CommandMethod("REVPLINES", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
-    'Public Sub REVPLINES()
-
-    '    Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
-    '    Dim DwgDB As Database = CurDwg.Database
-    '    Dim ed As Editor = CurDwg.Editor
-
-    '    Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction()
-
-    '        Dim SelResult As PromptSelectionResult = ed.SelectImplied()
-
-    '        If SelResult.Status = PromptStatus.Error Then
-    '            Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select polylines to reverse: ")}
-    '            'Seloptions.MessageForAdding = String.Format(vbLf & "Select polylines to reverse: ")
-    '            SelResult = ed.GetSelection(Seloptions)
-    '        Else
-    '            ed.SetImpliedSelection(New ObjectId(-1) {})
-    '        End If
-
-    '        If SelResult.Status = PromptStatus.OK Then
-
-    '            Dim acSSet As SelectionSet = SelResult.Value
-    '            Dim myobjIDs As ObjectId() = acSSet.GetObjectIds
-
-    '            'Dim i As Integer = 0
-    '            For Each objID As ObjectId In myobjIDs
-
-    '                Dim obj As Object = actrans.GetObject(objID, OpenMode.ForWrite)
-    '                Dim cur = TryCast(obj, Curve)
-
-    '                If cur IsNot Nothing Then
-    '                    Try
-    '                        cur.ReverseCurve()
-    '                    Catch
-    '                        ed.WriteMessage(vbLf & "Could not reverse object of type {0}.", cur.[GetType]().Name)
-    '                    End Try
-    '                Else
-    '                    ed.WriteMessage(vbLf & "Could not reverse object.")
-    '                End If
-    '            Next
-    '        End If
-    '        actrans.Commit()
-    '    End Using
-    'End Sub
-
 
     <CommandMethod("RgnCentroid")>
     Public Sub RegionCentroid()
@@ -1375,93 +1596,6 @@ NextPoint:
         End Using
     End Sub
 
-    <CommandMethod("SF2FL")>
-    Public Sub FIGS2Feats()
-        Dim docCol As Autodesk.AutoCAD.ApplicationServices.DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
-        Dim curDwg As Document = docCol.MdiActiveDocument
-        Dim dwgDB As Database = curDwg.Database
-        Dim cvlDwg As C3dAs.CivilDocument = Autodesk.Civil.ApplicationServices.CivilApplication.ActiveDocument()
-        Dim ed As Editor = curDwg.Editor
-
-        Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-            Dim psOptions As New PromptSelectionOptions
-
-            With psOptions
-                .MessageForAdding = vbLf & "Select survey figures to convert to feature lines: "
-                .AllowSubSelections = True
-            End With
-
-            Dim acSSPrompt As PromptSelectionResult = ed.GetSelection(psOptions)
-            Dim ObjColl As New ObjectIdCollection
-
-            Dim resColl As New ObjectIdCollection
-
-            '' If the prompt status is OK, objects were selected
-            If acSSPrompt.Status = PromptStatus.OK Then
-                Dim acSSet As SelectionSet = acSSPrompt.Value
-                '' Step through the objects in the selection set
-                For Each acSSObj As SelectedObject In acSSet
-                    '' Check to make sure a valid SelectedObject object was returned
-                    If Not IsDBNull(acSSObj) Then
-                        Dim tempObj As Object = acTrans.GetObject(acSSObj.ObjectId, OpenMode.ForRead)
-                        If TypeOf tempObj Is C3dDb.SurveyFigure Then
-                            ObjColl.Add(acSSObj.ObjectId)
-                        End If
-                    End If
-                Next
-            End If
-
-            Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForWrite)
-            Dim curSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
-
-            Dim pKO As New PromptKeywordOptions("")
-
-            With pKO
-                .Keywords.Add("Yes")
-                .Keywords.Add("No")
-                .Message = vbLf & "Delete survey figures after converting to feature lines?"
-                .AppendKeywordsToMessage = True
-                .AllowArbitraryInput = False
-                .AllowNone = False
-            End With
-            Dim eraseOrigObj As Boolean
-
-            Dim pkRes As PromptResult = ed.GetKeywords(pKO)
-            If pkRes.Status = PromptStatus.OK Then
-                If pkRes.StringResult = "Yes" Then eraseOrigObj = True
-                If pkRes.StringResult = "No" Then eraseOrigObj = False
-            End If
-
-            For Each lineID As ObjectId In ObjColl
-                Dim lineObj As C3dDb.SurveyFigure = TryCast(acTrans.GetObject(lineID, OpenMode.ForRead), C3dDb.SurveyFigure)
-
-                If lineObj IsNot Nothing Then
-                    Dim LinePts As Point3dCollection = lineObj.GetPoints(0)
-                    Dim objSite As ObjectId = lineObj.SiteId
-                    Dim newPolyId As ObjectId = Fig2Poly2D(lineID)
-                    Dim tempFlId As ObjectId
-                    tempFlId = C3dDb.FeatureLine.Create(newPolyId.ToString, newPolyId)
-                    Dim newPoly As Autodesk.AutoCAD.DatabaseServices.Entity = acTrans.GetObject(newPolyId, OpenMode.ForWrite)
-                    newPoly.Erase()
-                    Dim noOfPts As Integer = LinePts.Count
-                    Dim newFeat As C3dDb.FeatureLine = acTrans.GetObject(tempFlId, OpenMode.ForWrite)
-                    For i = 0 To noOfPts - 1
-                        newFeat.SetPointElevation(i, LinePts(i).Z)
-                    Next
-                End If
-            Next
-
-            If eraseOrigObj = True Then
-                For Each obID As ObjectId In ObjColl
-                    Dim origFig As Autodesk.AutoCAD.DatabaseServices.Entity = TryCast(acTrans.GetObject(obID, OpenMode.ForWrite), Autodesk.AutoCAD.DatabaseServices.Entity)
-                    origFig.Erase()
-                Next
-            End If
-            acTrans.Commit()
-        End Using
-    End Sub
-
-
     <CommandMethod("LV")>
     Public Sub ListVertices()
         Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -1505,45 +1639,6 @@ NextPoint:
             End Using
         End If
     End Sub
-
-
-    '<CommandMethod("REVPCurves")>
-    'Public Sub RevPCurve()
-    '    Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
-    '    Dim DwgDB As Database = CurDwg.Database
-    '    'Dim acTrans As Transaction = DwgDB.TransactionManager.StartTransaction()
-    '    Dim ed As Editor = CurDwg.Editor
-
-    '    Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
-
-    '        Dim SelResult As PromptSelectionResult = ed.SelectImplied()
-    '        If SelResult.Status = PromptStatus.Error Then
-    '            Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select polyline curves to reverse")}
-    '            'Seloptions.MessageForAdding = String.Format(vbLf & "Select centerlines")
-    '            SelResult = ed.GetSelection(Seloptions)
-    '        Else
-    '            ed.SetImpliedSelection(New ObjectId(-1) {})
-    '        End If
-
-    '        Dim acSSet As SelectionSet = SelResult.Value
-    '        Dim MyobjIDs As ObjectId() = acSSet.GetObjectIds
-
-    '        For Each objID As ObjectId In MyobjIDs
-
-    '            Dim obj As Object = acTrans.GetObject(objID, OpenMode.ForWrite)
-    '            Dim Cur = TryCast(obj, Curve)
-    '            If Cur IsNot Nothing Then
-    '                Try
-    '                    Cur.ReverseCurve()
-    '                Catch
-    '                    ed.WriteMessage(vbLf & "Could not reverse object of type {0}.", Cur.[GetType]().Name)
-    '                End Try
-    '            End If
-    '        Next
-    '        acTrans.Commit()
-    '    End Using
-    'End Sub
-
 
 End Module
 
@@ -1754,11 +1849,6 @@ Public Module PlotLayoutCommands
                 ed.WriteMessage(vbLf & DicItem.Key.ToString & "   " & DicItem.Value.ToString)
             Next DicItem
 
-            'For k = 0 To i - 1
-            '    'For Each plotStyle As String In PlotSettingsValidator.Current.GetPlotStyleSheetList()
-            '    ' Output the names of the available plot styles
-            '    ed.WriteMessage(vbLf & PScoll(k))
-            'Next k
         End Using
         Call DumpPltStyleTables()
 
@@ -1772,25 +1862,6 @@ Public Module PlotLayoutCommands
         Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = CurDwg.Database
         Dim ed As Editor = CurDwg.Editor
-
-        'Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
-
-        '    Dim cSpace As BlockTableRecord = actrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
-
-        '    Dim layMgr As LayoutManager = LayoutManager.Current
-        '    Dim curLayout As Layout = actrans.GetObject(layMgr.GetLayoutId(layMgr.CurrentLayout), OpenMode.ForWrite)
-        '    Dim plInfo As New PlotInfo()
-        '    plInfo.Layout = curLayout.ObjectId
-        '    Dim plSettings As New PlotSettings(curLayout.ModelType)
-        '    plSettings.CopyFrom(curLayout)
-        '    Dim psv As PlotSettingsValidator = PlotSettingsValidator.Current
-        '    'psv.SetCurrentStyleSheet(plSettings, "EES Standard 5.0 10-Scale.stb")
-        '    'psv.SetCurrentStyleSheet(plSettings, "\\eesserver\datadisk\CAD\plot styles\PsTest.stb")
-        '    psv.SetCurrentStyleSheet(plSettings, "PsTest.stb")
-        '    curLayout.UpgradeOpen()
-        '    curLayout.CopyFrom(plSettings)
-        '    actrans.Commit()
-        'End Using
 
         Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
@@ -1850,11 +1921,6 @@ Public Module PlotLayoutCommands
         Dim ed As Editor = curDwg.Editor
         Dim dwgDB As Database = curDwg.Database
         Dim i As Integer = 0
-
-        'Dim showSetup As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORM")
-        ' Dim createView As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LAYOUTCREATEVIEWPORT")
-
-        'Using dkLck As DocumentLock = curDwg.LockDocument
 
         Dim ppo As New PromptPointOptions(vbLf & "Pick upper left corner of first cell")
         With ppo
@@ -2209,8 +2275,6 @@ Public Module PlotLayoutCommands
 
     End Sub
 
-
-
     <CommandMethod("ALTS")>
     Public Sub AdjustLayouts()
         'Command to change the sheet sizes for layouts based upon the IMVS method.  Requires numbered views corresponding with the number of layouts to be adjusted.
@@ -2517,20 +2581,6 @@ Public Module PlotLayoutCommands
 
     End Sub
 
-    <CommandMethod("CountSheets")>
-    Public Sub CountSheets()
-
-        Dim myTabs As SortedDictionary(Of Integer, String) = LayoutTabList()
-        Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
-        Dim ed As Editor = doc.Editor
-        ed.WriteMessage(vbCrLf & "Number of Layouts:  " & myTabs.Count) '' Number of Tabs not counting Model Space Tab
-        For Each v In myTabs.Values
-            ed.WriteMessage(vbCrLf & v.ToString)
-        Next
-
-    End Sub
-
-
     Public Sub PlotDirect(pSet As PlotSettings, psetVal As PlotSettingsValidator, ByVal toFile As String)
 
         '' Get the current document and database
@@ -2721,6 +2771,7 @@ Public Module MiscCommands
 
     <CommandMethod("MAH")>
     Public Sub MkArrowHead()
+        'Creates a standard sign arrow head
 
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = curDwg.Database
@@ -2730,7 +2781,7 @@ Public Module MiscCommands
         Dim p1 As Point3d
         Dim p2 As Point3d
 
-        'get the tip location and store in p1
+        'get the tip location and store as p1
         Dim ppo As New PromptPointOptions(vbLf & "Pick tip of arrowhead")
         With ppo
             .AllowNone = False
@@ -2741,33 +2792,61 @@ Public Module MiscCommands
 
         If ppr.Status = PromptStatus.OK Then
             p1 = ppr.Value
+        Else
+            ed.WriteMessage(vbLf & "Command cancelled.")
+            Exit Sub
+        End If
 
-            'get second point for arrow orientation
-            Dim ppo2 As New PromptPointOptions(vbLf & "Pick direction of arrow shaft")
-            With ppo2
-                .UseBasePoint = True
-                .BasePoint = p1
-                .UseDashedLine = True
-            End With
+        Dim pko As New PromptKeywordOptions(vbLf & "Do you want to draw the arrow shaft?")
+        With pko
+            .AllowNone = False
+            .Keywords.Add("Yes")
+            .Keywords.Add("No")
+            .AppendKeywordsToMessage = True
+            .AllowArbitraryInput = False
+        End With
 
-            Dim ppr2 As PromptPointResult = ed.GetCorner(ppo2)
+        Dim drawShaft As Boolean
 
-            If ppr2.Status = PromptStatus.OK Then
+        Dim pkr As PromptResult = ed.GetKeywords(pko)
+        If pkr.Status = PromptStatus.OK Then
+            If pkr.StringResult = "Yes" Then
+                drawShaft = True
+            Else
+                drawShaft = False
+            End If
+        Else
+            ed.WriteMessage(vbLf & "Command cancelled.")
+            Exit Sub
+        End If
+
+
+        'get second point for arrow orientation
+        Dim ppo2 As New PromptPointOptions(vbLf & "Pick a point for the direction of the shaft")
+        With ppo2
+            If drawShaft Then .Message = vbLf & "Pick the end of the arrow shaft"
+            .UseBasePoint = True
+            .BasePoint = p1
+            .UseDashedLine = True
+        End With
+
+        Dim ppr2 As PromptPointResult = ed.GetCorner(ppo2)
+
+        If ppr2.Status = PromptStatus.OK Then
                 p2 = ppr2.Value
             Else
                 Exit Sub
             End If
-        Else
-            Exit Sub
-        End If
+
+        Dim arrLen As Double = p1.DistanceTo(p2)
 
         'create a vector2d from p1 & p2 to get the final orientation angle for the arrowhead
         Dim arrowVect As Vector3d = p1.GetVectorTo(p2)
-        Dim arrowVect2d As Vector2d = arrowVect.Convert2d(New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis))
+        Dim arrowVect2d As Vector2d = arrowVect.Convert2d(New Plane(Point3d.Origin, Vector3d.ZAxis))
         Dim arrowAng As Double = arrowVect2d.Angle
 
         'get the width of the arrow shaft - this is the critical parameter for the arrowhead
-        Dim pdo As New PromptDistanceOptions(vbLf & "Input or pick width of arrow shaft.")
+        Dim pdo As New PromptDistanceOptions(vbLf & "Enter or pick the width of the shaft.")
         With pdo
             .AllowNegative = False
             .Only2d = True
@@ -2785,13 +2864,13 @@ Public Module MiscCommands
         End If
 
         Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
-            'using an origin located on the cenerline of the arrow at the intersection of the arrowhead base lines
+            'using an origin located on the cenerline of the arrow at the end of the arrow shaft,
             'get temporary arrow coordinate geometry per Federal Sign Manual Appendix
             Dim paramB As Double = 1.21 * paramA
             Dim paramC As Double = 2 * paramA
             Dim paramE As Double = 0.21 * paramA
-            Dim theta1 As Double = (Atan(0.21 / 0.71))
-            Dim paramD As Double = (paramA * Tan(theta1)) / 2
+            Dim theta1 As Double = Asin(paramE / (paramB - (paramA / 2)))
+            Dim paramD As Double = (paramA / 2) * Tan(theta1)
             Dim ptO As Point3d = Point3d.Origin
             Dim s1 As New Point2d(ptO.X, paramA / 2)
             Dim s2 As New Point2d(ptO.X, -paramA / 2)
@@ -2803,15 +2882,12 @@ Public Module MiscCommands
             Dim ptR2d As New Point2d(ptR.X, ptR.Y)
             Dim negPtP As New Point2d(ptPx, -ptPy)
 
+
             'store the vector from the tip of the temporary arrow to its final location
             Dim moveVect As Vector3d = ptR.GetVectorTo(p1)
 
             'create a temporary circle for finding tangents
             Dim c1 As New Circle(cen1, Vector3d.ZAxis, paramE)
-
-            'Dim tempCRad As Double = Sqrt(paramB ^ 2 + paramC ^ 2)
-            'Dim tempPt As New Point2d(-tempCRad, ptO.Y)
-            'Dim iPts As Point2dCollection = FindTangentPoints(paramE, tempPt, New Point2d(cen1.X, cen1.Y))
 
             'get the tangent points from ptR to c1
             Dim iPts As Point2dCollection = GetTangentPoints(ptR, c1)
@@ -2835,65 +2911,63 @@ Public Module MiscCommands
             'set the opposite tangent point
             Dim negTanPt As New Point2d(tanPt.X, -tanPt.Y)
 
-
-            'Dim trnsvct As Vector3d = New Point3d(tempPt.X, tempPt.Y, 0).GetVectorTo(ptR)
-            'Dim rotVect As Vector2d = ptR2d.GetVectorTo(New Point2d(cen1.X, cen1.Y))
-            'Dim rotAng As Double = Vector2d.XAxis.GetAngleTo(rotVect)
-
-            'Dim mirrLine As New Line3d(ptR, ptO)
-
-            'Dim pl1 As New Polyline
-            'pl1.AddVertexAt(0, s1, 0, 0, 0)
-            'pl1.AddVertexAt(1, ptP, 0, 0, 0)
-
-            'Dim pl2 As New Polyline
-            'pl2.AddVertexAt(0, tempPt, 0, 0, 0)
-            'pl2.AddVertexAt(0, ptR2d, 0, 0, 0)
-            'pl2.AddVertexAt(1, tanPt, 0, 0, 0)
-            'pl2.TransformBy(Matrix3d.Displacement(trnsvct))
-            'pl2.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, ptR))
-
-            'Dim ahV13d As Vector3d = pl2.StartPoint.GetVectorTo(pl2.EndPoint)
-            'Dim ahv1 As Vector2d = ahV13d.Convert2d(New Plane(Point3d.Origin, Vector3d.ZAxis))
-
             'get the bulge value for the polyline
             Dim ahv1 As Vector2d = ptR2d.GetVectorTo(tanPt)
             Dim ahv2 As Vector2d = ptP2d.GetVectorTo(s1)
             Dim bulgeAng As Double = ahv1.GetAngleTo(ahv2)
             Dim myblg As Double = Tan(bulgeAng / 4)
-
-            'Dim pp1 As Point2d = New Point2d(pl2.EndPoint.X, pl2.EndPoint.Y)
-            'Dim pp2 As Point2d = New Point2d(pl2.StartPoint.X, pl2.StartPoint.Y)
-            'Dim pp3 As Point2d = New Point2d(pp1.X, -pp1.Y)
-            'Dim pp4 As Point2d = New Point2d(ptP.X, -ptP.Y)
-            'Dim pp5 As Point2d = New Point2d(pl1.EndPoint.X, -pl1.EndPoint.Y)
+            Dim ptF As New Point2d(arrLen - paramC, paramA / 2)
+            Dim negPtF As New Point2d(arrLen - paramC, -paramA / 2)
 
             'create a polyline
-            Using pl0 As New Polyline
-                pl0.AddVertexAt(0, s1, 0, 0, 0)
-                pl0.AddVertexAt(1, ptP2d, myblg, 0, 0)
-                pl0.AddVertexAt(2, tanPt, 0, 0, 0)
-                pl0.AddVertexAt(3, ptR2d, 0, 0, 0)
-                pl0.AddVertexAt(4, negTanPt, myblg, 0, 0)
-                pl0.AddVertexAt(5, negPtP, 0, 0, 0)
-                pl0.AddVertexAt(6, s2, 0, 0, 0)
+            If drawShaft Then
+                Using pl0 As New Polyline
+                    pl0.AddVertexAt(0, ptF, 0, 0, 0)
+                    pl0.AddVertexAt(1, s1, 0, 0, 0)
+                    pl0.AddVertexAt(2, ptP2d, myblg, 0, 0)
+                    pl0.AddVertexAt(3, tanPt, 0, 0, 0)
+                    pl0.AddVertexAt(4, ptR2d, 0, 0, 0)
+                    pl0.AddVertexAt(5, negTanPt, myblg, 0, 0)
+                    pl0.AddVertexAt(6, negPtP, 0, 0, 0)
+                    pl0.AddVertexAt(7, s2, 0, 0, 0)
+                    pl0.AddVertexAt(8, negPtF, 0, 0, 0)
+                    pl0.Closed = True
 
-                'move and rotate the polyline to its final position
-                pl0.TransformBy(Matrix3d.Displacement(moveVect))
-                pl0.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
+                    'move and rotate the polyline to its final position
+                    pl0.TransformBy(Matrix3d.Displacement(moveVect))
+                    pl0.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
 
-                'add it to the current space
-                Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
-                With curSpace
-                    .AppendEntity(pl0)
+                    'add it to the current space
+                    Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                    curSpace.AppendEntity(pl0)
                     acTrans.AddNewlyCreatedDBObject(pl0, True)
-                End With
-            End Using
+                End Using
+
+            Else
+                Using pl0 As New Polyline
+                    pl0.AddVertexAt(0, s1, 0, 0, 0)
+                    pl0.AddVertexAt(1, ptP2d, myblg, 0, 0)
+                    pl0.AddVertexAt(2, tanPt, 0, 0, 0)
+                    pl0.AddVertexAt(3, ptR2d, 0, 0, 0)
+                    pl0.AddVertexAt(4, negTanPt, myblg, 0, 0)
+                    pl0.AddVertexAt(5, negPtP, 0, 0, 0)
+                    pl0.AddVertexAt(6, s2, 0, 0, 0)
+
+                    'move and rotate the polyline to its final position
+                    pl0.TransformBy(Matrix3d.Displacement(moveVect))
+                    pl0.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
+
+                    'add it to the current space
+                    Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                    curSpace.AppendEntity(pl0)
+                    acTrans.AddNewlyCreatedDBObject(pl0, True)
+                End Using
+            End If
 
             'dispose of the temporary circle
             c1.Dispose()
-            acTrans.Commit()
 
+            acTrans.Commit()
         End Using
 
     End Sub
@@ -2915,8 +2989,8 @@ Public Module MiscCommands
             Dim paramB As Double = 1.21 * paramA
             Dim paramC As Double = 2 * paramA
             Dim paramE As Double = 0.21 * paramA
-            Dim theta1 As Double = (Atan(0.21 / 0.71))
-            Dim paramD As Double = (paramA * Tan(theta1)) / 2
+            Dim theta1 As Double = Asin(paramE / (paramB - (paramA / 2)))
+            Dim paramD As Double = (paramA / 2) * Tan(theta1)
             Dim ptO As Point3d = Point3d.Origin
             Dim s1 As New Point2d(ptO.X, paramA / 2)
             Dim s2 As New Point2d(ptO.X, -paramA / 2)
@@ -2933,10 +3007,6 @@ Public Module MiscCommands
 
             'create a temporary circle for finding tangents
             Dim c1 As New Circle(cen1, Vector3d.ZAxis, paramE)
-
-            'Dim tempCRad As Double = Sqrt(paramB ^ 2 + paramC ^ 2)
-            'Dim tempPt As New Point2d(-tempCRad, ptO.Y)
-            'Dim iPts As Point2dCollection = FindTangentPoints(paramE, tempPt, New Point2d(cen1.X, cen1.Y))
 
             'get the tangent points from ptR to c1
             Dim iPts As Point2dCollection = GetTangentPoints(ptR, c1)
@@ -2962,38 +3032,11 @@ Public Module MiscCommands
             'set the opposite tangent point
             Dim negTanPt As New Point2d(tanPt.X, -tanPt.Y)
 
-
-            'Dim trnsvct As Vector3d = New Point3d(tempPt.X, tempPt.Y, 0).GetVectorTo(ptR)
-            'Dim rotVect As Vector2d = ptR2d.GetVectorTo(New Point2d(cen1.X, cen1.Y))
-            'Dim rotAng As Double = Vector2d.XAxis.GetAngleTo(rotVect)
-
-            'Dim mirrLine As New Line3d(ptR, ptO)
-
-            'Dim pl1 As New Polyline
-            'pl1.AddVertexAt(0, s1, 0, 0, 0)
-            'pl1.AddVertexAt(1, ptP, 0, 0, 0)
-
-            'Dim pl2 As New Polyline
-            'pl2.AddVertexAt(0, tempPt, 0, 0, 0)
-            'pl2.AddVertexAt(0, ptR2d, 0, 0, 0)
-            'pl2.AddVertexAt(1, tanPt, 0, 0, 0)
-            'pl2.TransformBy(Matrix3d.Displacement(trnsvct))
-            'pl2.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, ptR))
-
-            'Dim ahV13d As Vector3d = pl2.StartPoint.GetVectorTo(pl2.EndPoint)
-            'Dim ahv1 As Vector2d = ahV13d.Convert2d(New Plane(Point3d.Origin, Vector3d.ZAxis))
-
             'get the bulge value for the polyline
             Dim ahv1 As Vector2d = ptR2d.GetVectorTo(tanPt)
             Dim ahv2 As Vector2d = ptP2d.GetVectorTo(s1)
             Dim bulgeAng As Double = ahv1.GetAngleTo(ahv2)
             Dim myblg As Double = Tan(bulgeAng / 4)
-
-            'Dim pp1 As Point2d = New Point2d(pl2.EndPoint.X, pl2.EndPoint.Y)
-            'Dim pp2 As Point2d = New Point2d(pl2.StartPoint.X, pl2.StartPoint.Y)
-            'Dim pp3 As Point2d = New Point2d(pp1.X, -pp1.Y)
-            'Dim pp4 As Point2d = New Point2d(ptP.X, -ptP.Y)
-            'Dim pp5 As Point2d = New Point2d(pl1.EndPoint.X, -pl1.EndPoint.Y)
 
             'create a polyline
             Dim pl0 As New Polyline
@@ -3007,17 +3050,14 @@ Public Module MiscCommands
 
             'move and rotate the polyline to its final position
             pl0.TransformBy(Matrix3d.Displacement(moveVect))
-                pl0.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
+            pl0.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
 
             'add it to the current space
             Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+            Dim plObjId As ObjectId = curSpace.AppendEntity(pl0)
+            acTrans.AddNewlyCreatedDBObject(pl0, True)
 
-            With curSpace
-                .AppendEntity(pl0)
-                acTrans.AddNewlyCreatedDBObject(pl0, True)
-            End With
-
-            Return pl0.ObjectId
+            Return plobjid
 
             'dispose of the temporary circle
             c1.Dispose()
@@ -3026,5 +3066,422 @@ Public Module MiscCommands
         End Using
 
     End Function
+
+
+    <CommandMethod("MDAR")>
+    Public Sub MakeDirectionalArrows()
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        'get arrow type from user
+        Dim atb As New ArrowTypeBox
+        atb.ShowDialog()
+        Dim aType As Integer = atb.ArrowType
+
+        'test for good type
+        If aType = 0 Then Exit Sub
+
+        'get the final tip location and store as p1
+        Dim p1 As Point3d
+        Dim ppo As New PromptPointOptions(vbLf & "Pick tip of arrowhead")
+        With ppo
+            .AllowNone = False
+            .AllowArbitraryInput = True
+        End With
+
+        Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+
+        If ppr.Status = PromptStatus.OK Then
+            p1 = ppr.Value
+        Else
+            ed.WriteMessage(vbLf & "Command cancelled.")
+            Exit Sub
+        End If
+
+        'get second point for orientation of arrows type 1 and 3
+        Dim arrowAng As Double
+        Dim p2 As Point3d
+
+        If aType = 1 Or aType = 3 Then
+            Dim ppo2 As New PromptPointOptions(vbLf & "Pick a point for the direction of the arrow shaft")
+            With ppo2
+                .UseBasePoint = True
+                .BasePoint = p1
+                .UseDashedLine = True
+            End With
+
+            Dim ppr2 As PromptPointResult = ed.GetCorner(ppo2)
+
+            If ppr2.Status = PromptStatus.OK Then
+                p2 = ppr2.Value
+            Else
+                Exit Sub
+            End If
+
+            'create a vector2d from p1 & p2 to get the final orientation angle for the arrowhead
+            Dim arrowVect As Vector3d = p1.GetVectorTo(p2)
+            Dim arrowVect2d As Vector2d = arrowVect.Convert2d(New Plane(Point3d.Origin, Vector3d.ZAxis))
+            arrowAng = arrowVect2d.Angle
+
+            'pick right or left for arrow type 2
+        ElseIf aType = 2 Then
+            Dim pko As New PromptKeywordOptions(vbLf & "Arrow pointing Left or Right?")
+            With pko
+                .Keywords.Add("Left")
+                .Keywords.Add("Right")
+                .AppendKeywordsToMessage = True
+                .AllowNone = False
+                .AllowArbitraryInput = False
+            End With
+
+            Dim pkr As PromptResult = ed.GetKeywords(pko)
+
+            If pkr.Status = PromptStatus.OK Then
+                If pkr.StringResult = "Left" Then
+                    arrowAng = 0
+                Else
+                    arrowAng = PI
+                End If
+            Else
+                ed.WriteMessage(vbLf & "Command ended.")
+                Exit Sub
+            End If
+
+            'type 4 always points down
+        ElseIf aType = 4 Then
+            arrowAng = PI / 2
+        Else
+            Exit Sub
+        End If
+
+
+        'Set arrow parameters by letter height or best parameter dimension.  See California Sign Manual Appendix for standard letter heights and parameter definitions.
+        Dim useLetters As Boolean
+        Dim pko2 As New PromptKeywordOptions("")
+        Dim msgText2 As String = ""
+
+        'Type 1 & 3 use parameter C
+        If aType = 1 Or aType = 3 Then
+            With pko2
+                .Message = vbLf & "Set size by letter height or Parameter C?"
+                .Keywords.Add("Height")
+                .Keywords.Add("C")
+                .AppendKeywordsToMessage = True
+                .AllowNone = False
+                .AllowArbitraryInput = False
+            End With
+
+            'Type 2 uses parameter D
+        ElseIf aType = 2 Then
+            With pko2
+                .Message = vbLf & "Set size by letter height or Parameter D?"
+                .Keywords.Add("Height")
+                .Keywords.Add("D")
+                .AppendKeywordsToMessage = True
+                .AllowNone = False
+                .AllowArbitraryInput = False
+            End With
+
+            'Type 4 has only two sizes
+        ElseIf aType = 4 Then
+            useLetters = False
+            With pko2
+                .Message = vbLf & "Arrow width (parameter A) 24 or 32?"
+                .Keywords.Add("24")
+                .Keywords.Add("32")
+                .AppendKeywordsToMessage = True
+                .AllowNone = False
+                .AllowArbitraryInput = False
+            End With
+        End If
+
+        Dim pkr2 As PromptResult = ed.GetKeywords(pko2)
+        Dim sizeValue As Double
+
+        If pkr2.Status = PromptStatus.OK Then
+            If pkr2.StringResult = "Height" Then
+                useLetters = True
+                msgText2 = vbLf & "Enter value for text height:"
+            ElseIf pkr2.StringResult = "C" Then
+                msgText2 = vbLf & "Enter value for Parameter C:"
+            ElseIf pkr2.StringResult = "D" Then
+                msgText2 = vbLf & "Enter value for Parameter D:"
+            Else
+                If IsNumeric(pkr2.StringResult) Then
+                    sizeValue = CDbl(pkr2.StringResult)
+                Else
+                    ed.WriteMessage(vbLf & "Invalid arrow size.  Ending Command.")
+                    Exit Sub
+                End If
+                useLetters = False
+            End If
+        Else
+            ed.WriteMessage(vbLf & "Command ended.")
+            Exit Sub
+        End If
+
+        If Not aType = 4 Then
+            Dim pdbo As New PromptDoubleOptions(msgText2)
+            With pdbo
+                .AllowNegative = False
+                .AllowZero = False
+                .DefaultValue = 8.0
+            End With
+
+            Dim pdbr As PromptDoubleResult = ed.GetDouble(pdbo)
+
+            If pdbr.Status = PromptStatus.OK Then
+                sizeValue = pdbr.Value
+            Else
+                Exit Sub
+            End If
+        End If
+
+        'create a new arrow object and populate fields
+        Dim ao As ArrowObj
+        ao = New ArrowObj(aType, sizeValue, useLetters, arrowAng)
+
+        'send to appropriate sub to create the arrow polyline
+        If aType = 4 Then
+            MkDirectionalArrowType4(p1, ao)
+        Else
+            MkDirectionalArrowType1(p1, ao)
+        End If
+
+
+    End Sub
+
+    Public Sub MkDirectionalArrowType1(p1 As Point3d, aobj As ArrowObj)
+        'Creates directional arrow types 1 through 3
+        'per California Sign Specifications Appendix
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            'set the vertices points
+            Dim paramA As Double = aobj.ParamA
+            Dim paramB As Double = aobj.ParamB
+            Dim paramC As Double = aobj.ParamC
+            Dim paramD As Double = aobj.ParamD
+            Dim paramE As Double = aobj.ParamE
+            Dim paramF As Double = aobj.ParamF
+            Dim paramR As Double = aobj.ParamR
+            Dim arrowAng As Double = aobj.ArrowAng
+            Dim ptO As Point3d = Point3d.Origin
+            Dim s12d As New Point2d(ptO.X, paramC / 2)
+            Dim s22d As New Point2d(ptO.X, -paramC / 2)
+            Dim cen1 As New Point3d(paramE - paramR, (paramA / 2) - paramR, ptO.Z)
+            Dim cen2 As New Point3d(-(paramB - 2 * paramR), ptO.Y, ptO.Z)
+
+            Dim ptQ As Point3d
+            Dim ptR As Point3d
+
+            'offset temporary line between circle centers by the radius to get tangent points.
+            'make sure the direction is correct.
+            Using tempLn As New Line(cen1, cen2)
+                Dim pR As Double = paramR
+                Dim chkVal As Double = 0
+                Dim tl As Line
+                Do
+                    Dim oSet As DBObjectCollection = tempLn.GetOffsetCurves(pR)
+                    tl = TryCast(oSet(0), Line)
+                    chkVal = tl.EndPoint.Y
+                    pR *= -1
+                Loop Until chkVal > 0
+                ptQ = tl.StartPoint
+                ptR = tl.EndPoint
+            End Using
+
+            'create temporary circle for finding tangents
+            Using c1 As New Circle(cen1, Vector3d.ZAxis, paramR)
+
+                'get the tangent points
+                Dim ptQ2d As New Point2d(ptQ.X, ptQ.Y)
+                Dim ptR2d As New Point2d(ptR.X, ptR.Y)
+
+                Dim tanPts2 As Point2dCollection = GetTangentPoints(New Point3d(s12d.X, s12d.Y, ptO.Z), c1)
+
+                Dim ptP2d As Point2d
+
+                'make sure that the tangent points exist and weed out the one that does not apply
+                If tanPts2 IsNot Nothing And tanPts2.Count = 2 Then
+                    If tanPts2(0).X > tanPts2(1).X Then
+                        ptP2d = tanPts2(0)
+                    Else
+                        ptP2d = tanPts2(1)
+                    End If
+                Else
+                    ed.WriteMessage(vbLf & "Error.  External tangents not found.")
+                    Exit Sub
+                End If
+
+                Dim ptT As New Point2d(paramF - paramB + paramE, paramD / 2)
+                Dim negPtT As New Point2d(ptT.X, -ptT.Y)
+
+                'set the opposite tangent points
+                Dim negPtR As New Point2d(ptR2d.X, -ptR2d.Y)
+                Dim negPtQ As New Point2d(ptQ2d.X, -ptQ2d.Y)
+                Dim negPtP As New Point2d(ptP2d.X, -ptP2d.Y)
+
+                'get the bulge values for the polyline
+                Dim vect1 As Vector2d = s12d.GetVectorTo(ptP2d)
+                Dim vect2 As Vector2d = ptQ2d.GetVectorTo(ptR2d)
+                Dim vect3 As Vector2d = negPtR.GetVectorTo(negPtQ)
+                Dim ang1 As Double = vect1.GetAngleTo(vect2)
+                Dim ang2 As Double = vect2.GetAngleTo(vect3)
+                Dim blg1 As Double = Tan(ang1 / 4)
+                Dim blg2 As Double = Tan(ang2 / 4)
+
+                'set a point at the arrow tip
+                Dim tipPt As New Point3d(paramE - paramB, 0, ptO.Z)
+
+                'store the vector from the tip of the temporary arrow to its final location
+                Dim moveVect As Vector3d = tipPt.GetVectorTo(p1)
+
+                'create a polyline
+                Using pl As New Polyline
+                    pl.AddVertexAt(0, ptT, 0, 0, 0)
+                    pl.AddVertexAt(1, s12d, 0, 0, 0)
+                    pl.AddVertexAt(2, ptP2d, blg1, 0, 0)
+                    pl.AddVertexAt(3, ptQ2d, 0, 0, 0)
+                    pl.AddVertexAt(4, ptR2d, blg2, 0, 0)
+                    pl.AddVertexAt(5, negPtR, 0, 0, 0)
+                    pl.AddVertexAt(6, negPtQ, blg1, 0, 0)
+                    pl.AddVertexAt(7, negPtP, 0, 0, 0)
+                    pl.AddVertexAt(8, s22d, 0, 0, 0)
+                    pl.AddVertexAt(9, negPtT, 0, 0, 0)
+                    pl.Closed = True
+
+                    'move and rotate the polyline to its final position
+                    pl.TransformBy(Matrix3d.Displacement(moveVect))
+                    pl.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
+
+                    'add it to the current space
+                    Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                    curSpace.AppendEntity(pl)
+                    acTrans.AddNewlyCreatedDBObject(pl, True)
+                End Using
+                'dispose of the temporary circle
+            End Using
+            acTrans.Commit()
+        End Using
+    End Sub
+
+    Public Sub MkDirectionalArrowType4(p1 As Point3d, aobj As ArrowObj)
+        'Creates a 1 line horizontal, vertical, or diagonal directional arrow
+        'per California Sign Specifications Appendix
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        'make sure arrow object is not nothing
+        Dim ao As ArrowObj
+        If aobj IsNot Nothing Then
+            ao = aobj
+        Else
+            Exit Sub
+        End If
+
+        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            'using an origin located on the cenerline of the arrow at the end of the arrow shaft,
+            'get temporary arrow coordinate geometry per California/Federal sign specifications
+            Dim paramA As Double = ao.ParamA
+            Dim paramB As Double = ao.ParamB
+            Dim paramC As Double = ao.ParamC
+            Dim paramD As Double = ao.ParamD
+            Dim paramE As Double = ao.ParamE
+            Dim paramR As Double = ao.ParamR
+            'Dim theta1 As Double = Asin(paramE / (paramB - (paramA / 2)))
+            'Dim paramD As Double = (paramA / 2) * Tan(theta1)
+            Dim ptO As Point3d = Point3d.Origin
+            Dim s12d As New Point2d(0, paramC / 2)
+            Dim s22d As New Point2d(0, -paramC / 2)
+            Dim cen1 As New Point3d(paramD - paramR, (paramA / 2) - paramR, ptO.Z)
+            Dim ptR As New Point3d(-(paramB - paramD), 0, 0)
+            Dim ptR2d As New Point2d(ptR.X, ptR.Y)
+            Dim ptS3d As New Point3d(s12d.X, s12d.Y, 0)
+            Dim ptT2d As New Point2d(paramE - paramB, paramC / 2)
+            Dim negPtT As New Point2d(ptT2d.X, -ptT2d.Y)
+
+OtherSide:
+            'create temporary circle for finding tangents
+            Dim c1 As New Circle(cen1, Vector3d.ZAxis, paramR)
+
+            'get the tangent points from the tip and the shaft
+            Dim tanPts As Point2dCollection = GetTangentPoints(ptS3d, c1)
+            Dim tanPts2 As Point2dCollection = GetTangentPoints(ptR, c1)
+
+            Dim ptP2d As Point2d
+            'make sure that the tangent points exist and weed out the one that does not apply
+            If tanPts IsNot Nothing And tanPts.Count = 2 Then
+                If tanPts(0).X > tanPts(1).X Then
+                    ptP2d = tanPts(0)
+                Else
+                    ptP2d = tanPts(1)
+                End If
+            Else
+                ed.WriteMessage(vbLf & "Error.  External tangents not found.")
+                Exit Sub
+            End If
+
+            Dim ptQ2d As Point2d
+            If tanPts2 IsNot Nothing And tanPts2.Count = 2 Then
+                If tanPts2(0).Y > tanPts2(1).Y Then
+                    ptQ2d = tanPts2(0)
+                Else
+                    ptQ2d = tanPts2(1)
+                End If
+            Else
+                ed.WriteMessage(vbLf & "Error.  External tangents not found.")
+                Exit Sub
+            End If
+
+            'set the opposite tangent points
+            Dim negPtQ As New Point2d(ptQ2d.X, -ptQ2d.Y)
+            Dim negPtP As New Point2d(ptP2d.X, -ptP2d.Y)
+
+            'get the bulge value for the polyline
+            Dim vect1 As Vector2d = s12d.GetVectorTo(ptP2d)
+            Dim vect2 As Vector2d = ptQ2d.GetVectorTo(ptR2d)
+            Dim ang1 As Double = vect1.GetAngleTo(vect2)
+            Dim blg1 As Double = Tan(ang1 / 4)
+
+            'store the vector from the tip of the temporary arrow to its final location
+            Dim moveVect As Vector3d = ptR.GetVectorTo(p1)
+
+            'create a polyline
+            Using pl As New Polyline
+                pl.AddVertexAt(0, ptT2d, 0, 0, 0)
+                pl.AddVertexAt(1, s12d, 0, 0, 0)
+                pl.AddVertexAt(2, ptP2d, blg1, 0, 0)
+                pl.AddVertexAt(3, ptQ2d, 0, 0, 0)
+                pl.AddVertexAt(4, ptR2d, 0, 0, 0)
+                pl.AddVertexAt(5, negPtQ, blg1, 0, 0)
+                pl.AddVertexAt(6, negPtP, 0, 0, 0)
+                pl.AddVertexAt(7, s22d, 0, 0, 0)
+                pl.AddVertexAt(8, negPtT, 0, 0, 0)
+                pl.Closed = True
+
+                'move and rotate the polyline to its final position
+                pl.TransformBy(Matrix3d.Displacement(moveVect))
+                pl.TransformBy(Matrix3d.Rotation(ao.ArrowAng, Vector3d.ZAxis, p1))
+
+                'add it to the current space
+                Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                curSpace.AppendEntity(pl)
+                acTrans.AddNewlyCreatedDBObject(pl, True)
+            End Using
+
+            'dispose of the temporary circle
+            c1.Dispose()
+
+            acTrans.Commit()
+        End Using
+
+    End Sub
 
 End Module
