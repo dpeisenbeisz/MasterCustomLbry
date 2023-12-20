@@ -113,6 +113,65 @@ End Module
 
 Public Module BlockCommands
 
+    <CommandMethod("CBTZ", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
+    Public Sub ChangeBlocksToLayerZero()
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+        Dim ed As Editor = curDwg.Editor
+
+        Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+        If SelResult.Status = PromptStatus.Error Then
+            Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select blocks to change subentity layers to zero:")}
+            SelResult = ed.GetSelection(Seloptions)
+        Else
+            ed.SetImpliedSelection(New ObjectId(-1) {})
+        End If
+
+        If SelResult.Status = PromptStatus.OK Then
+
+            Dim acSSet As SelectionSet = SelResult.Value
+            Dim MyobjIDs As ObjectId() = acSSet.GetObjectIds
+
+            Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction()
+                Dim blkTbl As BlockTable = actrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                Dim ltbl As LayerTable = actrans.GetObject(dwgDB.LayerTableId, OpenMode.ForRead)
+
+                'Dim i As Integer = 0
+                For Each objID As ObjectId In MyobjIDs
+                    Dim dbObj As DBObject = actrans.GetObject(objID, OpenMode.ForRead)
+                    If TypeOf dbObj Is BlockReference Then
+                        Dim parentBref As BlockReference = TryCast(dbObj, BlockReference)
+                        Dim parentName As String = parentBref.Name
+                        Dim ParentObjID As ObjectId = blkTbl(parentName)
+                        Dim ParentBTR As BlockTableRecord = actrans.GetObject(ParentObjID, OpenMode.ForWrite)
+                        For Each obID As ObjectId In ParentBTR
+                            Dim dObj As DBObject = actrans.GetObject(obID, OpenMode.ForRead)
+                            If TypeOf dObj Is Entity Then
+                                Dim ent As Entity = CType(dObj, Entity)
+                                If Not ent.LayerId = dwgDB.LayerZero Then
+                                    ent.UpgradeOpen()
+                                    'Dim entlay As String = ent.Layer
+                                    Dim entlayID As ObjectId = ent.LayerId
+                                    Dim layTblRec As LayerTableRecord = actrans.GetObject(entlayID, OpenMode.ForRead)
+                                    If ent.Color.IsByLayer Then ent.Color = layTblRec.Color
+                                    If ent.PlotStyleName = "ByLayer" Then ent.PlotStyleName = layTblRec.PlotStyleName
+                                    If ent.Linetype = "ByLayer" Then ent.LinetypeId = layTblRec.LinetypeObjectId
+                                    ent.LayerId = dwgDB.LayerZero
+                                Else
+                                End If
+                            End If
+                        Next
+                    End If
+                Next
+                actrans.Commit()
+            End Using
+        End If
+
+        ed.WriteMessage(vbLf & "All blocks updated.")
+
+    End Sub
+
+
     <CommandMethod("SetDwgsBase")>
     Public Sub SetDwgsBase()
 
@@ -241,10 +300,10 @@ SkipIt:
         Dim insPt As Point3d
 
         Dim i As Integer = 0
-        Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
+        Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
 
-            Dim blkTbl As BlockTable = actrans.GetObject(DwgDB.BlockTableId, OpenMode.ForWrite)
-            Dim cSpace As BlockTableRecord = actrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+            Dim blkTbl As BlockTable = actrans.GetObject(dwgDB.BlockTableId, OpenMode.ForWrite)
+            Dim cSpace As BlockTableRecord = actrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
 
             For Each ky As String In pathList.Keys
 
@@ -875,7 +934,7 @@ TryAgain:
             End Using
 
         Catch ex As Exception
-            Dim msgStr As String = "Fatal Error:" & vbLf & ex.Message & vbLf & ex.Source.ToString & vbLf 
+            Dim msgStr As String = "Fatal Error:" & vbLf & ex.Message & vbLf & ex.Source.ToString & vbLf
             MessageBox.Show(msgStr)
         End Try
 
@@ -933,6 +992,7 @@ Public Module GeometryCommands
                     tc1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
                     'a1.Dispose()
                 Else
+                    acTrans.Abort()
                     Exit Sub
                 End If
 
@@ -1330,6 +1390,8 @@ Public Module GeometryCommands
                     c1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
                     a1.Dispose()
                 Else
+                    If dbObj1 IsNot Nothing Then dbObj1.Dispose()
+                    acTrans.Abort()
                     Exit Sub
                 End If
 
@@ -1341,6 +1403,8 @@ Public Module GeometryCommands
                     c2 = New Circle(a2.Center, Vector3d.ZAxis, a2.Radius)
                     a2.Dispose()
                 Else
+                    If dbObj2 IsNot Nothing Then dbObj1.Dispose()
+                    acTrans.Abort()
                     Exit Sub
                 End If
 
@@ -1810,7 +1874,6 @@ Skip:
 
 End Module
 
-
 Public Module PlotLayoutCommands
 
     <CommandMethod("ListStyleTables")>
@@ -2080,128 +2143,136 @@ Public Module PlotLayoutCommands
             vpLayer = AddNewLayer("vports", 203)
         End If
 
-        Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+        'Dim showForm As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORM")
+        Dim cVp As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LAYOUTCREATEVIEWPORT")
+        Dim showForm As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS")
+        Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS", 0)
+        Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", 0)
 
-            'Dim showForm As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORM")
-            'Dim cVp As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LAYOUTCREATEVIEWPORT")
+        Try
 
-            Dim showForm As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS")
-            Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS", 0)
-            'Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", 1)
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
 
-            Dim shtNm As String = ""
+                Dim shtNm As String = ""
 
-            Dim pSet As PlotSettings = Nothing
-            Dim psetVal As PlotSettingsValidator
-            If makeLayouts Then
+                Dim pSet As PlotSettings = Nothing
+                Dim psetVal As PlotSettingsValidator
+                If makeLayouts Then
 
-                Dim mySetup As String = GetPlotSetup()
-                Dim myPltr As String
-                Dim plsets As DBDictionary = acTrans.GetObject(dwgDB.PlotSettingsDictionaryId, OpenMode.ForRead)
+                    Dim mySetup As String = GetPlotSetup()
+                    Dim myPltr As String
+                    Dim plsets As DBDictionary = acTrans.GetObject(dwgDB.PlotSettingsDictionaryId, OpenMode.ForRead)
 
-                If mySetup = "" Then
-                    Dim setName As String
-                    Dim psoPl As New PromptStringOptions(vbLf & "Enter name for new plot settings.")
-                    Dim psrPl As PromptResult = ed.GetString(psoPl)
-                    If psrPl.Status = PromptStatus.OK Then
-                        setName = psrPl.StringResult
+                    If String.IsNullOrEmpty(mySetup) Then
+                        Dim setName As String
+                        Dim psoPl As New PromptStringOptions(vbLf & "Enter name for new plot settings.")
+                        Dim psrPl As PromptResult = ed.GetString(psoPl)
+                        If psrPl.Status = PromptStatus.OK Then
+                            setName = psrPl.StringResult
+                        Else
+                            Exit Sub
+                        End If
+                        If plsets.Contains(setName) Then
+                            pSet = plsets.GetAt(setName).GetObject(OpenMode.ForWrite)
+                        Else
+                            pSet = New PlotSettings(False) With {.PlotSettingsName = setName}
+                            pSet.AddToPlotSettingsDictionary(dwgDB)
+                            acTrans.AddNewlyCreatedDBObject(pSet, True)
+                        End If
+                        psetVal = PlotSettingsValidator.Current
+                        psetVal.RefreshLists(pSet)
+                        myPltr = GetPrinter(psetVal)
+                        psetVal.SetPlotConfigurationName(pSet, myPltr, Nothing)
                     Else
-                        Exit Sub
+                        psetVal = PlotSettingsValidator.Current
+                        pSet = plsets.GetAt(mySetup).GetObject(OpenMode.ForWrite)
+                        psetVal.RefreshLists(pSet)
+                        myPltr = pSet.PlotConfigurationName
                     End If
-                    If plsets.Contains(setName) Then
-                        pSet = plsets.GetAt(setName).GetObject(OpenMode.ForWrite)
-                    Else
-                        pSet = New PlotSettings(False) With {.PlotSettingsName = setName}
-                        pSet.AddToPlotSettingsDictionary(dwgDB)
-                        acTrans.AddNewlyCreatedDBObject(pSet, True)
-                    End If
-                    psetVal = PlotSettingsValidator.Current
-                    psetVal.RefreshLists(pSet)
-                    myPltr = GetPrinter(psetVal)
-                    psetVal.SetPlotConfigurationName(pSet, myPltr, Nothing)
-                Else
-                    psetVal = PlotSettingsValidator.Current
-                    pSet = plsets.GetAt(mySetup).GetObject(OpenMode.ForWrite)
-                    psetVal.RefreshLists(pSet)
-                    myPltr = pSet.PlotConfigurationName
-
+                    shtNm = GetSheetName(psetVal, pSet)
                 End If
-                shtNm = GetSheetName(psetVal, pSet)
-            End If
 
-            Dim vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForWrite)
-            Dim viewList As New List(Of Integer)
+                Dim vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForWrite)
+                Dim viewList As New List(Of Integer)
 
-            Dim lastNo As Integer = 0
-            Dim startNo As Integer
+                Dim lastNo As Integer = 0
+                Dim startNo As Integer
 
-            For Each vID As ObjectId In vtb
-                Dim tempV As ViewTableRecord = acTrans.GetObject(vID, OpenMode.ForRead)
+                For Each vID As ObjectId In vtb
+                    Dim tempV As ViewTableRecord = acTrans.GetObject(vID, OpenMode.ForRead)
 
-                If IsNumeric(tempV.Name) Then
-                    Dim tInt As Integer = CInt(tempV.Name)
-                    If tInt > lastNo Then lastNo = tInt
-                End If
-            Next
-
-            Dim pdo7 As New PromptIntegerOptions(vbLf & "Last numbered vew is " & lastNo.ToString & ". Input the starting view number")
-            With pdo7
-                .DefaultValue = lastNo + 1
-            End With
-            Dim pdr7 As PromptIntegerResult = ed.GetInteger(pdo7)
-
-            If pdr7.Status = PromptStatus.OK Then
-                startNo = pdr7.Value
-            Else
-                Exit Sub
-            End If
-
-            i = startNo - 1
-
-            Dim starthoriz As Double = p1.X + (horiz / 2)
-            Dim startvert As Double = p1.Y + (vert / 2)
-
-            Dim endHoriz As Double = p1.X + (horiz * cCols) - (horiz / 2)
-            Dim endVert As Double = p1.Y + (vert * cRows) - (vert / 2)
-
-            For y = 0 To cRows - 1
-                Dim yCtr As Double = startvert + (vert * y)
-                For x As Integer = 0 To cCols - 1
-                    Dim xCtr As Double = starthoriz + (horiz * x)
-                    'For y As Integer = startvert To endVert Step vert
-                    '    For x As Integer = starthoriz To endHoriz Step horiz
-                    i += 1
-                    Dim vtr As ViewTableRecord
-                    If vtb.Has(i.ToString) Then
-                        vtr = acTrans.GetObject(vtb(i.ToString), OpenMode.ForWrite)
-                        With vtr
-                            .Width = Abs(horiz)
-                            .Height = Abs(vert)
-                            .CenterPoint = New Point2d(xCtr, yCtr)
-                        End With
-                    Else
-                        vtr = New ViewTableRecord
-                        With vtr
-                            .Name = i.ToString
-                            .Width = Abs(horiz)
-                            .Height = Abs(vert)
-                            .CenterPoint = New Point2d(xCtr, yCtr)
-                        End With
-                        Dim vtrid As ObjectId = vtb.Add(vtr)
-                        acTrans.AddNewlyCreatedDBObject(vtr, True)
-                    End If
-
-                    If makeLayouts AndAlso pSet IsNot Nothing AndAlso shtNm IsNot Nothing Then
-                        Dim ptrName As String = pSet.PlotConfigurationName
-                        Dim layoutID As ObjectId = CreateVP(vtr, vpLayer, hSize, vSize, acTrans, pSet, shtNm)
+                    If IsNumeric(tempV.Name) Then
+                        Dim tInt As Integer = CInt(tempV.Name)
+                        If tInt > lastNo Then lastNo = tInt
                     End If
                 Next
-            Next
 
+                Dim pdo7 As New PromptIntegerOptions(vbLf & "Last numbered vew is " & lastNo.ToString & ". Input the starting view number")
+                With pdo7
+                    .DefaultValue = lastNo + 1
+                End With
+                Dim pdr7 As PromptIntegerResult = ed.GetInteger(pdo7)
+
+                If pdr7.Status = PromptStatus.OK Then
+                    startNo = pdr7.Value
+                Else
+                    Exit Sub
+                End If
+
+                i = startNo - 1
+
+                Dim starthoriz As Double = p1.X + (horiz / 2)
+                Dim startvert As Double = p1.Y + (vert / 2)
+
+                Dim endHoriz As Double = p1.X + (horiz * cCols) - (horiz / 2)
+                Dim endVert As Double = p1.Y + (vert * cRows) - (vert / 2)
+
+                For y = 0 To cRows - 1
+                    Dim yCtr As Double = startvert + (vert * y)
+                    For x As Integer = 0 To cCols - 1
+                        Dim xCtr As Double = starthoriz + (horiz * x)
+                        'For y As Integer = startvert To endVert Step vert
+                        '    For x As Integer = starthoriz To endHoriz Step horiz
+                        i += 1
+                        Dim vtr As ViewTableRecord
+                        If vtb.Has(i.ToString) Then
+                            vtr = acTrans.GetObject(vtb(i.ToString), OpenMode.ForWrite)
+                            With vtr
+                                .Width = Abs(horiz)
+                                .Height = Abs(vert)
+                                .CenterPoint = New Point2d(xCtr, yCtr)
+                            End With
+                        Else
+                            vtr = New ViewTableRecord
+                            With vtr
+                                .Name = i.ToString
+                                .Width = Abs(horiz)
+                                .Height = Abs(vert)
+                                .CenterPoint = New Point2d(xCtr, yCtr)
+                            End With
+                            Dim vtrid As ObjectId = vtb.Add(vtr)
+                            acTrans.AddNewlyCreatedDBObject(vtr, True)
+                        End If
+
+                        If makeLayouts AndAlso pSet IsNot Nothing AndAlso shtNm IsNot Nothing Then
+                            Dim ptrName As String = pSet.PlotConfigurationName
+                            Dim layoutID As ObjectId = CreateVP(vtr, vpLayer, hSize, vSize, acTrans, pSet, shtNm)
+                        End If
+                    Next
+                Next
+
+                Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS", showForm)
+                Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", cVp)
+                acTrans.Commit()
+
+            End Using
+
+        Catch ex As Exception
+            ed.WriteMessage(vbLf & "Fatal Error in sub ImageMasterViews.")
             Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS", showForm)
-            'Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", cVp)
-            acTrans.Commit()
-        End Using
+            Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", cVp)
+        End Try
+
     End Sub
 
     <CommandMethod("RLO")>

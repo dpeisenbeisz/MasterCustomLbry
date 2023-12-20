@@ -815,11 +815,11 @@ Public Module Blocks
         Dim ed As Editor = curDwg.Editor
         Dim blkobjID As ObjectId
 
-        Dim pEO As New PromptEntityOptions("Select an inserted block")
+        Dim pEO As New PromptEntityOptions(vbLf & "Select an inserted block")
         With pEO
             .AllowNone = False
             .AllowObjectOnLockedLayer = True
-            .SetRejectMessage("Select a block reference")
+            .SetRejectMessage(vbLf & "Invalid selection.  Select a block reference.")
             .AddAllowedClass(GetType(BlockReference), True)
         End With
 
@@ -1042,7 +1042,7 @@ skipit:
             ElseIf fileResult = DialogResult.OK Then
                 fName = fDialog.FileName
             Else
-                MsgBox("Error. File not selected")
+                MsgBox("Error. File name not provided")
                 Return ""
                 Exit Function
             End If
@@ -1081,14 +1081,14 @@ skipit:
             Dim xmlResult As DialogResult = fDialog.ShowDialog()
 
             If xmlResult = DialogResult.Cancel Then
-                MsgBox("Error. CSV file not selected")
+                MsgBox("Error. File not selected")
                 Return Nothing
                 Exit Function
 
             ElseIf xmlResult = DialogResult.OK Then
                 fName = fDialog.FileName
             Else
-                MsgBox("Error. CSV file not selected")
+                MsgBox("Error. File not selected")
                 Return ""
                 Exit Function
             End If
@@ -1098,7 +1098,7 @@ skipit:
             Return fName
 
         Catch ex As Exception
-            MsgBox(ex.Message & vbLf & "Error selecting CSV file.")
+            MsgBox(ex.Message & vbLf & "Error selecting file.")
             Return ""
             Exit Function
         End Try
@@ -1793,6 +1793,7 @@ Public Module MathGeometry
                 a1.Dispose()
             Else
                 ed.WriteMessage(vbLf & "C1 is not a circle or circular arc.  Command ended.")
+                If dbObj1 IsNot Nothing Then dbObj1.Dispose()
                 Return Nothing
                 Exit Function
             End If
@@ -1806,13 +1807,17 @@ Public Module MathGeometry
                 a2.Dispose()
             Else
                 ed.WriteMessage(vbLf & "C2 is not a circle or circular arc.  Command ended.")
+                If DBObj2 IsNot Nothing Then DBObj2.Dispose()
                 Return Nothing
                 Exit Function
             End If
 
             If c1.Radius > c2.Radius Then
-                Return Nothing
-                Exit Function
+                Dim ctemp As Circle = c1
+                c1 = c2
+                c2 = ctemp
+                'Return Nothing
+                'Exit Function
             End If
 
             Dim c12D As New Point2d(c1.Center.X, c1.Center.Y)
@@ -1826,15 +1831,20 @@ Public Module MathGeometry
 
             If cenDist < c2.Radius - c1.Radius Then
                 tangents = 0
-                ed.WriteMessage(vbLf & "C1 is inside of C2. Circles have no common tangents.")
+                ed.WriteMessage(vbLf & "C1 is completely inside of C2. Circles have no common tangents.")
                 Return Nothing
                 Exit Function
             ElseIf cenDist = c2.Radius - c1.Radius Then
                 tangents = 1
+                ed.WriteMessage(vbLf & "C1 is inside of and touching C2. Circles have one common tangent at the point of their intersection.")
+                Return Nothing
+                Exit Function
             ElseIf cenDist > c2.Radius - c1.Radius AndAlso cenDist < c2.Radius + c1.Radius Then
                 tangents = 2
+                ed.WriteMessage(vbLf & "C1 intersects with C2. Circles have two common tangents.")
             ElseIf cenDist = c1.Radius + c2.Radius Then
                 tangents = 3
+                ed.WriteMessage(vbLf & "C1 is outside of and touching C2. Circles have 3 common tangents.")
             ElseIf cenDist > c1.Radius + c2.Radius Then
                 tangents = 4
             End If
@@ -1843,6 +1853,11 @@ Public Module MathGeometry
 
             Dim r1 As Double = c1.Radius
             Dim r2 As Double = c2.Radius
+
+            Dim p1 As Point2d
+            Dim p2 As Point2d
+            Dim p3 As Point2d
+            Dim p4 As Point2d
 
             Dim tc1 As New Circle(New Point3d(0, 0, c1.Center.Z), Vector3d.ZAxis, r1)
             Dim tc2 As New Circle(New Point3d(cenDist, 0, c2.Center.Z), Vector3d.ZAxis, r2)
@@ -1859,19 +1874,21 @@ Public Module MathGeometry
             Dim cen1 As New Point2d(tc1x, tc1y)
             Dim cen2 As New Point2d(tc2x, tc2y)
 
-            Dim p1 As Point2d
-            Dim p2 As Point2d
-            Dim p3 As Point2d
-            Dim p4 As Point2d
-
-            Dim x3a As Double = tc2x - r2 * Sin(alpha)
-            Dim y3a As Double = tc2y + r2 * Cos(alpha)
-            p1 = New Point2d(x3a, y3a)
-            Dim x3b As Double = tc1x - r1 * Sin(alpha)
-            Dim y3b As Double = tc1y + r1 * Cos(alpha)
-            p2 = New Point2d(x3b, y3b)
-            p3 = New Point2d(x3a, -y3a)
-            p4 = New Point2d(x3b, -y3b)
+            If Not r1 = r2 Then
+                Dim x3a As Double = tc2x - r2 * Sin(alpha)
+                Dim y3a As Double = tc2y + r2 * Cos(alpha)
+                p1 = New Point2d(x3a, y3a)
+                Dim x3b As Double = tc1x - r1 * Sin(alpha)
+                Dim y3b As Double = tc1y + r1 * Cos(alpha)
+                p2 = New Point2d(x3b, y3b)
+                p3 = New Point2d(x3a, -y3a)
+                p4 = New Point2d(x3b, -y3b)
+            Else
+                p1 = New Point2d(tc1x, r1)
+                p2 = New Point2d(tc2x, r2)
+                p3 = New Point2d(tc1x, -r1)
+                p4 = New Point2d(tc2x, -r2)
+            End If
 
             Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
@@ -1929,6 +1946,9 @@ Public Module MathGeometry
             End Using
 
         Catch ex As Exception
+            'If c1 IsNot Nothing Then c1.Dispose()
+            'If c2 IsNot Nothing Then c2.Dispose()
+
             MessageBox.Show(ex.Message)
             Return Nothing
         End Try
@@ -1991,8 +2011,11 @@ Public Module MathGeometry
             End If
 
             If c1.Radius > c2.Radius Then
-                Return Nothing
-                Exit Function
+                Dim ctemp As Circle = c1
+                c1 = c2
+                c2 = ctemp
+                'Return Nothing
+                'Exit Function
             End If
 
             Dim c12D As New Point2d(c1.Center.X, c1.Center.Y)
@@ -2002,27 +2025,47 @@ Public Module MathGeometry
             Dim rotangle = v2d.Angle
             Dim cenDist As Double = c12D.GetDistanceTo(c22D)
 
+            If cenDist = 0 Then
+                ed.WriteMessage(vbLf & "Circles are cocentric.  No common tangents.")
+                Return Nothing
+                Exit Function
+            End If
+
             Dim tangents As Integer
 
             If cenDist < c2.Radius - c1.Radius Then
                 tangents = 0
-                ed.WriteMessage(vbLf & "C1 is inside of C2. Circles have no common tangents.")
+                ed.WriteMessage(vbLf & "C1 is completely inside of C2. Circles have no common tangents.")
                 Return Nothing
                 Exit Function
             ElseIf cenDist = c2.Radius - c1.Radius Then
                 tangents = 1
+                ed.WriteMessage(vbLf & "C1 is inside of and touching C2. Circles have no common internal tangents.")
+                Return Nothing
+                Exit Function
             ElseIf cenDist > c2.Radius - c1.Radius AndAlso cenDist < c2.Radius + c1.Radius Then
                 tangents = 2
+                ed.WriteMessage(vbLf & "C1 intersects with C2. Circles have no common internal tangents.")
+                Return Nothing
+                Exit Function
             ElseIf cenDist = c1.Radius + c2.Radius Then
                 tangents = 3
+                ed.WriteMessage(vbLf & "C1 is outside of and touching C2. Circles have no common internal tangents.")
+                Return Nothing
+                Exit Function
             ElseIf cenDist > c1.Radius + c2.Radius Then
                 tangents = 4
+                ed.WriteMessage(vbLf & "Circles have 2 common internal tangents.")
             End If
-
             'If c1.Radius > c2.Radius Then cenDist *= -1
 
             Dim r1 As Double = c1.Radius
             Dim r2 As Double = c2.Radius
+
+            Dim p1 As Point2d
+            Dim p2 As Point2d
+            Dim p3 As Point2d
+            Dim p4 As Point2d
 
             Dim tc1 As New Circle(New Point3d(0, 0, c1.Center.Z), Vector3d.ZAxis, r1)
             Dim tc2 As New Circle(New Point3d(cenDist, 0, c2.Center.Z), Vector3d.ZAxis, r2)
@@ -2032,30 +2075,40 @@ Public Module MathGeometry
             Dim tc2x As Double = tc2.Center.X
             Dim tc2y As Double = tc2.Center.Y
 
-            'Dim gamma As Double = -Atan2(0, tc2x)
-            Dim siX As Double = ((r1 * tc2x) + (r2 * tc1x)) / (r1 + r2)
-            Dim l3 As Double = tc2x - siX
-            Dim l1 = siX - tc1x
-            Dim beta As Double = Atan2(r2, l3)
-            Dim alpha As Double = Asin((r2 - r1) / cenDist)
-            If alpha < 0 Then alpha = Asin((r1 - r2) / cenDist)
+            If Not r1 = r2 Then
+                'Dim gamma As Double = -Atan2(0, tc2x)
+                Dim siX As Double = ((r1 * tc2x) + (r2 * tc1x)) / (r1 + r2)
+                Dim l3 As Double = tc2x - siX
+                Dim l1 = siX - tc1x
+                Dim beta As Double = Atan2(r2, l3)
+                Dim alpha As Double = Asin((r2 - r1) / cenDist)
+                If alpha < 0 Then alpha = Asin((r1 - r2) / cenDist)
 
-            Dim cen1 As New Point2d(tc1x, tc1y)
-            Dim cen2 As New Point2d(tc2x, tc2y)
+                Dim cen1 As New Point2d(tc1x, tc1y)
+                Dim cen2 As New Point2d(tc2x, tc2y)
 
-            Dim p1 As Point2d
-            Dim p2 As Point2d
-            Dim p3 As Point2d
-            Dim p4 As Point2d
+                Dim tpc2x As Double = tc2x - r2 * Sin(beta)
+                Dim tpc2y As Double = tc2y + r2 * Cos(beta)
+                Dim tpc1x As Double = tc1x + r1 * Sin(beta)
+                Dim tpc1y As Double = tc1y + r1 * Cos(beta)
 
-            Dim tpc2x As Double = tc2x - r2 * Sin(beta)
-            Dim tpc2y As Double = tc2y + r2 * Cos(beta)
-            Dim tpc1x As Double = tc1x + r1 * Sin(beta)
-            Dim tpc1y As Double = tc1y + r1 * Cos(beta)
-            p1 = New Point2d(tpc1x, tpc1y)
-            p2 = New Point2d(tpc2x, tpc2y)
-            p3 = New Point2d(tpc1x, -tpc1y)
-            p4 = New Point2d(tpc2x, -tpc2y)
+                p1 = New Point2d(tpc1x, tpc1y)
+                p2 = New Point2d(tpc2x, tpc2y)
+                p3 = New Point2d(tpc1x, -tpc1y)
+                p4 = New Point2d(tpc2x, -tpc2y)
+            Else
+                Dim theta As Double = Asin(r1 / (cenDist / 2))
+                Dim tpc1x As Double = r1 * Sin(theta)
+                Dim tpc1y As Double = r1 * Cos(theta)
+                Dim tpc2x As Double = cenDist - (r1 * Sin(theta))
+                Dim tpc2y As Double = tpc1y
+
+                p1 = New Point2d(tpc1x, tpc1y)
+                p2 = New Point2d(tpc2x, tpc2y)
+                p3 = New Point2d(tpc1x, -tpc1y)
+                p4 = New Point2d(tpc2x, -tpc1y)
+
+            End If
 
             Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
@@ -2747,23 +2800,50 @@ Public Module PlotLayout
 
     Public Function GetSheetName(psetVal As PlotSettingsValidator, pset As PlotSettings) As String
 
-        Dim newPicker As New PlotSettingsForm
-        Dim myPaperSizes As StringCollection = psetVal.GetCanonicalMediaNameList(pset)
-        For Each nm As String In myPaperSizes
-            newPicker.AddSetup(nm)
-        Next
-        newPicker.Label1.Text = "Select media for layout"
-        newPicker.Text = "Media Picker"
-        newPicker.ShowDialog()
-
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
         Dim mySheet As String
-        If newPicker.DialogResult = DialogResult.OK Then
-            mySheet = newPicker.SelectedSetup
-        Else
-            mySheet = Nothing
-        End If
 
-        newPicker.Dispose()
+        If Not String.IsNullOrEmpty(pset.CanonicalMediaName) Then
+
+            Dim pkoMedia As New PromptKeywordOptions(vbLf & "Do you want to use the default media " & pset.CanonicalMediaName & "?")
+            With pkoMedia
+                .AllowArbitraryInput = False
+                .Keywords.Add("Yes")
+                .Keywords.Add("No")
+                .AppendKeywordsToMessage = True
+                .AllowNone = False
+            End With
+
+            Dim pkrMedia As PromptResult = ed.GetKeywords(pkoMedia)
+
+            If pkrMedia.Status = PromptStatus.OK Then
+                If pkrMedia.StringResult = "Yes" Then
+                    mySheet = pset.CanonicalMediaName
+                Else
+                    mySheet = ""
+                End If
+            Else
+                mySheet = Nothing
+            End If
+        Else
+            Dim newPicker As New PlotSettingsForm
+            Dim myPaperSizes As StringCollection = psetVal.GetCanonicalMediaNameList(pset)
+            For Each nm As String In myPaperSizes
+                newPicker.AddSetup(nm)
+            Next
+            newPicker.Label1.Text = "Select media for layout"
+            newPicker.Text = "Media Picker"
+            newPicker.ShowDialog()
+
+            If newPicker.DialogResult = DialogResult.OK Then
+                mySheet = newPicker.SelectedSetup
+            Else
+                mySheet = Nothing
+            End If
+
+            newPicker.Dispose()
+
+        End If
 
         Return mySheet
 
@@ -2853,23 +2933,34 @@ TryAgain:
         lm.CurrentLayout = vtr.Name
         Dim myptr = pset.PlotConfigurationName
 
-        'Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
-        'Dim curSpace As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
+        Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+        Dim curSpace As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
         'Dim curSpace As BlockTableRecord = acTrans.GetObject(blkTbl(vtr.Name), OpenMode.ForWrite)
 
         Dim lo As Layout = acTrans.GetObject(layId, OpenMode.ForWrite)
 
         Dim vpIDs As ObjectIdCollection = lo.GetViewports
-        Dim vp As Autodesk.AutoCAD.DatabaseServices.Viewport = acTrans.GetObject(vpIDs(1), OpenMode.ForWrite)
-        'Dim vp As New Viewport
-        vp.SetDatabaseDefaults()
-        vp.CenterPoint = New Point3d(hsize / 2, vsize / 2, 0)
-        vp.Height = vsize
-        vp.Width = hsize
-        If Not String.IsNullOrEmpty(vpLayerName) Then vp.Layer = vpLayerName
+        Dim vp As Autodesk.AutoCAD.DatabaseServices.Viewport
 
-        'curSpace.AppendEntity(vp)
-        'acTrans.AddNewlyCreatedDBObject(vp, True)
+        If vpIDs.Count > 0 Then
+            vp = acTrans.GetObject(vpIDs(1), OpenMode.ForWrite)
+            vp.SetDatabaseDefaults()
+            vp.CenterPoint = New Point3d(hsize / 2, vsize / 2, 0)
+            vp.Height = vsize
+            vp.Width = hsize
+        Else
+            vp = New Autodesk.AutoCAD.DatabaseServices.Viewport
+            vp.SetDatabaseDefaults()
+            vp.CenterPoint = New Point3d(hsize / 2, vsize / 2, 0)
+            vp.Height = vsize
+            vp.Width = hsize
+            curSpace.AppendEntity(vp)
+            acTrans.AddNewlyCreatedDBObject(vp, True)
+        End If
+
+        vp.On = True
+
+        If Not String.IsNullOrEmpty(vpLayerName) Then vp.Layer = vpLayerName
 
         lo.CopyFrom(pset)
         ed.SwitchToModelSpace()
