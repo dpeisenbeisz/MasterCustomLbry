@@ -19,7 +19,6 @@ Imports System.Math
 Imports System.Collections.Specialized
 Imports Autodesk.AutoCAD.PlottingServices
 
-
 Public Module Layers
 
     Public Function AddNewLayer(ByVal sLayerName As String, ByVal ColorNo As Integer) As String
@@ -50,7 +49,7 @@ Public Module Layers
                     Return sLayerName
                 Catch ex As Exception
                     Return "0"
-                    MsgBox(ex.Message)
+                    MessageBox.Show(ex.Message)
                     Exit Function
                 End Try
             End If
@@ -117,124 +116,8 @@ Public Module Layers
         '    End Using
     End Sub
 
-    Public Function GetTransparencyAlpha(ByVal idx As Integer) As Transparency
-        Dim transparencies As Dictionary(Of Integer, Byte) = TransToAlpha()
-        If transparencies.ContainsKey(idx) Then
-            Return New Autodesk.AutoCAD.Colors.Transparency(transparencies(idx))
-        Else
-            Return New Autodesk.AutoCAD.Colors.Transparency(Byte.MaxValue)
-        End If
-    End Function
-
-    Friend Function TransToAlpha() As Dictionary(Of Integer, Byte)
-        Dim transp As New Dictionary(Of Integer, Byte)
-        transp(0) = 255
-        transp(1) = 252
-        transp(2) = 249
-        transp(3) = 247
-        transp(4) = 244
-        transp(5) = 242
-        transp(6) = 239
-        transp(7) = 237
-        transp(8) = 234
-        transp(9) = 232
-        transp(10) = 229
-        transp(11) = 226
-        transp(12) = 224
-        transp(13) = 221
-        transp(14) = 219
-        transp(15) = 216
-        transp(16) = 214
-        transp(17) = 211
-        transp(18) = 209
-        transp(19) = 206
-        transp(20) = 204
-        transp(21) = 201
-        transp(22) = 198
-        transp(23) = 196
-        transp(24) = 193
-        transp(25) = 191
-        transp(26) = 188
-        transp(27) = 186
-        transp(28) = 183
-        transp(29) = 181
-        transp(30) = 178
-        transp(31) = 175
-        transp(32) = 173
-        transp(33) = 170
-        transp(34) = 168
-        transp(35) = 165
-        transp(36) = 163
-        transp(37) = 160
-        transp(38) = 158
-        transp(39) = 155
-        transp(40) = 153
-        transp(41) = 150
-        transp(42) = 147
-        transp(43) = 145
-        transp(44) = 142
-        transp(45) = 140
-        transp(46) = 137
-        transp(47) = 135
-        transp(48) = 132
-        transp(49) = 130
-        transp(50) = 127
-        transp(51) = 124
-        transp(52) = 122
-        transp(53) = 119
-        transp(54) = 117
-        transp(55) = 114
-        transp(56) = 112
-        transp(57) = 109
-        transp(58) = 107
-        transp(59) = 104
-        transp(60) = 102
-        transp(61) = 99
-        transp(62) = 96
-        transp(63) = 94
-        transp(64) = 91
-        transp(65) = 89
-        transp(66) = 86
-        transp(67) = 84
-        transp(68) = 81
-        transp(69) = 79
-        transp(70) = 76
-        transp(71) = 73
-        transp(72) = 71
-        transp(73) = 68
-        transp(74) = 66
-        transp(75) = 63
-        transp(76) = 61
-        transp(77) = 58
-        transp(78) = 56
-        transp(79) = 53
-        transp(80) = 51
-        transp(81) = 48
-        transp(82) = 45
-        transp(83) = 43
-        transp(84) = 40
-        transp(85) = 38
-        transp(86) = 35
-        transp(87) = 33
-        transp(88) = 30
-        transp(89) = 28
-        transp(90) = 25
-        transp(91) = 22
-        transp(92) = 20
-        transp(93) = 17
-        transp(94) = 15
-        transp(95) = 12
-        transp(96) = 10
-        transp(97) = 7
-        transp(98) = 5
-        transp(99) = 2
-        transp(100) = 0
-        Return transp
-    End Function
-
-
-
     Public Function GetEntitiesOnLayer(ByVal layerName As String) As ObjectIdCollection
+
         Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim ed As Editor = doc.Editor
         Dim tvs As TypedValue() = New TypedValue(0) {New TypedValue(CInt(DxfCode.LayerName), layerName)}
@@ -273,39 +156,43 @@ Public Module Layers
 
                 Dim mergeList As ObjectIdCollection
                 mergeList = GetEntitiesOnLayer(lName)
+
                 Dim uR As Boolean
-                Dim ents As Long = mergeList.Count
 
-                If ents > 0 Then
-                    Dim pkeyO As New PromptKeywordOptions(vbLf & ents.ToString & " entities on layer " & lName & " will be moved to layer " & mergeLayer & ".  Continue?")
-                    With pkeyO
-                        .Keywords.Add("Y")
-                        .Keywords.Add("N")
-                        .AppendKeywordsToMessage = True
-                    End With
+                If mergeList IsNot Nothing AndAlso mergeList.Count > 0 Then
+                    Dim ents As Long = mergeList.Count
 
-                    Dim pkeyR As PromptResult = ed.GetKeywords(pkeyO)
+                    If ents > 0 Then
+                        Dim pkeyO As New PromptKeywordOptions(vbLf & ents.ToString & " entities on layer " & lName & " will be moved to layer " & mergeLayer & ".  Continue?")
+                        With pkeyO
+                            .Keywords.Add("Y")
+                            .Keywords.Add("N")
+                            .AppendKeywordsToMessage = True
+                        End With
 
-                    If pkeyR.Status = PromptStatus.OK Then
-                        If pkeyR.StringResult = "Y" Then
-                            uR = True
+                        Dim pkeyR As PromptResult = ed.GetKeywords(pkeyO)
+
+                        If pkeyR.Status = PromptStatus.OK Then
+                            If pkeyR.StringResult = "Y" Then
+                                uR = True
+                            Else
+                                uR = False
+                            End If
                         Else
                             uR = False
                         End If
-                    Else
-                        uR = False
                     End If
-                End If
 
-                If uR = True Then
-                    For k As Integer = 0 To mergeList.Count - 1
-                        Dim myEnt As Entity = CType(acTrans.GetObject(mergeList(k), OpenMode.ForWrite), Entity)
-                        If myEnt IsNot Nothing Then
-                            myEnt.Layer = mergeLayer
-                        End If
-                    Next
-                Else
-                    Exit Sub
+                    If uR = True Then
+                        For k As Integer = 0 To mergeList.Count - 1
+                            Dim myEnt As Entity = CType(acTrans.GetObject(mergeList(k), OpenMode.ForWrite), Entity)
+                            If myEnt IsNot Nothing Then
+                                myEnt.Layer = mergeLayer
+                            End If
+                        Next
+                    Else
+                        Exit Sub
+                    End If
                 End If
 
                 If removeLayer Then
@@ -337,57 +224,58 @@ Public Module Layers
 
             If acLyrTbl.Has(lName) Then
 
-                Dim purgeColl As New ObjectIdCollection
-
                 Dim DelList As ObjectIdCollection
                 DelList = GetEntitiesOnLayer(lName)
                 Dim uR As Boolean
-                Dim ents As Long = DelList.Count
 
-                If ents > 0 Then
-                    Dim pkeyO As New PromptKeywordOptions(vbLf & "Drawing contains " & ents.ToString & " entities on layer " & lName & ". Coninue deleting layer?")
-                    With pkeyO
-                        .Keywords.Add("Y")
-                        .Keywords.Add("N")
-                        .AppendKeywordsToMessage = True
-                    End With
+                If DelList IsNot Nothing AndAlso DelList.Count > 0 Then
+                    Dim ents As Long = DelList.Count
+                    If ents > 0 Then
+                        Dim pkeyO As New PromptKeywordOptions(vbLf & "Drawing contains " & ents.ToString & " entities on layer " & lName & ". Coninue deleting layer?")
+                        With pkeyO
+                            .Keywords.Add("Y")
+                            .Keywords.Add("N")
+                            .AppendKeywordsToMessage = True
+                        End With
 
-                    Dim pkeyR As PromptResult = ed.GetKeywords(pkeyO)
+                        Dim pkeyR As PromptResult = ed.GetKeywords(pkeyO)
 
-                    If pkeyR.Status = PromptStatus.OK Then
-                        If pkeyR.StringResult = "Y" Then
-                            uR = True
+                        If pkeyR.Status = PromptStatus.OK Then
+                            If pkeyR.StringResult = "Y" Then
+                                uR = True
+                            Else
+                                uR = False
+                            End If
                         Else
                             uR = False
                         End If
+                    End If
+
+                    If uR Then
+                        For k As Integer = 0 To DelList.Count - 1
+                            Dim myEnt As Entity = CType(acTrans.GetObject(DelList(k), OpenMode.ForWrite), Entity)
+                            If myEnt IsNot Nothing Then
+                                myEnt.Erase(True)
+                            End If
+                        Next
                     Else
-                        uR = False
+                        Exit Sub
                     End If
                 End If
+            End If
 
-                If uR = True Then
-                    For k As Integer = 0 To DelList.Count - 1
-                        Dim myEnt As Entity = CType(acTrans.GetObject(DelList(k), OpenMode.ForWrite), Entity)
-                        If myEnt IsNot Nothing Then
-                            myEnt.Erase(True)
-                        End If
-                    Next
-                Else
-                    Exit Sub
-                End If
+            If acLyrTbl.IsWriteEnabled = False Then acLyrTbl.UpgradeOpen()
 
-                If acLyrTbl.IsWriteEnabled = False Then acLyrTbl.UpgradeOpen()
-
-                Dim lyrRec As LayerTableRecord = TryCast(acTrans.GetObject(acLyrTbl(lName), OpenMode.ForWrite), LayerTableRecord)
-                If lyrRec IsNot Nothing Then
-                    purgeColl.Add(acLyrTbl(lName))
-                    dwgDB.Purge(purgeColl)
-                    Try
-                        lyrRec.Erase(True)
-                    Catch ex As Exception
-                        Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
-                    End Try
-                End If
+            Dim lyrRec As LayerTableRecord = TryCast(acTrans.GetObject(acLyrTbl(lName), OpenMode.ForWrite), LayerTableRecord)
+            Dim purgeColl As New ObjectIdCollection
+            If lyrRec IsNot Nothing Then
+                purgeColl.Add(acLyrTbl(lName))
+                dwgDB.Purge(purgeColl)
+                Try
+                    lyrRec.Erase(True)
+                Catch ex As Exception
+                    Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
+                End Try
             End If
             acTrans.Commit()
         End Using
@@ -400,10 +288,7 @@ Public Module Layers
         Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction()
             Dim lyrTbl As LayerTable = acTrans.GetObject(dwgDB.LayerTableId, OpenMode.ForRead)
             If lyrTbl.Has(LayName) Then
-                'Dim Olayer As LayerTableRecord = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("CLAYER")
-                'Dim lyrObj As Object = acTrans.GetObject(lyrTbl(LayName), OpenMode.ForRead)
                 dwgDB.Clayer = lyrTbl(LayName)
-                'Striping.StLayer = LyrObj
             Else
                 Return False
                 acTrans.Abort()
@@ -419,23 +304,151 @@ Public Module Layers
         Dim acDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim dwgDB As Database = acDwg.Database
         If dwgDB.PlotStyleMode = False Then
-            Using locker As DocumentLock = acDwg.LockDocument
-                Using trans As Transaction = dwgDB.TransactionManager.StartTransaction
-                    Dim dict As DictionaryWithDefaultDictionary = trans.GetObject(dwgDB.PlotStyleNameDictionaryId, OpenMode.ForRead)
-                    Dim ltr As Entity = trans.GetObject(layID, OpenMode.ForWrite)
-                    ltr.PlotStyleName = "Normal"
-                    ltr.PlotStyleNameId = dict.Item("Normal")
-                    'Autodesk.AutoCAD.DatabaseServices.Entity.PlotStyleNameId As Autodesk.AutoCAD.DatabaseServices.PlotStyleDescriptor
-                    trans.Commit()
-                End Using
+            'Using locker As DocumentLock = acDwg.LockDocument
+            Using trans As Transaction = dwgDB.TransactionManager.StartTransaction
+                Dim dict As DictionaryWithDefaultDictionary = trans.GetObject(dwgDB.PlotStyleNameDictionaryId, OpenMode.ForRead)
+                Dim ltr As Entity = trans.GetObject(layID, OpenMode.ForWrite)
+                ltr.PlotStyleName = "Normal"
+                ltr.PlotStyleNameId = dict.Item("Normal")
+                'Autodesk.AutoCAD.DatabaseServices.Entity.PlotStyleNameId As Autodesk.AutoCAD.DatabaseServices.PlotStyleDescriptor
+                trans.Commit()
+            End Using
+            'End Using
+        End If
+    End Sub
+
+    Public Sub SetEntityPlotStyle(ByVal entID As ObjectId, PstyleName As String)
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+
+        If dwgDB.PlotStyleMode = False Then
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                Dim dict As DictionaryWithDefaultDictionary = acTrans.GetObject(dwgDB.PlotStyleNameDictionaryId, OpenMode.ForRead)
+                Dim ent As Entity = TryCast(acTrans.GetObject(entID, OpenMode.ForWrite), Entity)
+                If ent IsNot Nothing Then
+                    ent.PlotStyleName = PstyleName
+                End If
+                acTrans.Commit()
             End Using
         End If
     End Sub
+
+
+    Public Sub SetEntityPlotStyle(ByVal entID As ObjectId, PstyleName As String, acTrans As Transaction)
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+
+        If dwgDB.PlotStyleMode = False Then
+            Dim dict As DictionaryWithDefaultDictionary = acTrans.GetObject(dwgDB.PlotStyleNameDictionaryId, OpenMode.ForRead)
+            Dim ent As Entity = TryCast(acTrans.GetObject(entID, OpenMode.ForWrite), Entity)
+            If ent IsNot Nothing Then
+                ent.PlotStyleName = PstyleName
+                'ent.PlotStyleNameId = dict.Item(PstyleName)
+            End If
+            acTrans.Commit()
+        End If
+    End Sub
+
+
 
 End Module
 
 
 Public Module Blocks
+
+    Public Function PickBlocks() As Collection
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+        Dim ed As Editor = curDwg.Editor
+
+        Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+            Dim blktbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+            Dim bList As New SortedDictionary(Of String, ObjectId)
+
+            For Each bID As ObjectId In blktbl
+                Dim btr As BlockTableRecord = acTrans.GetObject(bID, OpenMode.ForRead)
+                If Not btr.IsLayout Then
+                    Dim bName As String = btr.Name
+                    Dim btrID As ObjectId = blktbl(bName)
+                    bList.Add(bName, btrID)
+                End If
+            Next
+
+            Dim bPicker As New Picker
+            With bPicker
+                .BxList.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended
+                .TopLabel.Text = "Select blocks"
+                .Text = "BLock Picker"
+                For Each blkNm As String In bList.Keys
+                    .BxList.Items.Add(blkNm)
+                Next
+            End With
+
+            bPicker.ShowDialog()
+
+            Dim blkColl As Collection
+
+            If bPicker.DialogResult = DialogResult.Cancel Then
+                Return Nothing
+                Exit Function
+            Else
+                blkColl = bPicker.PickCol
+            End If
+
+            acTrans.Commit()
+            Return blkColl
+        End Using
+
+    End Function
+
+
+
+
+
+    Public Function BLockEntsToLayerZero(brefID As ObjectId) As ObjectIdCollection
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+        Dim ed As Editor = curDwg.Editor
+
+        Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction()
+            Dim blkTbl As BlockTable = actrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+            Dim ltbl As LayerTable = actrans.GetObject(dwgDB.LayerTableId, OpenMode.ForRead)
+
+            Dim bref As BlockReference = actrans.GetObject(brefID, OpenMode.ForRead)
+            Dim btrID As ObjectId = bref.BlockId
+
+            Dim btr As BlockTableRecord = actrans.GetObject(btrID, OpenMode.ForWrite)
+            Dim idCol As New ObjectIdCollection
+
+            'Dim i As Integer = 0
+            For Each obID As ObjectId In btr
+                Dim dObj As DBObject = actrans.GetObject(obID, OpenMode.ForRead)
+                If TypeOf dObj IsNot BlockReference Then
+                    If TypeOf dObj Is Entity Then
+                        Dim ent As Entity = CType(dObj, Entity)
+                        If Not ent.LayerId = dwgDB.LayerZero Then
+                            ent.UpgradeOpen()
+                            'Dim entlay As String = ent.Layer
+                            Dim entlayID As ObjectId = ent.LayerId
+                            Dim layTblRec As LayerTableRecord = actrans.GetObject(entlayID, OpenMode.ForRead)
+                            If ent.Color.IsByLayer Then ent.Color = layTblRec.Color
+                            If ent.PlotStyleName = "ByLayer" Then ent.PlotStyleName = layTblRec.PlotStyleName
+                            If ent.Linetype = "ByLayer" Then ent.LinetypeId = layTblRec.LinetypeObjectId
+                            ent.LayerId = dwgDB.LayerZero
+                        End If
+                    End If
+                Else
+                    idCol.Add(obID)
+                End If
+            Next
+            Return idCol
+            actrans.Commit()
+        End Using
+    End Function
 
     Public Sub ClearBlk(bName As String)
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -570,6 +583,87 @@ Public Module Blocks
         End Try
 
     End Sub
+    Public Sub DelPurgeBlock(bName As String)
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Try
+            Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                If BlkExists(bName) Then
+                    Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim delRefs As Boolean = True
+                    Dim refsExist As Boolean = False
+                    Dim refList As New ObjectIdCollection
+                    For Each btrId As ObjectId In blkTbl
+                        Dim btr As BlockTableRecord = acTrans.GetObject(btrId, OpenMode.ForRead)
+                        For Each entID As ObjectId In btr
+                            Dim ob As DBObject = acTrans.GetObject(entID, OpenMode.ForRead)
+                            If TypeOf ob Is BlockReference Then
+                                Dim bRef As BlockReference = TryCast(ob, BlockReference)
+                                If bRef.Name = bName Then
+                                    If Not refsExist Then
+                                        Dim msgStr As String = "There are existing block references for " & bName & " in this drawing.  Erase references and purge block?"
+                                        Dim dr As DialogResult = MessageBox.Show(msgStr, "References Exist", MessageBoxButtons.YesNo)
+                                        If dr = DialogResult.Yes Then
+                                            refsExist = True
+                                            delRefs = True
+                                            refList.Add(entID)
+                                        Else
+                                            refsExist = True
+                                            delRefs = False
+                                        End If
+                                    Else
+                                        refList.Add(entID)
+                                    End If
+                                End If
+                            End If
+                        Next
+                    Next
+
+                    If refsExist Then
+                        If delRefs Then
+                            For Each id As ObjectId In refList
+                                Dim tempRef As Entity = acTrans.GetObject(id, OpenMode.ForWrite)
+                                tempRef.Erase()
+                            Next
+                        Else
+                            acTrans.Abort()
+                            Exit Sub
+                        End If
+                    End If
+
+                    PurgeBlk(bName, acTrans)
+                End If
+                acTrans.Commit()
+            End Using
+
+        Catch ex As Autodesk.AutoCAD.Runtime.Exception
+            MessageBox.Show(ex.Message.ToString)
+        End Try
+
+    End Sub
+
+    Public Sub RenameBlock(bName As String, newName As String)
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        If BlkExists(bName) Then
+            Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                Dim btr As BlockTableRecord = acTrans.GetObject(blkTbl(bName), OpenMode.ForWrite)
+                btr.Name = newName
+                acTrans.Commit()
+            End Using
+        End If
+    End Sub
+
+    Public Sub RenameBlock(bName As String, newName As String, acTrans As Transaction)
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        If BlkExists(bName) Then
+            Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+            Dim btr As BlockTableRecord = acTrans.GetObject(blkTbl(bName), OpenMode.ForWrite)
+            btr.Name = newName
+        End If
+    End Sub
 
     Public Sub PurgeBlk(bName As String)
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -577,7 +671,8 @@ Public Module Blocks
         Try
             Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
                 If BlkExists(bName) Then
-                    Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForWrite)
+                    Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                    'Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
                     Dim blkId As ObjectId = blkTbl(bName)
                     Dim blkCol As New ObjectIdCollection
                     blkCol.Add(blkId)
@@ -590,6 +685,22 @@ Public Module Blocks
         End Try
     End Sub
 
+    Public Sub PurgeBlk(bName As String, acTrans As Transaction)
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Try
+            If BlkExists(bName) Then
+                Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                'Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+                Dim blkId As ObjectId = blkTbl(bName)
+                Dim blkCol As New ObjectIdCollection
+                blkCol.Add(blkId)
+                DwgDB.Purge(blkCol)
+            End If
+        Catch ex As Autodesk.AutoCAD.Runtime.Exception
+            MessageBox.Show(ex.Message.ToString)
+        End Try
+    End Sub
     Public Sub InsertDwgBlock(fName As String, safeBname As String)
 
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -695,7 +806,7 @@ Public Module Blocks
         Try
             sourceDb.ReadDwgFile(sourcefilename, System.IO.FileShare.Read, False, "")
         Catch __unusedException1__ As System.Exception
-            MsgBox(vbLf & "Unable to read drawing file.")
+            MessageBox.Show(vbLf & "Unable to read drawing file.")
             Return
         End Try
 
@@ -730,7 +841,7 @@ Public Module Blocks
                 Try
                     sourceDb.SaveAs(sourcefilename, True, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, sourceDb.SecurityParameters)
                 Catch ex As Exception
-                    MsgBox("Unable to save drawing file." & vbLf & ex.Message)
+                    MessageBox.Show("Unable to save drawing file." & vbLf & ex.Message)
                 End Try
             End If
 
@@ -917,6 +1028,7 @@ Public Module Blocks
                         Exit For
                     Catch ex As Exception
                         retValue = False
+                        Exit For
                     End Try
                 End If
             Next
@@ -966,14 +1078,14 @@ Public Module FileUtilities
             Dim xmlResult As DialogResult = fDialog.ShowDialog()
 
             If xmlResult = DialogResult.Cancel Then
-                MsgBox("Error. XML file not selected")
+                MessageBox.Show("Error. XML file not selected")
                 Return ""
                 Exit Function
 
             ElseIf xmlResult = DialogResult.OK Then
                 fName = fDialog.FileName
             Else
-                MsgBox("Error. XML file not selected")
+                MessageBox.Show("Error. XML file not selected")
                 Return ""
                 Exit Function
             End If
@@ -983,7 +1095,7 @@ skipit:
             Return fName
 
         Catch ex As Exception
-            MsgBox(ex.Message & vbLf & "Error selecting XML file.")
+            MessageBox.Show(ex.Message & vbLf & "Error selecting XML file.")
             Return ""
             Exit Function
         End Try
@@ -1035,14 +1147,13 @@ skipit:
             Dim fileResult As DialogResult = fDialog.ShowDialog()
 
             If fileResult = DialogResult.Cancel Then
-                MsgBox("Error. File not selected")
+                MessageBox.Show("Error. File not selected")
                 Return Nothing
                 Exit Function
-
             ElseIf fileResult = DialogResult.OK Then
                 fName = fDialog.FileName
             Else
-                MsgBox("Error. File name not provided")
+                MessageBox.Show("Error. File name not provided.")
                 Return ""
                 Exit Function
             End If
@@ -1052,7 +1163,7 @@ skipit:
             Return fName
 
         Catch ex As Exception
-            MsgBox(ex.Message & vbLf & "Error selecting file.")
+            MessageBox.Show(ex.Message & vbLf & "Error selecting file.")
             Return ""
             Exit Function
         End Try
@@ -1081,14 +1192,14 @@ skipit:
             Dim xmlResult As DialogResult = fDialog.ShowDialog()
 
             If xmlResult = DialogResult.Cancel Then
-                MsgBox("Error. File not selected")
+                MessageBox.Show("Error. File not selected")
                 Return Nothing
                 Exit Function
 
             ElseIf xmlResult = DialogResult.OK Then
                 fName = fDialog.FileName
             Else
-                MsgBox("Error. File not selected")
+                MessageBox.Show("Error. File not selected")
                 Return ""
                 Exit Function
             End If
@@ -1098,7 +1209,7 @@ skipit:
             Return fName
 
         Catch ex As Exception
-            MsgBox(ex.Message & vbLf & "Error selecting file.")
+            MessageBox.Show(ex.Message & vbLf & "Error selecting file.")
             Return ""
             Exit Function
         End Try
@@ -1130,7 +1241,7 @@ skipit:
                 fName = fDialog.SelectedPath
                 retval = fName
             Else
-                MsgBox("Error. Folder not selected")
+                MessageBox.Show("Error. Folder not selected")
                 retval = ""
             End If
 
@@ -1138,7 +1249,7 @@ skipit:
             Return retval
 
         Catch ex As Exception
-            MsgBox(ex.Message & vbLf & "Error selecting folder.")
+            MessageBox.Show(ex.Message & vbLf & "Error selecting folder.")
             Return ""
             Exit Function
         End Try
@@ -1168,14 +1279,14 @@ skipit:
             Dim xsdResult As DialogResult = fDialog.ShowDialog()
 
             If xsdResult = DialogResult.Cancel Then
-                MsgBox("Error. XSD file not selected")
+                MessageBox.Show("Error. XSD file not selected")
                 Return ""
                 Exit Function
 
             ElseIf xsdResult = DialogResult.OK Then
                 fName = fDialog.FileName
             Else
-                MsgBox("Error. XSD file not selected")
+                MessageBox.Show("Error. XSD file not selected")
                 Return ""
                 Exit Function
             End If
@@ -1185,7 +1296,7 @@ skipit:
             Return fName
 
         Catch ex As Exception
-            MsgBox(ex.Message & vbLf & "Error selecting XSD file.")
+            MessageBox.Show(ex.Message & vbLf & "Error selecting XSD file.")
             Return ""
             Exit Function
         End Try
@@ -1439,7 +1550,7 @@ tryAgain:
             'MsgBox("Picked Font Name is " & fntPicker.FontName)
             fntName = fntPicker.FontName
         Else
-            MsgBox("error picking font name.")
+            MessageBox.Show("error picking font name.")
             Return ""
             Exit Function
         End If
@@ -1494,8 +1605,8 @@ tryAgain:
                 acTrans.Commit()
 
             Catch ex As Exception
-                'MsgBox(ex.ErrorStatus & vbLf & ex.Message)
-                MsgBox("Error creating new textstyle.  Using current drawing textstyle." & vbLf & ex.ErrorStatus & vbLf & ex.Message)
+                'Messagebox.show(ex.ErrorStatus & vbLf & ex.Message)
+                MessageBox.Show("Error creating new textstyle.  Using current drawing textstyle." & vbLf & ex.ErrorStatus & vbLf & ex.Message)
                 Return ""
                 acTrans.Abort()
                 Exit Function
@@ -1515,10 +1626,10 @@ tryAgain:
         fntPicker.ShowDialog()
 
         If fntPicker.DialogResult = DialogResult.OK Then
-            'MsgBox("Picked Font Name is " & fntPicker.FontName)
+            'Messagebox.show("Picked Font Name is " & fntPicker.FontName)
             styleName = fntPicker.FontName
         Else
-            'MsgBox("error picking style.")
+            'Messagebox.show("error picking style.")
             Return ""
             Exit Function
         End If
@@ -1612,6 +1723,121 @@ Public Module Properties
         End If
     End Function
 
+    Public Function GetTransparencyAlpha(ByVal idx As Integer) As Transparency
+        Dim transparencies As Dictionary(Of Integer, Byte) = TransToAlpha()
+        If transparencies.ContainsKey(idx) Then
+            Return New Autodesk.AutoCAD.Colors.Transparency(transparencies(idx))
+        Else
+            Return New Autodesk.AutoCAD.Colors.Transparency(Byte.MaxValue)
+        End If
+    End Function
+
+    Friend Function TransToAlpha() As Dictionary(Of Integer, Byte)
+        Dim transp As New Dictionary(Of Integer, Byte)
+        transp(0) = 255
+        transp(1) = 252
+        transp(2) = 249
+        transp(3) = 247
+        transp(4) = 244
+        transp(5) = 242
+        transp(6) = 239
+        transp(7) = 237
+        transp(8) = 234
+        transp(9) = 232
+        transp(10) = 229
+        transp(11) = 226
+        transp(12) = 224
+        transp(13) = 221
+        transp(14) = 219
+        transp(15) = 216
+        transp(16) = 214
+        transp(17) = 211
+        transp(18) = 209
+        transp(19) = 206
+        transp(20) = 204
+        transp(21) = 201
+        transp(22) = 198
+        transp(23) = 196
+        transp(24) = 193
+        transp(25) = 191
+        transp(26) = 188
+        transp(27) = 186
+        transp(28) = 183
+        transp(29) = 181
+        transp(30) = 178
+        transp(31) = 175
+        transp(32) = 173
+        transp(33) = 170
+        transp(34) = 168
+        transp(35) = 165
+        transp(36) = 163
+        transp(37) = 160
+        transp(38) = 158
+        transp(39) = 155
+        transp(40) = 153
+        transp(41) = 150
+        transp(42) = 147
+        transp(43) = 145
+        transp(44) = 142
+        transp(45) = 140
+        transp(46) = 137
+        transp(47) = 135
+        transp(48) = 132
+        transp(49) = 130
+        transp(50) = 127
+        transp(51) = 124
+        transp(52) = 122
+        transp(53) = 119
+        transp(54) = 117
+        transp(55) = 114
+        transp(56) = 112
+        transp(57) = 109
+        transp(58) = 107
+        transp(59) = 104
+        transp(60) = 102
+        transp(61) = 99
+        transp(62) = 96
+        transp(63) = 94
+        transp(64) = 91
+        transp(65) = 89
+        transp(66) = 86
+        transp(67) = 84
+        transp(68) = 81
+        transp(69) = 79
+        transp(70) = 76
+        transp(71) = 73
+        transp(72) = 71
+        transp(73) = 68
+        transp(74) = 66
+        transp(75) = 63
+        transp(76) = 61
+        transp(77) = 58
+        transp(78) = 56
+        transp(79) = 53
+        transp(80) = 51
+        transp(81) = 48
+        transp(82) = 45
+        transp(83) = 43
+        transp(84) = 40
+        transp(85) = 38
+        transp(86) = 35
+        transp(87) = 33
+        transp(88) = 30
+        transp(89) = 28
+        transp(90) = 25
+        transp(91) = 22
+        transp(92) = 20
+        transp(93) = 17
+        transp(94) = 15
+        transp(95) = 12
+        transp(96) = 10
+        transp(97) = 7
+        transp(98) = 5
+        transp(99) = 2
+        transp(100) = 0
+        Return transp
+    End Function
+
     Public Function GetColor(colorStr As String) As Color
         If String.IsNullOrEmpty(colorStr) Then
             Return Nothing
@@ -1694,20 +1920,29 @@ Public Module MathGeometry
     'Const AutoCADver As String = "AutoCAD.Application.21"
     'Const Civil3dVer As String = "AeccXUiLand.Aeccapplication.11.0"
 
-    Public Function GetTangentPoints(ptP As Point3d, c1 As Circle) As Point2dCollection
+    Public Function GetTangentPoints(ptP As Point3d, c1 As Circle, Optional verbose As Boolean = False) As Point2dCollection
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim ed As Editor = curDwg.Editor
 
         'declare a collection for output
         Dim points As New Point2dCollection
 
         'get the center and radius of the circle
-        Dim ptC As Point3d = c1.Center
-        Dim rds As Double = c1.Radius
+        Dim cCen As Point3d = c1.Center
+        Dim r As Double = c1.Radius
 
         'pull the 2D coordinates from the center point and the external point
         Dim px As Double = ptP.X
         Dim py As Double = ptP.Y
-        Dim cx As Double = ptC.X
-        Dim cy As Double = ptC.Y
+        Dim cx As Double = cCen.X
+        Dim cy As Double = cCen.Y
+
+        Dim ptP2d As New Point2d(px, py)
+        Dim cCen2d As New Point2d(cx, cy)
+        Dim v2d As Vector2d = ptP2d.GetVectorTo(cCen2d)
+        'get angle from x-axis to a line between the external point and circle center
+        Dim gamma As Double = v2d.Angle
 
         'Delta x and Delta y
         Dim dx = cx - px
@@ -1715,41 +1950,52 @@ Public Module MathGeometry
 
         'if the same point, no tangents
         If dx = 0 And dy = 0 Then
+            If verbose Then ed.WriteMessage(vbLf & "Error. Point cannot be the circle center.")
             Return Nothing
             Exit Function
         End If
 
-        'get distance from ptP to center of the circle
-        Dim pc = Sqrt(dx ^ 2 + dy ^ 2)
+        'get distance from ptP to center of the circle using acad function
+        Dim pc = ptP2d.GetDistanceTo(cCen2d)
+        'Dim pc = Sqrt(dx ^ 2 + dy ^ 2)
+
+        'establish a temporary coordinate system with (0,0) at the external point
+        'and the circle center located on the x-axis at x = pc
+        'get the angle from the temp x-axis to a tangent point
+        Dim theta As Double = Asin(r / pc)
 
         'test for no tangents or one tangent
-        If pc < rds Then 'no tangents
+        If pc < r Then 'no tangents
+            If verbose Then ed.WriteMessage(vbLf & "Error. Point cannot be inside of the circle. No tangent points.")
             Return Nothing
             Exit Function
-        ElseIf pc = rds Then 'one tangent = ptP
+        ElseIf pc = r Then 'one tangent = ptP
             points.Add(New Point2d(ptP.X, ptP.Y))
             Return points
             Exit Function
         End If
 
-        'distance from ptP to tangent point (x1)
-        Dim rsq As Double = pc ^ 2 - (rds ^ 2)
+        'get the coordinates of the tangent points relative to the temporary coordinate system
+        Dim tp1x As Double = pc - (r * Sin(theta))
+        Dim tp2x As Double = tp1x
+        Dim tp1y As Double = r * Cos(theta)
+        Dim tp2y As Double = -tp1y
 
-        'distance from P to temporary point x0
-        Dim d = rsq / pc
+        'rotate coordinates of tp1 and tp2 to final orientation
+        Dim point1x As Double = (tp1x * Cos(gamma)) - (tp1y * Sin(gamma))
+        Dim point1y As Double = (tp1x * Sin(gamma)) + (tp1y * Cos(gamma))
+        Dim point2x As Double = (tp2x * Cos(gamma)) - (tp2y * Sin(gamma))
+        Dim point2y As Double = (tp2x * Sin(gamma)) + (tp2y * Cos(gamma))
 
-        'distance from x0 to tangent points
-        Dim h As Double = Sqrt(rsq - (d ^ 2))
+        'translate coordinates from temporary to world coordinate system
+        Dim f1x As Double = point1x + ptP.X
+        Dim f1y As Double = point1y + ptP.Y
+        Dim f2x As Double = point2x + ptP.X
+        Dim f2y As Double = point2y + ptP.Y
 
-        '1st tangent point
-        Dim pt1x As Double = px + (dx * d - dy * h) / pc
-        Dim pt1y As Double = py + (dy * d + dx * h) / pc
-        Dim pt1 As New Point2d(pt1x, pt1y)
-
-        '2nd tangent point
-        Dim pt2x As Double = px + (dx * d + dy * h) / pc
-        Dim pt2y As Double = py + (dy * d - dx * h) / pc
-        Dim pt2 As New Point2d(pt2x, pt2y)
+        'create 2d points and add to return collection
+        Dim pt1 As New Point2d(f1x, f1y)
+        Dim pt2 As New Point2d(f2x, f2y)
 
         points.Add(pt1)
         points.Add(pt2)
@@ -1758,9 +2004,106 @@ Public Module MathGeometry
 
     End Function
 
+    Public Function GetTangentPoints(ptP As Point3d, dbObj As DBObject) As Point2dCollection
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim ed As Editor = curDwg.Editor
+
+        Dim c1 As Circle
+
+        'substitute circles for arcs if arcs are picked
+        If TypeOf dbObj Is Autodesk.AutoCAD.DatabaseServices.Circle Then
+            c1 = CType(dbObj, Circle)
+        ElseIf TypeOf dbObj Is Arc Then
+            Dim a1 As Arc = CType(dbObj, Arc)
+            c1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
+            a1.Dispose()
+        Else
+            ed.WriteMessage(vbLf & "Entity is not a circle or circular arc.  Command ended.")
+            Return Nothing
+            Exit Function
+        End If
+
+        'declare a collection for output
+        Dim points As New Point2dCollection
+
+        'get the center and radius of the circle
+        Dim cCen As Point3d = c1.Center
+        Dim r As Double = c1.Radius
+
+        'pull the 2D coordinates from the center point and the external point
+        Dim px As Double = ptP.X
+        Dim py As Double = ptP.Y
+        Dim cx As Double = cCen.X
+        Dim cy As Double = cCen.Y
+
+        Dim ptP2d As New Point2d(px, py)
+        Dim cCen2d As New Point2d(cx, cy)
+        Dim v2d As Vector2d = ptP2d.GetVectorTo(cCen2d)
+        'get angle from x-axis to a line between the external point and circle center
+        Dim gamma As Double = v2d.Angle
+
+        'Delta x and Delta y
+        Dim dx = cx - px
+        Dim dy = cy - py
+
+        'if the same point, no tangents
+        If dx = 0 And dy = 0 Then
+            ed.WriteMessage(vbLf & "Error. Point cannot be the circle center.")
+            Return Nothing
+            Exit Function
+        End If
+
+        'get distance from ptP to center of the circle using acad function
+        Dim pc = ptP2d.GetDistanceTo(cCen2d)
+
+        'establish a temporary coordinate system with (0,0) at the external point
+        'and the circle center located on the x-axis at x = pc
+        'get the angle from the temp x-axis to a tangent point
+        Dim theta As Double = Asin(r / pc)
+
+        'test for no tangents or one tangent
+        If pc < r Then 'no tangents
+            ed.WriteMessage(vbLf & "Error. Point cannot be inside of the circle. No tangent points.")
+            Return Nothing
+            Exit Function
+        ElseIf pc = r Then 'one tangent = ptP
+            points.Add(New Point2d(ptP.X, ptP.Y))
+            Return points
+            Exit Function
+        End If
+
+        'get the coordinates of the tangent points relative to the temporary x-axis
+        Dim tp1x As Double = pc - (r * Sin(theta))
+        Dim tp2x As Double = tp1x
+        Dim tp1y As Double = r * Cos(theta)
+        Dim tp2y As Double = -tp1y
+
+        'rotate coordinates of tp1 and tp2 to final orientation
+        Dim point1x As Double = (tp1x * Cos(gamma)) - (tp1y * Sin(gamma))
+        Dim point1y As Double = (tp1y * Cos(gamma)) + (tp1x * Sin(gamma))
+        Dim point2x As Double = (tp2x * Cos(gamma)) - (tp2y * Sin(gamma))
+        Dim point2y As Double = (tp2y * Cos(gamma)) + (tp2x * Sin(gamma))
+
+        'translate coordinates from temporary to world coordinate system
+        Dim f1x As Double = point1x + ptP.X
+        Dim f1y As Double = point1y + ptP.Y
+        Dim f2x As Double = point2x + ptP.X
+        Dim f2y As Double = point2y + ptP.Y
+
+        'create points and add to return collection
+        Dim pt1 As New Point2d(f1x, f1y)
+        Dim pt2 As New Point2d(f2x, f2y)
+        points.Add(pt1)
+        points.Add(pt2)
+
+        Return points
+
+    End Function
 
     Public Function GetAngleFromXaxis(StartPt As Point3d, RefPt As Point3d) As Double
         'Function returns the angle defined by the x-axis and a vector defined by two 3D points
+        'in the xy plane
         Try
             Dim SP2d = New Point2d(StartPt.X, StartPt.Y)
             Dim RP2D = New Point2d(RefPt.X, RefPt.Y)
@@ -1774,7 +2117,7 @@ Public Module MathGeometry
         End Try
     End Function
 
-    Public Function ExtTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject) As Point2dCollection
+    Public Function ExtTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject, Optional verbose As Boolean = False) As Point2dCollection
 
         Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = CurDwg.Database
@@ -1784,7 +2127,7 @@ Public Module MathGeometry
         Dim c2 As Circle
 
         Try
-
+            'substitute circles for arcs if arcs are picked
             If TypeOf dbObj1 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
                 c1 = CType(dbObj1, Circle)
             ElseIf TypeOf dbObj1 Is Arc Then
@@ -1792,12 +2135,11 @@ Public Module MathGeometry
                 c1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
                 a1.Dispose()
             Else
-                ed.WriteMessage(vbLf & "C1 is not a circle or circular arc.  Command ended.")
+                If verbose Then ed.WriteMessage(vbLf & "C1 is not a circle or circular arc.  Command ended.")
                 If dbObj1 IsNot Nothing Then dbObj1.Dispose()
                 Return Nothing
                 Exit Function
             End If
-
 
             If TypeOf DBObj2 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
                 c2 = CType(DBObj2, Circle)
@@ -1806,152 +2148,256 @@ Public Module MathGeometry
                 c2 = New Circle(a2.Center, Vector3d.ZAxis, a2.Radius)
                 a2.Dispose()
             Else
-                ed.WriteMessage(vbLf & "C2 is not a circle or circular arc.  Command ended.")
+                If verbose Then ed.WriteMessage(vbLf & "C2 is not a circle or circular arc.  Command ended.")
                 If DBObj2 IsNot Nothing Then DBObj2.Dispose()
                 Return Nothing
                 Exit Function
             End If
 
+            'make the smaller circle c1
             If c1.Radius > c2.Radius Then
                 Dim ctemp As Circle = c1
                 c1 = c2
                 c2 = ctemp
-                'Return Nothing
-                'Exit Function
             End If
 
+            'create 2D points for the picked circles' centers
             Dim c12D As New Point2d(c1.Center.X, c1.Center.Y)
             Dim c22D As New Point2d(c2.Center.X, c2.Center.Y)
 
+            'get the angle between the x-axis and line between the circle centers
+            'create a 2D vector from center c1 to center c2
             Dim v2d As Vector2d = c12D.GetVectorTo(c22D)
             Dim rotangle = v2d.Angle
-            Dim cenDist As Double = c12D.GetDistanceTo(c22D)
 
-            Dim tangents As Integer
-
-            If cenDist < c2.Radius - c1.Radius Then
-                tangents = 0
-                ed.WriteMessage(vbLf & "C1 is completely inside of C2. Circles have no common tangents.")
-                Return Nothing
-                Exit Function
-            ElseIf cenDist = c2.Radius - c1.Radius Then
-                tangents = 1
-                ed.WriteMessage(vbLf & "C1 is inside of and touching C2. Circles have one common tangent at the point of their intersection.")
-                Return Nothing
-                Exit Function
-            ElseIf cenDist > c2.Radius - c1.Radius AndAlso cenDist < c2.Radius + c1.Radius Then
-                tangents = 2
-                ed.WriteMessage(vbLf & "C1 intersects with C2. Circles have two common tangents.")
-            ElseIf cenDist = c1.Radius + c2.Radius Then
-                tangents = 3
-                ed.WriteMessage(vbLf & "C1 is outside of and touching C2. Circles have 3 common tangents.")
-            ElseIf cenDist > c1.Radius + c2.Radius Then
-                tangents = 4
-            End If
-
-            'If c1.Radius > c2.Radius Then cenDist *= -1
+            'round the distance between circle centers to 10 decimals to prevent floating point errors
+            Dim cenDist As Double = Round(v2d.Length, 10)
 
             Dim r1 As Double = c1.Radius
             Dim r2 As Double = c2.Radius
+
+            'create temp circles on the x-axis at the same distance apart
+            Dim tc1 As New Circle(New Point3d(0, 0, 0), Vector3d.ZAxis, r1)
+            Dim tc2 As New Circle(New Point3d(cenDist, 0, 0), Vector3d.ZAxis, r2)
+
+            Dim tangents As Integer
+            Dim singTanPts As New Point2dCollection
+            Dim raddiff As Double = Round(r2 - r1, 10)
+            Dim radsum As Double = Round(r2 + r1, 10)
+
+            'test for the number of tangents
+            If cenDist < raddiff Then
+                tangents = 0
+                If verbose Then ed.WriteMessage(vbLf & "C1 is completely inside of C2. Circles have no common tangents.")
+                Return Nothing
+                Exit Function
+            ElseIf cenDist = raddiff Then
+                tangents = 1
+                If verbose Then ed.WriteMessage(vbLf & "C1 is inside of and touching C2. Circles have one common exterior tangent at the point of their intersection.")
+                'get tangent for touching circles
+                singTanPts = GetSingleTangent(c1, c2)
+            ElseIf cenDist > raddiff AndAlso cenDist < radsum Then
+                tangents = 2
+                If verbose Then ed.WriteMessage(vbLf & "C1 intersects with C2. Circles have two common exterior tangents.")
+            ElseIf cenDist = radsum Then
+                tangents = 3
+                If verbose Then ed.WriteMessage(vbLf & "C1 is outside of and touching C2. Circles have 3 common exterior tangents.")
+                'get tangent for touching circles
+                singTanPts = GetSingleTangent(c1, c2)
+            ElseIf cenDist > radsum Then
+                tangents = 4
+            End If
 
             Dim p1 As Point2d
             Dim p2 As Point2d
             Dim p3 As Point2d
             Dim p4 As Point2d
 
-            Dim tc1 As New Circle(New Point3d(0, 0, c1.Center.Z), Vector3d.ZAxis, r1)
-            Dim tc2 As New Circle(New Point3d(cenDist, 0, c2.Center.Z), Vector3d.ZAxis, r2)
-
+            'temp circle center coordinates
             Dim tc1x As Double = tc1.Center.X
             Dim tc1y As Double = tc1.Center.Y
             Dim tc2x As Double = tc2.Center.X
             Dim tc2y As Double = tc2.Center.Y
 
-            'Dim gamma As Double = -Atan2(0, tc2x)
+            'calc the angle between the x-axis and the tangent lines (temp circles)
             Dim alpha As Double = Asin((r2 - r1) / cenDist)
             If alpha < 0 Then alpha = Asin((r1 - r2) / cenDist)
 
             Dim cen1 As New Point2d(tc1x, tc1y)
             Dim cen2 As New Point2d(tc2x, tc2y)
 
-            If Not r1 = r2 Then
-                Dim x3a As Double = tc2x - r2 * Sin(alpha)
-                Dim y3a As Double = tc2y + r2 * Cos(alpha)
-                p1 = New Point2d(x3a, y3a)
-                Dim x3b As Double = tc1x - r1 * Sin(alpha)
-                Dim y3b As Double = tc1y + r1 * Cos(alpha)
-                p2 = New Point2d(x3b, y3b)
-                p3 = New Point2d(x3a, -y3a)
-                p4 = New Point2d(x3b, -y3b)
-            Else
-                p1 = New Point2d(tc1x, r1)
-                p2 = New Point2d(tc2x, r2)
-                p3 = New Point2d(tc1x, -r1)
-                p4 = New Point2d(tc2x, -r2)
+            'create an output collection
+            Dim tPts As New Point2dCollection
+
+            'get displacement vector from temp circles to final positions
+            Dim dispVect1 As Vector3d = tc1.Center.GetVectorTo(c1.Center)
+
+            'calculate the coordinates for the tangent points
+            'if circles are the same size then the points are simply offsets of the centerline
+            If Not tangents = 1 Then
+
+                Dim p1xt As Double
+                Dim p1yt As Double
+                Dim p2xt As Double
+                Dim p2yt As Double
+                Dim p3xt As Double
+                Dim p3yt As Double
+                Dim p4xt As Double
+                Dim p4yt As Double
+
+                If Not r1 = r2 Then
+                    p1xt = tc2x - r2 * Sin(alpha)
+                    p1yt = tc2y + r2 * Cos(alpha)
+                    p2xt = tc1x - r1 * Sin(alpha)
+                    p2yt = tc1y + r1 * Cos(alpha)
+                    p3xt = p1xt
+                    p3yt = -p1yt
+                    p4xt = p2xt
+                    p4yt = -p2yt
+                Else
+                    p1xt = tc1x
+                    p1yt = r1
+                    p2xt = tc2x
+                    p2yt = r2
+                    p3xt = tc1x
+                    p3yt = -r1
+                    p4xt = tc2x
+                    p4yt = -r1
+                End If
+
+                'rotate coordinates
+
+                Dim p1x As Double = p1xt * Cos(rotangle) - p1yt * Sin(rotangle)
+                Dim p1y As Double = p1xt * Sin(rotangle) + p1yt * Cos(rotangle)
+                Dim p2x As Double = p2xt * Cos(rotangle) - p2yt * Sin(rotangle)
+                Dim p2y As Double = p2xt * Sin(rotangle) + p2yt * Cos(rotangle)
+                Dim p3x As Double = p3xt * Cos(rotangle) - p3yt * Sin(rotangle)
+                Dim p3y As Double = p3xt * Sin(rotangle) + p3yt * Cos(rotangle)
+                Dim p4x As Double = p4xt * Cos(rotangle) - p4yt * Sin(rotangle)
+                Dim p4y As Double = p4xt * Sin(rotangle) + p4yt * Cos(rotangle)
+
+                'translate coordinates
+                p1x += dispVect1.X
+                p1y += dispVect1.Y
+                p2x += dispVect1.X
+                p2y += dispVect1.Y
+                p3x += dispVect1.X
+                p3y += dispVect1.Y
+                p4x += dispVect1.X
+                p4y += dispVect1.Y
+
+                'final 2d points
+                p1 = New Point2d(p1x, p1y)
+                p2 = New Point2d(p2x, p2y)
+                p3 = New Point2d(p3x, p3y)
+                p4 = New Point2d(p4x, p4y)
+
+                tPts.Add(p1)
+                tPts.Add(p2)
+                tPts.Add(p3)
+                tPts.Add(p4)
+
             End If
 
-            Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            'add points if the circles are touching
+            If singTanPts IsNot Nothing AndAlso singTanPts.Count = 3 Then
+                tPts.Add(singTanPts(0))
+                tPts.Add(singTanPts(1))
+                tPts.Add(singTanPts(2))
+            End If
 
-                Dim blkTbl As BlockTable = actrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-                Dim mdlSpace As BlockTableRecord = actrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+            'dispose temp circles
+            tc1.Dispose()
+            tc2.Dispose()
 
-                Dim dbp1 As New DBPoint(New Point3d(p1.X, p1.Y, c1.Center.Z))
-                Dim dbp2 As New DBPoint(New Point3d(p2.X, p2.Y, c2.Center.Z))
-                Dim dbp3 As New DBPoint(New Point3d(p3.X, p3.Y, c1.Center.Z))
-                Dim dbp4 As New DBPoint(New Point3d(p4.X, p4.Y, c2.Center.Z))
-
-                mdlSpace.AppendEntity(dbp1)
-                actrans.AddNewlyCreatedDBObject(dbp1, True)
-
-                mdlSpace.AppendEntity(dbp2)
-                actrans.AddNewlyCreatedDBObject(dbp2, True)
-
-                mdlSpace.AppendEntity(dbp3)
-                actrans.AddNewlyCreatedDBObject(dbp3, True)
-
-                mdlSpace.AppendEntity(dbp4)
-                actrans.AddNewlyCreatedDBObject(dbp4, True)
-
-                Dim dispVect1 As Vector3d = tc1.Center.GetVectorTo(c1.Center)
-                dbp1.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp2.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp3.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp4.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp1.TransformBy(Matrix3d.Displacement(dispVect1))
-                dbp2.TransformBy(Matrix3d.Displacement(dispVect1))
-                dbp3.TransformBy(Matrix3d.Displacement(dispVect1))
-                dbp4.TransformBy(Matrix3d.Displacement(dispVect1))
-
-                Dim p12d As New Point2d(dbp1.Position.X, dbp1.Position.Y)
-                Dim p22d As New Point2d(dbp2.Position.X, dbp2.Position.Y)
-                Dim p32d As New Point2d(dbp3.Position.X, dbp3.Position.Y)
-                Dim p42d As New Point2d(dbp4.Position.X, dbp4.Position.Y)
-
-                Dim tPts As New Point2dCollection
-                With tPts
-                    .Add(p12d)
-                    .Add(p22d)
-                    .Add(p32d)
-                    .Add(p42d)
-                End With
-
-                Return tPts
-
-                dbp1.Dispose()
-                dbp2.Dispose()
-                dbp3.Dispose()
-                dbp4.Dispose()
-                tc1.Dispose()
-                tc2.Dispose()
-            End Using
+            Return tPts
 
         Catch ex As Exception
-            'If c1 IsNot Nothing Then c1.Dispose()
-            'If c2 IsNot Nothing Then c2.Dispose()
-
             MessageBox.Show(ex.Message)
             Return Nothing
         End Try
+
+
+    End Function
+
+    Public Function GetSingleTangent(c1 As Circle, c2 As Circle) As Point2dCollection
+
+        'routine for getting the tangent of two touching circles at their single intersection point
+
+        Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = CurDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        Dim cen1 As New Point2d(c1.Center.X, c1.Center.Y)
+        Dim cen2 As New Point2d(c2.Center.X, c2.Center.Y)
+
+        Dim v2d As Vector2d = cen1.GetVectorTo(cen2)
+        Dim cDist As Double = v2d.Length
+        Dim rotAngle As Double = v2d.Angle
+
+        Dim r1 As Double = c1.Radius
+        Dim r2 As Double = c2.Radius
+
+        Dim tc1 As New Circle(New Point3d(0, 0, 0), Vector3d.ZAxis, r1)
+        Dim tc2 As New Circle(New Point3d(cDist, 0, 0), Vector3d.ZAxis, r2)
+
+        'get displacement vector from temp circles to final positions
+        Dim dispVect1 As Vector3d = tc1.Center.GetVectorTo(c1.Center)
+
+        Dim pt1x As Double
+        Dim pt1y As Double = -50
+        Dim pt2x As Double
+        Dim pt2y As Double = 50
+        Dim pt3x As Double
+        Dim pt3y As Double = 0
+
+        If cDist < r2 Then
+            pt1x = -r1
+            pt2x = -r1
+            pt3x = -r1
+        ElseIf cDist > r2 Then
+            pt1x = r1
+            pt2x = r1
+            pt3x = r1
+        Else
+            ed.WriteMessage(vbLf & "Error.  Circles do not touch at a single point.")
+            Return Nothing
+            Exit Function
+        End If
+
+        Dim p1x As Double = pt1x * Cos(rotAngle) - pt1y * Sin(rotAngle)
+        Dim p1y As Double = pt1x * Sin(rotAngle) + pt1y * Cos(rotAngle)
+        Dim p2x As Double = pt2x * Cos(rotAngle) - pt2y * Sin(rotAngle)
+        Dim p2y As Double = pt2x * Sin(rotAngle) + pt2y * Cos(rotAngle)
+        Dim p3x As Double = pt3x * Cos(rotAngle) - pt3y * Sin(rotAngle)
+        Dim p3y As Double = pt3x * Sin(rotAngle) + pt3y * Cos(rotAngle)
+
+        'translate coordinates
+        p1x += dispVect1.X
+        p1y += dispVect1.Y
+        p2x += dispVect1.X
+        p2y += dispVect1.Y
+        p3x += dispVect1.X
+        p3y += dispVect1.Y
+
+        'final 2d points
+        Dim p1 As New Point2d(p1x, p1y)
+        Dim p2 As New Point2d(p2x, p2y)
+        Dim p3 As New Point2d(p3x, p3y)
+
+        Dim tPts As New Point2dCollection
+
+        With tPts
+            .Add(p1)
+            .Add(p2)
+            .Add(p3)
+        End With
+
+
+        tc1.Dispose()
+        tc2.Dispose()
+
+        Return tPts
     End Function
 
     Public Function IsArc(objId As ObjectId) As Boolean
@@ -1974,7 +2420,8 @@ Public Module MathGeometry
         End Using
 
     End Function
-    Public Function IntTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject) As Point2dCollection
+
+    Public Function IntTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject, Optional verbose As Boolean = False) As Point2dCollection
 
         Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim DwgDB As Database = CurDwg.Database
@@ -1984,7 +2431,7 @@ Public Module MathGeometry
         Dim c2 As Circle
 
         Try
-
+            'substitute circles for arcs if arcs are picked
             If TypeOf dbObj1 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
                 c1 = CType(dbObj1, Circle)
             ElseIf TypeOf dbObj1 Is Arc Then
@@ -1992,11 +2439,10 @@ Public Module MathGeometry
                 c1 = New Circle(a1.Center, Vector3d.ZAxis, a1.Radius)
                 a1.Dispose()
             Else
-                ed.WriteMessage(vbLf & "C1 is not a circle or circular arc.  Command ended.")
+                If verbose Then ed.WriteMessage(vbLf & "C1 is not a circle or circular arc.  Command ended.")
                 Return Nothing
                 Exit Function
             End If
-
 
             If TypeOf DBObj2 Is Autodesk.AutoCAD.DatabaseServices.Circle Then
                 c2 = CType(DBObj2, Circle)
@@ -2005,11 +2451,12 @@ Public Module MathGeometry
                 c2 = New Circle(a2.Center, Vector3d.ZAxis, a2.Radius)
                 a2.Dispose()
             Else
-                ed.WriteMessage(vbLf & "C2 is not a circle or circular arc.  Command ended.")
+                If verbose Then ed.WriteMessage(vbLf & "C2 is not a circle or circular arc.  Command ended.")
                 Return Nothing
                 Exit Function
             End If
 
+            'make c1 the smaller circle
             If c1.Radius > c2.Radius Then
                 Dim ctemp As Circle = c1
                 c1 = c2
@@ -2018,84 +2465,87 @@ Public Module MathGeometry
                 'Exit Function
             End If
 
+            '2D circle centers
             Dim c12D As New Point2d(c1.Center.X, c1.Center.Y)
             Dim c22D As New Point2d(c2.Center.X, c2.Center.Y)
 
+            'get the angle from the x-axis to the line between circle centers
             Dim v2d As Vector2d = c12D.GetVectorTo(c22D)
             Dim rotangle = v2d.Angle
-            Dim cenDist As Double = c12D.GetDistanceTo(c22D)
+            Dim cenDist As Double = Round(c12D.GetDistanceTo(c22D), 10)
 
+            'test for the number of tangents
             If cenDist = 0 Then
-                ed.WriteMessage(vbLf & "Circles are cocentric.  No common tangents.")
+                If verbose Then ed.WriteMessage(vbLf & "Circles are cocentric.  No common tangents.")
                 Return Nothing
                 Exit Function
             End If
 
             Dim tangents As Integer
+            Dim raddiff As Double = Round(c2.Radius - c1.Radius, 10)
+            Dim radsum As Double = Round(c2.Radius + c1.Radius, 10)
 
-            If cenDist < c2.Radius - c1.Radius Then
+            If cenDist < raddiff Then
                 tangents = 0
-                ed.WriteMessage(vbLf & "C1 is completely inside of C2. Circles have no common tangents.")
+                If verbose Then ed.WriteMessage(vbLf & "C1 is completely inside of C2. Circles have no common tangents.")
                 Return Nothing
                 Exit Function
-            ElseIf cenDist = c2.Radius - c1.Radius Then
+            ElseIf cenDist = raddiff Then
                 tangents = 1
-                ed.WriteMessage(vbLf & "C1 is inside of and touching C2. Circles have no common internal tangents.")
+                If verbose Then ed.WriteMessage(vbLf & "C1 is inside of and touching C2. Circles have no common interior tangents.")
                 Return Nothing
                 Exit Function
-            ElseIf cenDist > c2.Radius - c1.Radius AndAlso cenDist < c2.Radius + c1.Radius Then
+            ElseIf cenDist > raddiff And cenDist < radsum Then
                 tangents = 2
-                ed.WriteMessage(vbLf & "C1 intersects with C2. Circles have no common internal tangents.")
+                If verbose Then ed.WriteMessage(vbLf & "C1 intersects with C2. Circles have no common interior tangents.")
                 Return Nothing
                 Exit Function
-            ElseIf cenDist = c1.Radius + c2.Radius Then
+            ElseIf cenDist = radsum Then
                 tangents = 3
-                ed.WriteMessage(vbLf & "C1 is outside of and touching C2. Circles have no common internal tangents.")
+                If verbose Then ed.WriteMessage(vbLf & "C1 is outside of and touching C2. Circles have no common interior tangents.")
                 Return Nothing
                 Exit Function
-            ElseIf cenDist > c1.Radius + c2.Radius Then
+            ElseIf cenDist > radsum Then
                 tangents = 4
-                ed.WriteMessage(vbLf & "Circles have 2 common internal tangents.")
+                If verbose Then ed.WriteMessage(vbLf & "Circles have 2 common internal tangents.")
             End If
-            'If c1.Radius > c2.Radius Then cenDist *= -1
 
             Dim r1 As Double = c1.Radius
             Dim r2 As Double = c2.Radius
+
+            'create temp circles on the x-axis
+            Dim tc1 As New Circle(New Point3d(0, 0, 0), Vector3d.ZAxis, r1)
+            Dim tc2 As New Circle(New Point3d(cenDist, 0, 0), Vector3d.ZAxis, r2)
+
+            Dim tc1x As Double = 0
+            Dim tc1y As Double = 0
+            Dim tc2x As Double = cenDist
+            Dim tc2y As Double = 0
 
             Dim p1 As Point2d
             Dim p2 As Point2d
             Dim p3 As Point2d
             Dim p4 As Point2d
 
-            Dim tc1 As New Circle(New Point3d(0, 0, c1.Center.Z), Vector3d.ZAxis, r1)
-            Dim tc2 As New Circle(New Point3d(cenDist, 0, c2.Center.Z), Vector3d.ZAxis, r2)
-
-            Dim tc1x As Double = tc1.Center.X
-            Dim tc1y As Double = tc1.Center.Y
-            Dim tc2x As Double = tc2.Center.X
-            Dim tc2y As Double = tc2.Center.Y
-
+            'calc tangent point coordinates
             If Not r1 = r2 Then
-                'Dim gamma As Double = -Atan2(0, tc2x)
-                Dim siX As Double = ((r1 * tc2x) + (r2 * tc1x)) / (r1 + r2)
-                Dim l3 As Double = tc2x - siX
-                Dim l1 = siX - tc1x
-                Dim beta As Double = Atan2(r2, l3)
-                Dim alpha As Double = Asin((r2 - r1) / cenDist)
-                If alpha < 0 Then alpha = Asin((r1 - r2) / cenDist)
+                Dim d1 As Double = (r1 * cenDist) / (r1 + r2)
+                Dim theta As Double = Asin(r1 / d1)
+                Dim tpc1x As Double = r1 * Sin(theta)
+                Dim tpc1y As Double = r1 * Cos(theta)
+                Dim d2 As Double = cenDist - d1
 
+                Dim alpha As Double = Asin(r2 / d2)
+                Dim tpc2x As Double = cenDist - (r2 * Sin(alpha))
+                Dim tpc2y As Double = r2 * Cos(alpha)
                 Dim cen1 As New Point2d(tc1x, tc1y)
                 Dim cen2 As New Point2d(tc2x, tc2y)
-
-                Dim tpc2x As Double = tc2x - r2 * Sin(beta)
-                Dim tpc2y As Double = tc2y + r2 * Cos(beta)
-                Dim tpc1x As Double = tc1x + r1 * Sin(beta)
-                Dim tpc1y As Double = tc1y + r1 * Cos(beta)
 
                 p1 = New Point2d(tpc1x, tpc1y)
                 p2 = New Point2d(tpc2x, tpc2y)
                 p3 = New Point2d(tpc1x, -tpc1y)
                 p4 = New Point2d(tpc2x, -tpc2y)
+
             Else
                 Dim theta As Double = Asin(r1 / (cenDist / 2))
                 Dim tpc1x As Double = r1 * Sin(theta)
@@ -2107,74 +2557,58 @@ Public Module MathGeometry
                 p2 = New Point2d(tpc2x, tpc2y)
                 p3 = New Point2d(tpc1x, -tpc1y)
                 p4 = New Point2d(tpc2x, -tpc1y)
-
             End If
 
-            Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            'rotate points
+            Dim p1x As Double = p1.X * Cos(rotangle) - p1.Y * Sin(rotangle)
+            Dim p1y As Double = p1.X * Sin(rotangle) + p1.Y * Cos(rotangle)
+            Dim p2x As Double = p2.X * Cos(rotangle) - p2.Y * Sin(rotangle)
+            Dim p2y As Double = p2.X * Sin(rotangle) + p2.Y * Cos(rotangle)
+            Dim p3x As Double = p3.X * Cos(rotangle) - p3.Y * Sin(rotangle)
+            Dim p3y As Double = p3.X * Sin(rotangle) + p3.Y * Cos(rotangle)
+            Dim p4x As Double = p4.X * Cos(rotangle) - p4.Y * Sin(rotangle)
+            Dim p4y As Double = p4.X * Sin(rotangle) + p4.Y * Cos(rotangle)
 
-                Dim blkTbl As BlockTable = actrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-                Dim mdlSpace As BlockTableRecord = actrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+            Dim dV As Vector3d = tc1.Center.GetVectorTo(c1.Center)
 
-                Dim dbp1 As New DBPoint(New Point3d(p1.X, p1.Y, c1.Center.Z))
-                Dim dbp2 As New DBPoint(New Point3d(p2.X, p2.Y, c2.Center.Z))
-                Dim dbp3 As New DBPoint(New Point3d(p3.X, p3.Y, c1.Center.Z))
-                Dim dbp4 As New DBPoint(New Point3d(p4.X, p4.Y, c2.Center.Z))
+            'move points
+            p1x += dV.X
+            p1y += dV.Y
+            p2x += dV.X
+            p2y += dV.Y
+            p3x += dV.X
+            p3y += dV.Y
+            p4x += dV.X
+            p4y += dV.Y
 
-                mdlSpace.AppendEntity(dbp1)
-                actrans.AddNewlyCreatedDBObject(dbp1, True)
+            Dim p1f As New Point2d(p1x, p1y)
+            Dim p2f As New Point2d(p2x, p2y)
+            Dim p3f As New Point2d(p3x, p3y)
+            Dim p4f As New Point2d(p4x, p4y)
 
-                mdlSpace.AppendEntity(dbp2)
-                actrans.AddNewlyCreatedDBObject(dbp2, True)
+            'create an output collection
+            Dim tPts As New Point2dCollection
 
-                mdlSpace.AppendEntity(dbp3)
-                actrans.AddNewlyCreatedDBObject(dbp3, True)
+            With tPts
+                .Add(p1f)
+                .Add(p2f)
+                .Add(p3f)
+                .Add(p4f)
+            End With
 
-                mdlSpace.AppendEntity(dbp4)
-                actrans.AddNewlyCreatedDBObject(dbp4, True)
-
-                Dim dispVect1 As Vector3d = tc1.Center.GetVectorTo(c1.Center)
-                dbp1.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp2.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp3.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp4.TransformBy(Matrix3d.Rotation(rotangle, Vector3d.ZAxis, tc1.Center))
-                dbp1.TransformBy(Matrix3d.Displacement(dispVect1))
-                dbp2.TransformBy(Matrix3d.Displacement(dispVect1))
-                dbp3.TransformBy(Matrix3d.Displacement(dispVect1))
-                dbp4.TransformBy(Matrix3d.Displacement(dispVect1))
-
-                Dim p12d As New Point2d(dbp1.Position.X, dbp1.Position.Y)
-                Dim p22d As New Point2d(dbp2.Position.X, dbp2.Position.Y)
-                Dim p32d As New Point2d(dbp3.Position.X, dbp3.Position.Y)
-                Dim p42d As New Point2d(dbp4.Position.X, dbp4.Position.Y)
-
-                Dim tPts As New Point2dCollection
-                With tPts
-                    .Add(p12d)
-                    .Add(p22d)
-                    .Add(p32d)
-                    .Add(p42d)
-                End With
-
-                Return tPts
-
-                dbp1.Dispose()
-                dbp2.Dispose()
-                dbp3.Dispose()
-                dbp4.Dispose()
-                tc1.Dispose()
-                tc2.Dispose()
-            End Using
+            Return tPts
 
         Catch ex As Exception
             MessageBox.Show(ex.Message)
             Return Nothing
         End Try
-    End Function
 
+    End Function
 
     Public Function Arc2poly(arcID As ObjectId) As ObjectId
 
         'converts an arc to an equivalent polyline
+
         Dim acDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         'Dim ed As Editor = acDwg.Editor
         Dim dwgDB As Database = acDwg.Database
@@ -2236,6 +2670,8 @@ Public Module MathGeometry
 
     Public Function GetTangentBulge(l1 As Line, l2 As Line) As Double
 
+        'get tangent bulge between two lines
+
         Dim blg As Double
 
         If l1 = l2 Then
@@ -2259,6 +2695,8 @@ Public Module MathGeometry
 
     Public Function GetTangentBulge(vert1 As Vertex2d, vert2 As Vertex2d, vert3 As Vertex2d, vert4 As Vertex2d) As Double
 
+        'get tangent bulge between polyline segments
+
         Dim blg As Double
 
         Dim p1 As New Point2d(vert1.Position.X, vert1.Position.Y)
@@ -2270,6 +2708,26 @@ Public Module MathGeometry
         Dim v2 As Vector2d = p3.GetVectorTo(p4)
 
         Dim ang As Double = v1.GetAngleTo(v2)
+        blg = Tan(ang / 4)
+
+        Return blg
+
+    End Function
+
+    Public Function GetTangentBulge(v1 As Point3d, v2 As Point3d, v3 As Point3d, v4 As Point3d) As Double
+        'get tangent bulge using vertex points
+
+        Dim blg As Double
+
+        Dim p1 As New Point2d(v1.X, v1.Y)
+        Dim p2 As New Point2d(v2.X, v2.y)
+        Dim p3 As New Point2d(v3.X, v3.Y)
+        Dim p4 As New Point2d(v4.X, v4.Y)
+
+        Dim vect1 As Vector2d = p1.GetVectorTo(p2)
+        Dim vect2 As Vector2d = p3.GetVectorTo(p4)
+
+        Dim ang As Double = vect1.GetAngleTo(vect2)
         blg = Tan(ang / 4)
 
         Return blg
@@ -2509,9 +2967,9 @@ Public Module MathGeometry
                 Dim tempValue As Double = tempvec.DotProduct(temporthoY)
 
                 If tempXaxis.IsPerpendicularTo(tempZaxis) Then 'And xAxUnitVect.IsPerpendicularTo(zAxUnitVect) And yAxUnitVect.IsPerpendicularTo(zAxUnitVect) Then
-                    MsgBox("Orthogonal Vectors")
+                    MessageBox.Show("Orthogonal Vectors")
                 Else
-                    MsgBox("not orthogonal. dot product = " & tempValue.ToString)
+                    MessageBox.Show("not orthogonal. dot product = " & tempValue.ToString)
                     Return Nothing
                     Exit Function
                 End If
@@ -2766,9 +3224,442 @@ UCSExists:
 
     End Function
 
+    Public Function MkArrowHead(p1 As Point3d, p2 As Point3d, paramA As Double) As ObjectId
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        'create a vector2d from p1 & p2 to get the final orientation angle for the arrowhead
+        Dim arrowVect As Vector3d = p1.GetVectorTo(p2)
+        Dim arrowVect2d As Vector2d = arrowVect.Convert2d(New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis))
+        Dim arrowAng As Double = arrowVect2d.Angle
+
+        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            'using an origin located on the cenerline of the arrow at the intersection of the arrowhead base lines
+            'get temporary arrow coordinate geometry per Federal Sign Manual Appendix
+            Dim paramB As Double = 1.21 * paramA
+            Dim paramC As Double = 2 * paramA
+            Dim paramE As Double = 0.21 * paramA
+            Dim theta1 As Double = Asin(paramE / (paramB - (paramA / 2)))
+            Dim paramD As Double = (paramA / 2) * Tan(theta1)
+            Dim ptO As Point3d = Point3d.Origin
+            Dim s1 As New Point2d(ptO.X, paramA / 2)
+            Dim s2 As New Point2d(ptO.X, -paramA / 2)
+            Dim cen1 As New Point3d(ptO.X, paramB, 0)
+            Dim ptPx As Double = paramE * Cos(theta1)
+            Dim ptPy As Double = paramB - (paramE * Sin(theta1))
+            Dim ptP2d As New Point2d(ptPx, ptPy)
+            Dim ptR As New Point3d(-paramC, ptO.Y, ptO.Z)
+            Dim ptR2d As New Point2d(ptR.X, ptR.Y)
+            Dim negPtP As New Point2d(ptPx, -ptPy)
+
+            'store the vector from the tip of the temporary arrow to its final location
+            Dim moveVect As Vector3d = ptR.GetVectorTo(p1)
+
+            'create a temporary circle for finding tangents
+            Dim c1 As New Circle(cen1, Vector3d.ZAxis, paramE)
+
+            'get the tangent points from ptR to c1
+            Dim iPts As Point2dCollection = GetTangentPoints(ptR, c1)
+
+            'make sure that the tangent points exist and weed out the one that does not apply
+            Dim tanPt As Point2d
+            If iPts IsNot Nothing AndAlso iPts.Count = 2 Then
+                If iPts(0).Y > 0 Then
+                    tanPt = iPts(0)
+                Else
+                    tanPt = iPts(1)
+                End If
+            ElseIf iPts IsNot Nothing AndAlso iPts.Count = 1 Then
+                ed.WriteMessage(vbLf & "Error in MkArrowHead Function")
+                Return Nothing
+                Exit Function
+            ElseIf iPts Is Nothing Then
+                ed.WriteMessage(vbLf & "Error in MkArrowHead Function")
+                Return Nothing
+                Exit Function
+            End If
+
+            'set the opposite tangent point
+            Dim negTanPt As New Point2d(tanPt.X, -tanPt.Y)
+
+            'get the bulge value for the polyline
+            Dim ahv1 As Vector2d = ptR2d.GetVectorTo(tanPt)
+            Dim ahv2 As Vector2d = ptP2d.GetVectorTo(s1)
+            Dim bulgeAng As Double = ahv1.GetAngleTo(ahv2)
+            Dim myblg As Double = Tan(bulgeAng / 4)
+
+            'create a polyline
+            Dim pl0 As New Polyline
+            pl0.AddVertexAt(0, s1, 0, 0, 0)
+            pl0.AddVertexAt(1, ptP2d, myblg, 0, 0)
+            pl0.AddVertexAt(2, tanPt, 0, 0, 0)
+            pl0.AddVertexAt(3, ptR2d, 0, 0, 0)
+            pl0.AddVertexAt(4, negTanPt, myblg, 0, 0)
+            pl0.AddVertexAt(5, negPtP, 0, 0, 0)
+            pl0.AddVertexAt(6, s2, 0, 0, 0)
+
+            'move and rotate the polyline to its final position
+            pl0.TransformBy(Matrix3d.Displacement(moveVect))
+            pl0.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
+
+            'add it to the current space
+            Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+            Dim plObjId As ObjectId = curSpace.AppendEntity(pl0)
+            acTrans.AddNewlyCreatedDBObject(pl0, True)
+
+            Return plObjId
+
+            'dispose of the temporary circle
+            c1.Dispose()
+            acTrans.Commit()
+
+        End Using
+
+    End Function
+    Public Sub MkDirectionalArrowType1(p1 As Point3d, aobj As ArrowObj)
+        'Creates directional arrow types 1 through 3
+        'per California Sign Specifications Appendix
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            'set the vertices points
+            Dim paramA As Double = aobj.ParamA
+            Dim paramB As Double = aobj.ParamB
+            Dim paramC As Double = aobj.ParamC
+            Dim paramD As Double = aobj.ParamD
+            Dim paramE As Double = aobj.ParamE
+            Dim paramF As Double = aobj.ParamF
+            Dim paramR As Double = aobj.ParamR
+            Dim arrowAng As Double = aobj.ArrowAng
+            Dim ptO As Point3d = Point3d.Origin
+            Dim s12d As New Point2d(ptO.X, paramC / 2)
+            Dim s22d As New Point2d(ptO.X, -paramC / 2)
+            Dim cen1 As New Point3d(paramE - paramR, (paramA / 2) - paramR, ptO.Z)
+            Dim cen2 As New Point3d(-(paramB - 2 * paramR), ptO.Y, ptO.Z)
+
+            Dim ptQ As Point3d
+            Dim ptR As Point3d
+
+            'offset temporary line between circle centers by the radius to get tangent points.
+            'make sure the direction is correct.
+            Using tempLn As New Line(cen1, cen2)
+                Dim pR As Double = paramR
+                Dim chkVal As Double = 0
+                Dim tl As Line
+                Do
+                    Dim oSet As DBObjectCollection = tempLn.GetOffsetCurves(pR)
+                    tl = TryCast(oSet(0), Line)
+                    chkVal = tl.EndPoint.Y
+                    pR *= -1
+                Loop Until chkVal > 0
+                ptQ = tl.StartPoint
+                ptR = tl.EndPoint
+            End Using
+
+            'create temporary circle for finding tangents
+            Using c1 As New Circle(cen1, Vector3d.ZAxis, paramR)
+
+                'get the tangent points
+                Dim ptQ2d As New Point2d(ptQ.X, ptQ.Y)
+                Dim ptR2d As New Point2d(ptR.X, ptR.Y)
+
+                Dim tanPts2 As Point2dCollection = GetTangentPoints(New Point3d(s12d.X, s12d.Y, ptO.Z), c1)
+
+                Dim ptP2d As Point2d
+
+                'make sure that the tangent points exist and weed out the one that does not apply
+                If tanPts2 IsNot Nothing And tanPts2.Count = 2 Then
+                    If tanPts2(0).X > tanPts2(1).X Then
+                        ptP2d = tanPts2(0)
+                    Else
+                        ptP2d = tanPts2(1)
+                    End If
+                Else
+                    ed.WriteMessage(vbLf & "Error.  External tangents not found.")
+                    Exit Sub
+                End If
+
+                Dim ptT As New Point2d(paramF - paramB + paramE, paramD / 2)
+                Dim negPtT As New Point2d(ptT.X, -ptT.Y)
+
+                'set the opposite tangent points
+                Dim negPtR As New Point2d(ptR2d.X, -ptR2d.Y)
+                Dim negPtQ As New Point2d(ptQ2d.X, -ptQ2d.Y)
+                Dim negPtP As New Point2d(ptP2d.X, -ptP2d.Y)
+
+                'get the bulge values for the polyline
+                Dim vect1 As Vector2d = s12d.GetVectorTo(ptP2d)
+                Dim vect2 As Vector2d = ptQ2d.GetVectorTo(ptR2d)
+                Dim vect3 As Vector2d = negPtR.GetVectorTo(negPtQ)
+                Dim ang1 As Double = vect1.GetAngleTo(vect2)
+                Dim ang2 As Double = vect2.GetAngleTo(vect3)
+                Dim blg1 As Double = Tan(ang1 / 4)
+                Dim blg2 As Double = Tan(ang2 / 4)
+
+                'set a point at the arrow tip
+                Dim tipPt As New Point3d(paramE - paramB, 0, ptO.Z)
+
+                'store the vector from the tip of the temporary arrow to its final location
+                Dim moveVect As Vector3d = tipPt.GetVectorTo(p1)
+
+                'create a polyline
+                Using pl As New Polyline
+                    pl.AddVertexAt(0, ptT, 0, 0, 0)
+                    pl.AddVertexAt(1, s12d, 0, 0, 0)
+                    pl.AddVertexAt(2, ptP2d, blg1, 0, 0)
+                    pl.AddVertexAt(3, ptQ2d, 0, 0, 0)
+                    pl.AddVertexAt(4, ptR2d, blg2, 0, 0)
+                    pl.AddVertexAt(5, negPtR, 0, 0, 0)
+                    pl.AddVertexAt(6, negPtQ, blg1, 0, 0)
+                    pl.AddVertexAt(7, negPtP, 0, 0, 0)
+                    pl.AddVertexAt(8, s22d, 0, 0, 0)
+                    pl.AddVertexAt(9, negPtT, 0, 0, 0)
+                    pl.Closed = True
+
+                    'move and rotate the polyline to its final position
+                    pl.TransformBy(Matrix3d.Displacement(moveVect))
+                    pl.TransformBy(Matrix3d.Rotation(arrowAng, Vector3d.ZAxis, p1))
+
+                    'add it to the current space
+                    Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                    curSpace.AppendEntity(pl)
+                    acTrans.AddNewlyCreatedDBObject(pl, True)
+                End Using
+                'dispose of the temporary circle
+            End Using
+            acTrans.Commit()
+        End Using
+    End Sub
+
+    Public Sub MkDirectionalArrowType4(p1 As Point3d, aobj As ArrowObj)
+        'Creates a 1 line horizontal, vertical, or diagonal directional arrow
+        'per California Sign Specifications Appendix
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim DwgDB As Database = curDwg.Database
+        Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+        'make sure arrow object is not nothing
+        Dim ao As ArrowObj
+        If aobj IsNot Nothing Then
+            ao = aobj
+        Else
+            Exit Sub
+        End If
+
+        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            'using an origin located on the cenerline of the arrow at the end of the arrow shaft,
+            'get temporary arrow coordinate geometry per California/Federal sign specifications
+            Dim paramA As Double = ao.ParamA
+            Dim paramB As Double = ao.ParamB
+            Dim paramC As Double = ao.ParamC
+            Dim paramD As Double = ao.ParamD
+            Dim paramE As Double = ao.ParamE
+            Dim paramR As Double = ao.ParamR
+            'Dim theta1 As Double = Asin(paramE / (paramB - (paramA / 2)))
+            'Dim paramD As Double = (paramA / 2) * Tan(theta1)
+            Dim ptO As Point3d = Point3d.Origin
+            Dim s12d As New Point2d(0, paramC / 2)
+            Dim s22d As New Point2d(0, -paramC / 2)
+            Dim cen1 As New Point3d(paramD - paramR, (paramA / 2) - paramR, ptO.Z)
+            Dim ptR As New Point3d(-(paramB - paramD), 0, 0)
+            Dim ptR2d As New Point2d(ptR.X, ptR.Y)
+            Dim ptS3d As New Point3d(s12d.X, s12d.Y, 0)
+            Dim ptT2d As New Point2d(paramE - paramB, paramC / 2)
+            Dim negPtT As New Point2d(ptT2d.X, -ptT2d.Y)
+
+OtherSide:
+            'create temporary circle for finding tangents
+            Dim c1 As New Circle(cen1, Vector3d.ZAxis, paramR)
+
+            'get the tangent points from the tip and the shaft
+            Dim tanPts As Point2dCollection = GetTangentPoints(ptS3d, c1)
+            Dim tanPts2 As Point2dCollection = GetTangentPoints(ptR, c1)
+
+            Dim ptP2d As Point2d
+            'make sure that the tangent points exist and weed out the one that does not apply
+            If tanPts IsNot Nothing And tanPts.Count = 2 Then
+                If tanPts(0).X > tanPts(1).X Then
+                    ptP2d = tanPts(0)
+                Else
+                    ptP2d = tanPts(1)
+                End If
+            Else
+                ed.WriteMessage(vbLf & "Error calculating tangent points.")
+                Exit Sub
+            End If
+
+            Dim ptQ2d As Point2d
+            If tanPts2 IsNot Nothing And tanPts2.Count = 2 Then
+                If tanPts2(0).Y > tanPts2(1).Y Then
+                    ptQ2d = tanPts2(0)
+                Else
+                    ptQ2d = tanPts2(1)
+                End If
+            Else
+                ed.WriteMessage(vbLf & "Error.  External tangents not found.")
+                Exit Sub
+            End If
+
+            'set the opposite tangent points
+            Dim negPtQ As New Point2d(ptQ2d.X, -ptQ2d.Y)
+            Dim negPtP As New Point2d(ptP2d.X, -ptP2d.Y)
+
+            'get the bulge value for the polyline
+            Dim vect1 As Vector2d = s12d.GetVectorTo(ptP2d)
+            Dim vect2 As Vector2d = ptQ2d.GetVectorTo(ptR2d)
+            Dim ang1 As Double = vect1.GetAngleTo(vect2)
+            Dim blg1 As Double = Tan(ang1 / 4)
+
+            'store the vector from the tip of the temporary arrow to its final location
+            Dim moveVect As Vector3d = ptR.GetVectorTo(p1)
+
+            'create a polyline
+            Using pl As New Polyline
+                pl.AddVertexAt(0, ptT2d, 0, 0, 0)
+                pl.AddVertexAt(1, s12d, 0, 0, 0)
+                pl.AddVertexAt(2, ptP2d, blg1, 0, 0)
+                pl.AddVertexAt(3, ptQ2d, 0, 0, 0)
+                pl.AddVertexAt(4, ptR2d, 0, 0, 0)
+                pl.AddVertexAt(5, negPtQ, blg1, 0, 0)
+                pl.AddVertexAt(6, negPtP, 0, 0, 0)
+                pl.AddVertexAt(7, s22d, 0, 0, 0)
+                pl.AddVertexAt(8, negPtT, 0, 0, 0)
+                pl.Closed = True
+
+                'move and rotate the polyline to its final position
+                pl.TransformBy(Matrix3d.Displacement(moveVect))
+                pl.TransformBy(Matrix3d.Rotation(ao.ArrowAng, Vector3d.ZAxis, p1))
+
+                'add it to the current space
+                Dim curSpace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                curSpace.AppendEntity(pl)
+                acTrans.AddNewlyCreatedDBObject(pl, True)
+            End Using
+
+            'dispose of the temporary circle
+            c1.Dispose()
+
+            acTrans.Commit()
+        End Using
+
+    End Sub
 End Module
 
 Public Module PlotLayout
+
+    Public Sub PlotDirect(pSet As PlotSettings, psetVal As PlotSettingsValidator, ByVal toFile As String)
+
+        '' Get the current document and database
+        Dim acDoc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgdb As Database = acDoc.Database
+        Dim CurVar As Object
+        'Get the BACKGROUNDPLOT SYSTEM VARIABLE
+        CurVar = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("BackGroundPlot")
+        'SET BACKGROUNDPLOT SYSTEM VARIABLE TO ZERO
+        Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("BackGroundPlot", 0)
+        ''Start as transaction
+        Using acTrans As Transaction = dwgdb.TransactionManager.StartTransaction()
+            '' Referring to the Layout Manager
+            Dim acLayoutMgr As LayoutManager
+            acLayoutMgr = LayoutManager.Current
+            '' Get the current layout and output its name in the Command Line window
+            Dim acLayout As Layout
+            acLayout = acTrans.GetObject(acLayoutMgr.GetLayoutId(acLayoutMgr.CurrentLayout), OpenMode.ForRead)
+
+            '' Get the PlotInfo from the layout
+            Dim acPlInfo As New PlotInfo With {.Layout = acLayout.ObjectId}
+            'acPlInfo.Layout = acLayout.ObjectId
+
+            '' Set the PlotSettings object
+            psetVal.RefreshLists(pSet)
+
+            '' Center the plot
+            psetVal.SetPlotCentered(pSet, True)
+
+            '' Set the plot info as an override
+            acPlInfo.OverrideSettings = pSet
+
+            Dim PlInfoVdr As New PlotInfoValidator
+            With PlInfoVdr
+                .MediaMatchingPolicy = MatchingPolicy.MatchEnabled
+                .Validate(acPlInfo)
+            End With
+
+
+            '' Check whether a plot job is in progress
+            If PlotFactory.ProcessPlotState = Autodesk.AutoCAD.PlottingServices.
+                    ProcessPlotState.NotPlotting Then
+
+                Using acPlEng As PlotEngine = PlotFactory.CreatePublishEngine()
+
+                    '' Track the plot progress with a Progress dialog
+                    Dim acPlProgDlg As New PlotProgressDialog(False, 1, True)
+
+                    Using (acPlProgDlg)
+                        '' Define the status messages to display when plotting starts
+                        acPlProgDlg.PlotMsgString(PlotMessageIndex.DialogTitle) = "Plot Progress"
+                        acPlProgDlg.PlotMsgString(PlotMessageIndex.CancelJobButtonMessage) = "Cancel Job"
+                        acPlProgDlg.PlotMsgString(PlotMessageIndex.CancelSheetButtonMessage) = "Cancel Sheet"
+                        acPlProgDlg.PlotMsgString(PlotMessageIndex.SheetSetProgressCaption) = "Sheet Set Progress"
+                        acPlProgDlg.PlotMsgString(PlotMessageIndex.SheetProgressCaption) = "Sheet Progress"
+
+                        '' Set the plot progress range
+                        acPlProgDlg.LowerPlotProgressRange = 0
+                        acPlProgDlg.UpperPlotProgressRange = 100
+                        acPlProgDlg.PlotProgressPos = 0
+
+                        '' Display the Progress dialog
+                        acPlProgDlg.OnBeginPlot()
+                        acPlProgDlg.IsVisible = True
+
+                        '' Start to plot the layout
+                        acPlEng.BeginPlot(acPlProgDlg, Nothing)
+
+                        '' Define the plot output
+                        acPlEng.BeginDocument(acPlInfo, acDoc.Name, Nothing, 1, True, toFile)
+
+                        '' Display information about the current plot
+                        acPlProgDlg.PlotMsgString(PlotMessageIndex.Status) = "Plotting: " & acDoc.Name & " - " & acLayout.LayoutName
+
+                        '' Set the sheet progress range
+                        acPlProgDlg.OnBeginSheet()
+                        acPlProgDlg.LowerSheetProgressRange = 0
+                        acPlProgDlg.UpperSheetProgressRange = 100
+                        acPlProgDlg.SheetProgressPos = 0
+
+                        '' Plot the first sheet/layout
+                        Dim acPlPageInfo As New PlotPageInfo
+                        acPlEng.BeginPage(acPlPageInfo, acPlInfo, True, Nothing)
+
+                        acPlEng.BeginGenerateGraphics(Nothing)
+                        acPlEng.EndGenerateGraphics(Nothing)
+
+                        '' Finish plotting the sheet/layout
+                        acPlEng.EndPage(Nothing)
+                        acPlProgDlg.SheetProgressPos = 100
+                        acPlProgDlg.OnEndSheet()
+
+                        '' Finish plotting the document
+                        acPlEng.EndDocument(Nothing)
+
+                        '' Finish the plot
+                        acPlProgDlg.PlotProgressPos = 100
+                        acPlProgDlg.OnEndPlot()
+                        acPlEng.EndPlot(Nothing)
+
+                    End Using
+                End Using
+            End If
+        End Using
+        'REVERT BACK TO THE ORIGINAL BACKGROUNDPLOT SYSTEM VARIABLE
+        Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("BackGroundPlot", CurVar)
+    End Sub
 
     Public Function GetPstyleFiles() As List(Of String)
         Dim acDoc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -2872,10 +3763,6 @@ Public Module PlotLayout
             Dim layMgr As LayoutManager = LayoutManager.Current
             Dim curLayout As Layout = actrans.GetObject(layMgr.GetLayoutId(layMgr.CurrentLayout), OpenMode.ForRead)
             Dim plInfo As New PlotInfo() With {.Layout = curLayout.ObjectId}
-            'plInfo.Layout = curLayout.ObjectId
-            'Dim plSettings As New PlotSettings(curLayout.ModelType)
-            'plSettings.CopyFrom(curLayout)
-            'Dim plsVldtr As PlotSettingsValidator = PlotSettingsValidator.Current
             Dim tFileName As String = Path.GetTempFileName
             ed.WriteMessage(vbLf & tFileName)
 
@@ -2922,6 +3809,8 @@ TryAgain:
     End Sub
 
     Public Function CreateVP(vtr As ViewTableRecord, vpLayerName As String, hsize As Double, vsize As Double, acTrans As Transaction, pset As PlotSettings, sheetNm As String) As ObjectId
+
+        'used by the ImageMasterViews sub
 
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
         Dim ed As Editor = curDwg.Editor
@@ -3016,7 +3905,7 @@ TryAgain:
             Dim pkr As New Picker
             With pkr
                 .TopLabel.Text = "Select Printer Definition"
-                .BxList.SelectionMode = Windows.Forms.SelectionMode.One
+                .BxList.SelectionMode = System.Windows.Forms.SelectionMode.One
             End With
 
             For i As Integer = 0 To myPlotters.Count - 1

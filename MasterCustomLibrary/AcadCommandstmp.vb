@@ -14,24 +14,6 @@ Imports System.Xml.Serialization
 Imports System.Runtime.CompilerServices
 Imports GI = Autodesk.AutoCAD.GraphicsInterface
 
-Public Class StringList
-    Inherits List(Of String)
-End Class
-
-Public Class StringListComparer
-    Inherits EqualityComparer(Of List(Of String))
-    Public Overrides Function Equals(x As List(Of String), y As List(Of String)) As Boolean
-        Return x.Count = y.Count AndAlso
-               GetHashCode(x) = GetHashCode(y) AndAlso
-               x.All(Function(s) y.Contains(s)) AndAlso
-               y.All(Function(s) x.Contains(s))
-    End Function
-
-    Public Overrides Function GetHashCode(obj As List(Of String)) As Integer
-        Return obj.Aggregate(0, Function(h, s) h Xor s.GetHashCode())
-    End Function
-
-End Class
 Public Module ArcCommands
 
     <CommandMethod("LISTARCDATA")>
@@ -132,181 +114,6 @@ End Module
 
 Public Module BlockCommands
 
-    <CommandMethod("RENBLKS")>
-    Public Sub RenameAllBlocks()
-        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
-        Dim DwgDB As Database = curDwg.Database
-        Dim ed As Editor = curDwg.Editor
-
-        Dim allBlks As Boolean = True
-
-        Dim pko3 As New PromptKeywordOptions(vbLf & "Rename all blocks?")
-        With pko3
-            .Keywords.Add("Yes")
-            .Keywords.Add("No")
-            .AllowNone = False
-            .AppendKeywordsToMessage = True
-            .AllowArbitraryInput = False
-        End With
-
-        Dim pkR3 As PromptResult = ed.GetKeywords(pko3)
-
-        If pkR3.Status = PromptStatus.OK Then
-            If pkR3.StringResult = "No" Then
-                allBlks = False
-            End If
-        Else
-            Exit Sub
-        End If
-
-        Dim bList As New SortedDictionary(Of String, ObjectId)
-        Dim blkColl As New Collection
-
-        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
-            Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForWrite)
-
-            For Each bID As ObjectId In blkTbl
-                Dim btr As BlockTableRecord = acTrans.GetObject(bID, OpenMode.ForRead)
-                If Not btr.IsLayout And Not Left(btr.Name, 1) = "*" Then
-                    Dim bName As String = btr.Name
-                    Dim btrID As ObjectId = blkTbl(bName)
-                    bList.Add(bName, btrID)
-                End If
-            Next
-
-            If allBlks Then
-                For Each btrName As String In bList.Keys
-                    Dim btr As BlockTableRecord = acTrans.GetObject(blkTbl(btrName), OpenMode.ForWrite)
-                    If Not btr.IsLayout And Not Left(btr.Name, 1) = "*" Then
-                        blkColl.Add(btr.Name)
-                    End If
-                Next
-            Else
-                blkColl = PickBlocks()
-            End If
-            acTrans.Commit()
-        End Using
-
-        Dim pko As New PromptKeywordOptions(vbLf & "Add prefix/suffix to existing block names or replace string?")
-        With pko
-            .Keywords.Add("Prefix")
-            .Keywords.Add("Suffix")
-            .Keywords.Add("Replace")
-            .AllowNone = False
-            .AppendKeywordsToMessage = True
-            .AllowArbitraryInput = False
-        End With
-
-        Dim pkR As PromptResult = ed.GetKeywords(pko)
-
-        Dim usePrefix As Boolean = False
-        Dim repStr As Boolean = False
-
-        If pkR.Status = PromptStatus.OK Then
-            If pkR.StringResult = "Prefix" Then
-                usePrefix = True
-            ElseIf pkR.StringResult = "Replace" Then
-                repStr = True
-            End If
-        Else
-            Exit Sub
-        End If
-
-        Dim oldStr As String = ""
-
-        If repStr Then
-
-            Dim pso0 As New PromptStringOptions(vbLf & "Enter string to replace in block names: ")
-            pso0.AllowSpaces = True
-
-            Dim psr0 As PromptResult = ed.GetString(pso0)
-
-            If psr0.Status = PromptStatus.OK Then
-                oldStr = psr0.StringResult
-                If String.IsNullOrEmpty(oldStr) Then Exit Sub
-            Else
-                Exit Sub
-            End If
-
-        End If
-
-        Dim pso As New PromptStringOptions(vbLf & "Enter string to add to block names: ")
-        With pso
-            pso.AllowSpaces = True
-            If repStr Then .Message = vbLf & "Enter new string:"
-        End With
-
-        Dim addStr As String
-
-        Dim psr As PromptResult = ed.GetString(pso)
-
-        If psr.Status = PromptStatus.OK Then
-            addStr = psr.StringResult
-            If String.IsNullOrEmpty(addStr) Then Exit Sub
-        Else
-            Exit Sub
-        End If
-
-        Dim pko2 As New PromptKeywordOptions(vbLf & "Confirm renaming for each block?")
-        With pko2
-            .Keywords.Add("Yes")
-            .Keywords.Add("No")
-            .AllowNone = False
-            .AppendKeywordsToMessage = True
-            .AllowArbitraryInput = False
-        End With
-
-        Dim pkR2 As PromptResult = ed.GetKeywords(pko2)
-
-        Dim checkNames As Boolean = False
-
-        If pkR2.Status = PromptStatus.OK Then
-            If pkR2.StringResult = "Yes" Then
-                checkNames = True
-            End If
-        Else
-            Exit Sub
-        End If
-
-        Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
-            Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForWrite)
-
-            For Each bn As String In blkColl
-                Dim btr As BlockTableRecord = acTrans.GetObject(blkTbl(bn), OpenMode.ForRead)
-                If Not btr.IsLayout And Not Left(btr.Name, 1) = "*" Then
-                    btr.UpgradeOpen()
-                    Dim oldName As String = btr.Name
-                    Dim newName As String
-
-                    If usePrefix Then
-                        newName = addStr & oldName
-                    ElseIf repStr And Not usePrefix Then
-                        newName = Strings.Replace(oldName, oldStr, addStr, 1, 1)
-                    Else
-                        newName = oldName & addStr
-                    End If
-                    If Not oldName = newName Then
-                        If checkNames Then
-                            Dim newMsg As String = vbLf & "Change block name from " & oldName & " to " & newName & "?"
-                            pko2.Message = newMsg
-                            Dim pkr4 As PromptResult = ed.GetKeywords(pko2)
-                            If pkr4.Status = PromptStatus.OK Then
-                                If pkr4.StringResult = "Yes" Then
-                                    RenameBlock(oldName, newName)
-                                End If
-                            Else
-                                Exit Sub
-                            End If
-                        Else
-                            RenameBlock(oldName, newName)
-                        End If
-                    End If
-                End If
-            Next
-            acTrans.Commit()
-        End Using
-    End Sub
-
     <CommandMethod("CBTZ", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
     Public Sub ChangeBlocksToLayerZero()
         Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -335,7 +142,6 @@ Public Module BlockCommands
                 For Each objID As ObjectId In MyobjIDs
                     Dim dbObj As DBObject = actrans.GetObject(objID, OpenMode.ForRead)
                     Dim blkList As New List(Of String)
-
                     If TypeOf dbObj Is BlockReference Then
                         Dim parentBref As BlockReference = TryCast(dbObj, BlockReference)
                         Dim parentName As String = parentBref.Name
@@ -370,17 +176,12 @@ Public Module BlockCommands
                                 blkList.Add(thisBr.Name)
                             End If
                         Next
-                        If blkList.Count > 0 Then
-                            sb.AppendLine(blkList(0))
-                            For m As Integer = 1 To blkList.Count - 1
-                                If Not blkList(m) = blkList(m - 1) Then
-                                    sb.AppendLine(blkList(m))
-                                End If
-                            Next
-                            'Dim blkList2 As New List(Of String)
-                            If Not String.IsNullOrEmpty(sb.ToString) Then MessageBox.Show("Block definition for " & parentName & " contains the following unprocessed blocks:" & vbLf & sb.ToString)
-                            parentBref.RecordGraphicsModified(True)
-                        End If
+                        blkList = blkList.Distinct
+                        For Each nm As String In blkList
+                            sb.AppendLine(nm)
+                        Next
+                        If Not String.IsNullOrEmpty(sb.ToString) Then MessageBox.Show("Block definition for " & parentName & " contains the following unprocessed blocks:" & vbLf & sb.ToString)
+                        parentBref.RecordGraphicsModified(True)
                     End If
                 Next
                 actrans.Commit()
@@ -438,20 +239,15 @@ Public Module BlockCommands
                                 End If
                             Else
                                 Dim thisBr As BlockReference = CType(dObj, BlockReference)
-                                blklist.Add(thisBr.Name)
+                                blkList.Add(thisBr.Name)
                             End If
                         Next
-                        If blklist.Count > 0 Then
-                            sb.AppendLine(blklist(0))
-                            For m As Integer = 1 To blklist.Count - 1
-                                If Not blklist(m) = blklist(m - 1) Then
-                                    sb.AppendLine(blklist(m))
-                                End If
-                            Next
-                            'Dim blkList2 As New List(Of String)
-                            If Not String.IsNullOrEmpty(sb.ToString) Then MessageBox.Show("Block definition for " & parentName & " contains the following unprocessed blocks:" & vbLf & sb.ToString)
-                            parentBref.RecordGraphicsModified(True)
-                        End If
+                        blkList = blkList.Distinct
+                        For Each nm As String In blkList
+                            sb.AppendLine(nm)
+                        Next
+                        If Not String.IsNullOrEmpty(sb.ToString) Then MessageBox.Show("Block definition for " & parentName & " contains the following unprocessed blocks:" & vbLf & sb.ToString)
+                        parentBref.RecordGraphicsModified(True)
                     End If
                 Next
                 actrans.Commit()
@@ -761,7 +557,7 @@ SkipIt:
 
             Dim bPicker As New Picker
             With bPicker
-                .BxList.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended
+                .BxList.SelectionMode = Windows.Forms.SelectionMode.MultiExtended
                 .TopLabel.Text = "Select blocks to update"
                 .Text = "BLock Picker"
                 For Each blkNm As String In bList.Keys
@@ -1545,7 +1341,7 @@ Public Module GeometryCommands
 
             End Using
 
-        Catch ex As Exception
+        Catch ex As exception
             ed.WriteMessage(vbLf & "Fatal error in sub InteriorTangent2Circles.")
             MessageBox.Show(ex.Message)
         End Try
@@ -2318,7 +2114,7 @@ Public Module PlotLayoutCommands
         Dim cVp As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LAYOUTCREATEVIEWPORT")
         Dim showForm As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS")
         Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS", 0)
-        Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", 1)
+        Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", 0)
 
         Try
 
@@ -2967,10 +2763,10 @@ Public Module MiscCommands
         Dim ppr2 As PromptPointResult = ed.GetCorner(ppo2)
 
         If ppr2.Status = PromptStatus.OK Then
-            p2 = ppr2.Value
-        Else
-            Exit Sub
-        End If
+                p2 = ppr2.Value
+            Else
+                Exit Sub
+            End If
 
         Dim arrLen As Double = p1.DistanceTo(p2)
 
