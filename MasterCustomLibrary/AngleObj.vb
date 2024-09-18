@@ -1,4 +1,6 @@
-﻿Imports System.Math
+﻿'(c) David Eisenbeisz 2023 all rights reserved
+Option Strict On
+Imports System.Math
 
 Public Class AngleObj : Inherits CollectionBase
 
@@ -14,9 +16,11 @@ Public Class AngleObj : Inherits CollectionBase
     End Sub
     Public Sub New(meas As Double, isRadians As Boolean, Optional baseAngle As Double = 0)
         'true = radians, false = decimal degrees
+        'default baseangle is East (x-axis)
 
         If isRadians Then
             'baseAngle = (baseAngle + (3 * PI / 2)) Mod (2 * PI)
+            'm_azimuth = CDec(meas + baseAngle) Mod CDec(2 * PI)
             m_azimuth = CDec(meas + baseAngle) Mod CDec(2 * PI)
             If m_azimuth < 0 Then m_azimuth += (2 * PI)
             If m_azimuth >= (2 * PI) Then m_azimuth -= (2 * PI)
@@ -79,12 +83,12 @@ Public Class AngleObj : Inherits CollectionBase
 
     Public Sub New(brng As String, Optional baseAngle As Double = 0)
 
-        Dim Card As String = Left(brng, 1)
+        Dim card As String = Left(brng, 1)
         Dim direct As String = Right(brng, 1)
-        Dim NewStr As String = Mid(brng, 2, Len(brng) - 2)
+        Dim NewStr As String = Trim(Mid(brng, 2, Len(brng) - 2))
 
-        If Not Card = "N" Then
-            If Not Card = "S" Then GoTo ErrSub
+        If Not card = "N" Then
+            If Not card = "S" Then GoTo ErrSub
         End If
 
         If Not direct = "E" Then
@@ -163,7 +167,7 @@ Public Class AngleObj : Inherits CollectionBase
 ErrSub:
         Throw New Exception("Surveyor's Angle not formatted correctly.")
     End Sub
-    Public Function AddAngle(a2 As AngleObj) As AngleObj
+    Public Function Add(a2 As AngleObj) As AngleObj
         'Dim newAng As Double = (m_radians + a2.Radians) Mod (2 * PI)
         Dim newAng As Double = (m_decAz + a2.DecAzimuth) Mod 360
         If Abs(newAng) < 10 ^ -10 Then newAng = 0
@@ -171,7 +175,7 @@ ErrSub:
         Return a3
     End Function
 
-    Public Function SubtractAngle(a2 As AngleObj) As AngleObj
+    Public Function Subtract(a2 As AngleObj) As AngleObj
         Dim newAng As Double = (m_decAz - a2.DecAzimuth) Mod 360
         If Abs(newAng) < 10 ^ -10 Then newAng = 0
         Dim a3 As New AngleObj(newAng, False, m_decBase)
@@ -180,12 +184,13 @@ ErrSub:
     Public ReadOnly Property Degrees() As Long
         Get
             Dim tempDegs As Double = m_decDegs Mod 360
-            Return tempDegs - (tempDegs Mod 1)
+            Return CLng(tempDegs - (tempDegs Mod 1))
         End Get
     End Property
     Public Function AddAngles(angles() As AngleObj) As AngleObj
         'Dim newAng As Double = (m_radians + a2.Radians) Mod (2 * PI)
         Dim newAng As Double = m_decAz
+
         For i As Integer = 0 To UBound(angles)
             Dim a2 As AngleObj = angles(i)
             newAng += a2.DecAzimuth
@@ -197,8 +202,9 @@ ErrSub:
         If Abs(sumAng) < 10 ^ -10 Then sumAng = 0
         Dim a3 As New AngleObj(sumAng, False, m_decBase)
         Return a3
+
     End Function
-    Public ReadOnly Property Surveyors(Optional decimalPlaces As Integer = 2) As String
+    Public ReadOnly Property Surveyors(Optional decimalPlaces As Integer = 2, Optional baseangle As Double = 0) As String
         Get
             Dim angl As Double = m_decAz Mod 360
             'Dim minDbl As Double = (angl Mod 1) * 60
@@ -234,8 +240,8 @@ ErrSub:
 
             'Dim deglong As Long = angl - (angl Mod 1)
             Dim angleParts() As Double = DECtoDMS(adjAngl)
-            Dim ang As Integer = angleParts(0)
-            Dim minLong As Integer = angleParts(1)
+            Dim ang As Decimal = CDec(angleParts(0))
+            Dim minLong As Double = angleParts(1)
             Dim secDbl As Double = angleParts(2)
 
             If secDbl >= 60 Then
@@ -281,7 +287,7 @@ ErrSub:
     Public ReadOnly Property Seconds(Optional decimalPlaces As Integer = 2) As Double
         Get
             Dim angParts() As Double = DECtoDMS(m_decDegs)
-            Return Round(angParts(2), decimalPlaces)
+            Return Round(CDbl(angParts(2)), decimalPlaces)
         End Get
     End Property
 
@@ -332,9 +338,9 @@ ErrSub:
             Dim mins As String
             Dim secs As String
 
-            Dim deglong As Integer = angleParts(0)
+            Dim deglong As Long = CLng(angleParts(0))
 
-            Dim minlong As Integer = angleParts(1)
+            Dim minlong As Long = CLng(angleParts(1))
             If minlong < 10 Then
                 mins = "0" & minlong.ToString
             Else
@@ -355,9 +361,9 @@ ErrSub:
         Get
             Dim angleParts() As Double = DECtoDMS(m_decDegs)
 
-            Dim deglong As Integer = angleParts(0)
-            Dim minlong As Integer = angleParts(1)
-            Dim secdbl As Double = angleParts(2)
+            Dim deglong As Long = CLng(angleParts(0))
+            Dim minlong As Long = CLng(angleParts(1))
+            Dim secdbl As Double = CDbl(angleParts(2))
 
             Dim mins As String
             Dim secs As String
@@ -403,11 +409,12 @@ ErrSub:
     End Function
     Private Function DECtoDMS(tempAng As Double) As Double()
         'convert to decimals to prevent floating-point modulo error
+
         Dim decAng As Decimal = CDec(tempAng) Mod 360
         If decAng < 0 Then decAng += 360
-        Dim degLong As Long = decAng - (decAng Mod 1)
-        Dim minDbl As Decimal = (decAng Mod 1) * 60
-        Dim secdbl As Double = (minDbl Mod 1) * 60
+        Dim degLong As Long = CLng(decAng - (decAng Mod 1))
+        Dim mindbl As Double = (decAng Mod 1) * 60
+        Dim secdbl As Double = CDbl((minDbl Mod 1) * 60)
 
         If secdbl >= 60 Then
             secdbl -= 60
@@ -418,7 +425,7 @@ ErrSub:
             End If
         End If
 
-        Dim minlong As Long = minDbl \ 1
+        Dim minlong As Decimal = CDec(mindbl - (mindbl Mod 1))
 
         Dim returnArray() As Double = {degLong, minlong, secdbl}
         Return returnArray

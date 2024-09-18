@@ -3,7 +3,8 @@ Imports Autodesk.AutoCAD.Colors
 Imports Autodesk.AutoCAD.DatabaseServices
 Imports System.Windows.Forms
 
-Public Class Picker
+Public Class Picker : Inherits Form
+
     Private m_PickColl As Collection
 
     Public ReadOnly Property PickCol As Collection
@@ -26,9 +27,6 @@ Public Class Picker
         m_PickColl = Nothing
         Me.DialogResult = DialogResult.Cancel
         Hide()
-    End Sub
-    Private Sub LayPicker_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-
     End Sub
 
     Private Sub BxLyr_SelectedIndexChanged(sender As Object, e As EventArgs) Handles BxList.SelectedIndexChanged

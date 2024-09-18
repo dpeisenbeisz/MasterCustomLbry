@@ -1,4 +1,4 @@
-﻿
+﻿'(C) David Eisenbeisz 2023
 Public Class ArrowObj : Inherits CollectionBase
     Private m_A As Double
     Private m_B As Double

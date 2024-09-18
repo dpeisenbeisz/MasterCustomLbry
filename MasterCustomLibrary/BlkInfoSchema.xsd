@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema id="BlkInfoSchema"
+    targetNamespace="http://tempuri.org/BlkInfoSchema.xsd"
+    elementFormDefault="qualified"
+    xmlns="http://tempuri.org/BlkInfoSchema.xsd"
+    xmlns:mstns="http://tempuri.org/BlkInfoSchema.xsd"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+>
+  <xs:element name="AcBlocks">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="BlockInfo" minOccurs="1" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:attribute name="RefName" type="xs:string"/>
+            <xs:attribute name="RefHandle" type="xs:string"/>
+            <xs:attribute name="Insertion" type="xs:string"/>
+            <xs:attribute name="Rotation" type="xs:string"/>
+            <xs:attribute name="ReferenceId" type="xs:string"/>
+            <xs:attribute name="HasAttributes" type="xs:boolean"/>
+            <xs:attribute name="IsDynamic" type="xs:boolean"/>
+            <xs:attribute name="RefCount" type="xs:integer"/>
+            <xs:attribute name="DynamicName" type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
+
+
+
+

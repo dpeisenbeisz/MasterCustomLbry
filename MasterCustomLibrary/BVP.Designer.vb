@@ -1,5 +1,5 @@
 ﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
-Partial Class BlockViewPanel
+Partial Class BVP
     Inherits System.Windows.Forms.Form
 
     'Form overrides dispose to clean up the component list.
@@ -24,9 +24,6 @@ Partial Class BlockViewPanel
     Private Sub InitializeComponent()
         Me.TableLayoutPanel1 = New System.Windows.Forms.TableLayoutPanel()
         Me.DGV1 = New System.Windows.Forms.DataGridView()
-        Me.FlowLayoutPanel1 = New System.Windows.Forms.FlowLayoutPanel()
-        Me.ButCancel = New System.Windows.Forms.Button()
-        Me.ButOk = New System.Windows.Forms.Button()
         Me.RefName = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.RefID = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.BlkCount = New System.Windows.Forms.DataGridViewTextBoxColumn()
@@ -36,6 +33,9 @@ Partial Class BlockViewPanel
         Me.Rotation = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.HasAttr = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.IsDynamic = New System.Windows.Forms.DataGridViewTextBoxColumn()
+        Me.FlowLayoutPanel1 = New System.Windows.Forms.FlowLayoutPanel()
+        Me.ButCancel = New System.Windows.Forms.Button()
+        Me.ButOk = New System.Windows.Forms.Button()
         Me.TableLayoutPanel1.SuspendLayout()
         CType(Me.DGV1, System.ComponentModel.ISupportInitialize).BeginInit()
         Me.FlowLayoutPanel1.SuspendLayout()
@@ -53,7 +53,7 @@ Partial Class BlockViewPanel
         Me.TableLayoutPanel1.RowCount = 2
         Me.TableLayoutPanel1.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 91.11111!))
         Me.TableLayoutPanel1.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 8.888889!))
-        Me.TableLayoutPanel1.Size = New System.Drawing.Size(1349, 450)
+        Me.TableLayoutPanel1.Size = New System.Drawing.Size(1348, 450)
         Me.TableLayoutPanel1.TabIndex = 3
         '
         'DGV1
@@ -66,38 +66,8 @@ Partial Class BlockViewPanel
         Me.DGV1.Location = New System.Drawing.Point(3, 3)
         Me.DGV1.Name = "DGV1"
         Me.DGV1.ReadOnly = True
-        Me.DGV1.Size = New System.Drawing.Size(1343, 403)
+        Me.DGV1.Size = New System.Drawing.Size(1342, 403)
         Me.DGV1.TabIndex = 1
-        '
-        'FlowLayoutPanel1
-        '
-        Me.FlowLayoutPanel1.Controls.Add(Me.ButCancel)
-        Me.FlowLayoutPanel1.Controls.Add(Me.ButOk)
-        Me.FlowLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill
-        Me.FlowLayoutPanel1.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft
-        Me.FlowLayoutPanel1.Location = New System.Drawing.Point(3, 412)
-        Me.FlowLayoutPanel1.Name = "FlowLayoutPanel1"
-        Me.FlowLayoutPanel1.Size = New System.Drawing.Size(1343, 35)
-        Me.FlowLayoutPanel1.TabIndex = 5
-        '
-        'ButCancel
-        '
-        Me.ButCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel
-        Me.ButCancel.Location = New System.Drawing.Point(1265, 3)
-        Me.ButCancel.Name = "ButCancel"
-        Me.ButCancel.Size = New System.Drawing.Size(75, 23)
-        Me.ButCancel.TabIndex = 3
-        Me.ButCancel.Text = "Cancel"
-        Me.ButCancel.UseVisualStyleBackColor = True
-        '
-        'ButOk
-        '
-        Me.ButOk.Location = New System.Drawing.Point(1184, 3)
-        Me.ButOk.Name = "ButOk"
-        Me.ButOk.Size = New System.Drawing.Size(75, 23)
-        Me.ButOk.TabIndex = 4
-        Me.ButOk.Text = "OK"
-        Me.ButOk.UseVisualStyleBackColor = True
         '
         'RefName
         '
@@ -159,11 +129,41 @@ Partial Class BlockViewPanel
         Me.IsDynamic.Name = "IsDynamic"
         Me.IsDynamic.ReadOnly = True
         '
+        'FlowLayoutPanel1
+        '
+        Me.FlowLayoutPanel1.Controls.Add(Me.ButCancel)
+        Me.FlowLayoutPanel1.Controls.Add(Me.ButOk)
+        Me.FlowLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill
+        Me.FlowLayoutPanel1.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft
+        Me.FlowLayoutPanel1.Location = New System.Drawing.Point(3, 412)
+        Me.FlowLayoutPanel1.Name = "FlowLayoutPanel1"
+        Me.FlowLayoutPanel1.Size = New System.Drawing.Size(1342, 35)
+        Me.FlowLayoutPanel1.TabIndex = 5
+        '
+        'ButCancel
+        '
+        Me.ButCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel
+        Me.ButCancel.Location = New System.Drawing.Point(1264, 3)
+        Me.ButCancel.Name = "ButCancel"
+        Me.ButCancel.Size = New System.Drawing.Size(75, 23)
+        Me.ButCancel.TabIndex = 3
+        Me.ButCancel.Text = "Cancel"
+        Me.ButCancel.UseVisualStyleBackColor = True
+        '
+        'ButOk
+        '
+        Me.ButOk.Location = New System.Drawing.Point(1183, 3)
+        Me.ButOk.Name = "ButOk"
+        Me.ButOk.Size = New System.Drawing.Size(75, 23)
+        Me.ButOk.TabIndex = 4
+        Me.ButOk.Text = "OK"
+        Me.ButOk.UseVisualStyleBackColor = True
+        '
         'BlockViewPanel
         '
-        Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
-        Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1349, 450)
+        Me.AutoScaleDimensions = New System.Drawing.SizeF(96.0!, 96.0!)
+        Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi
+        Me.ClientSize = New System.Drawing.Size(1348, 450)
         Me.Controls.Add(Me.TableLayoutPanel1)
         Me.Name = "BlockViewPanel"
         Me.Text = "Block Data"

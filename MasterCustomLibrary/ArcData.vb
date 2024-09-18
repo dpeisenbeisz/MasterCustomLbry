@@ -1,9 +1,12 @@
-﻿Imports System.Math
+﻿'(C) David Eisenbeisz 2023
+
+Imports System.Math
 Imports Autodesk.AutoCAD.Geometry
 Imports Autodesk.AutoCAD.Runtime
 
 Public Class ArcData : Inherits CollectionBase
     Implements IDisposable
+
     Private c_pt1 As Point3d
     Private c_pt2 As Point3d
     Private c_pt3 As Point3d
@@ -39,16 +42,6 @@ Public Class ArcData : Inherits CollectionBase
     'Private ReadOnly c_length As Double
     Private c_CtrToMidAngle As Double
     Private c_CurveNumber As Double
-
-    'Private x1 As Double
-    'Private x2 As Double
-    'Private x3 As Double
-    'Private y1 As Double
-    'Private y2 As Double
-    'Private y3 As Double
-    'Private z1 As Double
-    'Private z2 As Double
-    'Private z3 As Double
     Private disposedValue As Boolean
 
     Public Sub New()
@@ -79,20 +72,9 @@ Public Class ArcData : Inherits CollectionBase
         c_pt2 = New Point3d(tpt2.X, tpt2.Y, pt1Z)
         c_pt3 = New Point3d(tPt3.X, tPt3.Y, pt1Z)
 
-        'If c_Delta < 0 Then c_Delta += (2 * PI)
-        'If c_Delta >= (2 * PI) Then c_Delta -= (2 * PI)
-
-        'x1 = c_pt1.X
-        'x2 = c_pt2.X
-        'x3 = c_pt3.X
-        'y1 = c_pt1.Y
-        'y2 = c_pt2.Y
-        'y3 = c_pt3.Y
-        'z1 = c_pt1.Z
-        'z2 = c_pt2.Z
-        'z3 = c_pt3.Z
-
         Call GetArcData(c_pt1, c_pt2, c_pt3)
+        acArc.Dispose()
+
     End Sub
     Public ReadOnly Property Radius As Double
         Get
@@ -321,6 +303,18 @@ Public Class ArcData : Inherits CollectionBase
         End Get
     End Property
 
+    Public ReadOnly Property TangentOffset(d As Double) As Double
+        Get
+            If c_radius ^ 2 - d ^ 2 > -1 Then
+                Dim y As Double = c_radius - Sqrt(c_radius ^ 2 - d ^ 2)
+                Return y
+            Else
+                Return Nothing
+            End If
+        End Get
+
+    End Property
+
     Private Sub GetArcData(pt1 As Point3d, pt2 As Point3d, pt3 As Point3d, Optional hasDelta As Boolean = False)
         'by David Eisenbeisz
 
@@ -344,6 +338,7 @@ Public Class ArcData : Inherits CollectionBase
             'if the determinant is zero, the points are collinear
             If comdet = 0 Then
                 MsgBox("Error in ArcData.  Referenced points are collinear.  Exit function.")
+                Exit Sub
             End If
 
             'store center coordinates
@@ -379,9 +374,8 @@ Public Class ArcData : Inherits CollectionBase
                     'c_center3d = New Point3d(c_center2d.X, c_center2d.Y, z1)
                     c_center3d = cPt
                     c_radius = .Radius
+                    c_IsClockwise = .IsClockWise
                 End With
-
-                c_IsClockwise = acArc.IsClockWise
 
                 Dim startV As Vector2d = tPt1.GetVectorTo(c_center2d)
                 Dim subV As Vector2d = tpt2.GetVectorTo(c_center2d)
@@ -393,6 +387,7 @@ Public Class ArcData : Inherits CollectionBase
                 Dim midV As Vector2d
 
                 If acArc.IsClockWise Then
+                    c_IsClockwise = acArc.IsClockWise
                     c_Delta = (2 * PI) - vectPt1.GetAngleTo(vectPt3, Vector3d.ZAxis)
                     c_subDelta1 = (2 * PI) - vectPt2.GetAngleTo(vectPt1, Vector3d.ZAxis)
                     c_subDelta2 = (2 * PI) - vectPt3.GetAngleTo(vectPt2, Vector3d.ZAxis)
@@ -412,7 +407,9 @@ Public Class ArcData : Inherits CollectionBase
                     perpVmid = midV.RotateBy(PI / 2)
                     c_midBlg = -Tan(c_midDelta / 4)
 
+
                 Else
+                    c_IsClockwise = acArc.IsClockWise
                     c_Delta = vectPt1.GetAngleTo(vectPt3, Vector3d.ZAxis)
                     c_subDelta1 = vectPt1.GetAngleTo(vectPt2, Vector3d.ZAxis)
                     c_subDelta2 = vectPt2.GetAngleTo(vectPt3, Vector3d.ZAxis)

@@ -64,7 +64,7 @@ Partial Class Picker
         Me.BxList.FormattingEnabled = True
         Me.BxList.Location = New System.Drawing.Point(16, 46)
         Me.BxList.Name = "BxList"
-        Me.BxList.SelectionMode = System.Windows.Forms.SelectionMode.MultiSimple
+        Me.BxList.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended
         Me.BxList.Size = New System.Drawing.Size(245, 459)
         Me.BxList.TabIndex = 16
         '

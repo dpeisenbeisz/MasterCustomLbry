@@ -6,8 +6,12 @@ Imports Autodesk.AutoCAD.EditorInput
 Imports Autodesk.AutoCAD.Runtime
 Imports Autodesk.AutoCAD.Geometry
 Imports Autodesk.AutoCAD.GraphicsInterface
+Imports System.Text
 
-Public Class BlockViewPanel
+
+Public Class BVP
+
+    Private ObjIds As ObjectIdCollection
 
     Public Sub GetBlocks()
 
@@ -103,11 +107,58 @@ Public Class BlockViewPanel
 
     Private Sub BlockViewPanel_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
-        Call getBlocks()
+        Call GetBlocks()
 
     End Sub
 
-    Private Sub DGV1_CellContentClick(sender As Object, e As DataGridViewCellEventArgs) Handles DGV1.CellContentClick
+    Private Sub DGV1_CellContentDoubleClick(sender As Object, e As DataGridViewCellEventArgs) Handles DGV1.CellContentDoubleClick
+
+        Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+        Dim dwgDB As Database = curDwg.Database
+        Dim ed As Editor = curDwg.Editor
+
+        Dim rowIdx As Long = e.RowIndex
+        Dim colIdx As Long = e.ColumnIndex
+        Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+
+            Select Case colIdx
+
+                Case Is = 7
+                    Dim blkCol As Collection = DGV1.DataSource
+                    Dim bi As BlkInfo = blkCol(rowIdx)
+                    Dim attList As AttributeCollection = bi.Attributes
+                    Dim sb As New StringBuilder
+                    Dim headStr As String = "Name" & vbTab & "Value"
+                    sb.AppendLine(headStr)
+                    For Each atId As ObjectId In attList
+                        Dim dbOb As DBObject = acTrans.GetObject(atId, OpenMode.ForRead)
+                        If TypeOf dbOb Is AttributeReference Then
+                            Dim atRef As AttributeReference = CType(dbOb, AttributeReference)
+                            Dim atStr As String = atRef.Tag.ToString & vbTab & atRef.TextString
+                            sb.AppendLine(atStr)
+                        End If
+                    Next
+                    MessageBox.Show(sb.ToString)
+                Case Is = 8
+                    Dim blkCol As Collection = DGV1.DataSource
+                    Dim bi As BlkInfo = blkCol(rowIdx)
+                    Dim dynList As DynamicBlockReferencePropertyCollection = bi.DynamicProperties
+                    Dim sb As New StringBuilder
+                    Dim headStr As String = "Property" & vbTab & "Value"
+                    sb.AppendLine(headStr)
+                    For Each dynprop As DynamicBlockReferenceProperty In dynList
+                        Dim propName As String = dynprop.PropertyName
+                        Dim propValue As String = dynprop.Value.ToString
+                        Dim tStr As String = propName & vbTab & propValue
+                        sb.AppendLine(tStr)
+                    Next
+                    MessageBox.Show(sb.ToString)
+                Case Else
+
+            End Select
+        End Using
 
     End Sub
+
+
 End Class

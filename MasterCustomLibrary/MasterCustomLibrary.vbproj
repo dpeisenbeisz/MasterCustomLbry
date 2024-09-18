@@ -106,18 +106,25 @@
     <Compile Include="AcCommon.vb" />
     <Compile Include="AngleObj.vb" />
     <Compile Include="ArcData.vb" />
-    <Compile Include="BlkInfo.vb" />
+    <Compile Include="BlockInfo.vb" />
     <Compile Include="ArrowObj.vb" />
+    <Compile Include="AcBlocks.vb" />
+    <Compile Include="AttributeForm.Designer.vb">
+      <DependentUpon>AttributeForm.vb</DependentUpon>
+    </Compile>
+    <Compile Include="AttributeForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="FontPicker.designer.vb">
       <DependentUpon>FontPicker.vb</DependentUpon>
     </Compile>
     <Compile Include="FontPicker.vb">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="BlockPanel.Designer.vb">
-      <DependentUpon>BlockPanel.vb</DependentUpon>
+    <Compile Include="BlkViewPanel.Designer.vb">
+      <DependentUpon>BlkViewPanel.vb</DependentUpon>
     </Compile>
-    <Compile Include="BlockPanel.vb">
+    <Compile Include="BlkViewPanel.vb">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="ArrowTypeBox.Designer.vb">
@@ -132,6 +139,7 @@
     <Compile Include="LayoutPicker.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="LTdata.vb" />
     <Compile Include="PlotSettingsForm.Designer.vb">
       <DependentUpon>PlotSettingsForm.vb</DependentUpon>
     </Compile>
@@ -161,16 +169,20 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="Walls.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="FontPicker.resx">
       <DependentUpon>FontPicker.vb</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="BlockPanel.resx">
-      <DependentUpon>BlockPanel.vb</DependentUpon>
+    <EmbeddedResource Include="BlkViewPanel.resx">
+      <DependentUpon>BlkViewPanel.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="ArrowTypeBox.resx">
       <DependentUpon>ArrowTypeBox.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="AttributeForm.resx">
+      <DependentUpon>AttributeForm.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="LayoutPicker.resx">
       <DependentUpon>LayoutPicker.vb</DependentUpon>
@@ -189,6 +201,9 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="BlkInfoSchema.xsd">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
     <None Include="My Project\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>
@@ -199,9 +214,9 @@
       <LastGenOutput>Settings.Designer.vb</LastGenOutput>
     </None>
     <None Include="packages.config" />
-    <None Include="XMLSchema1.xsd">
+    <EmbeddedResource Include="LayerSchema1.xsd">
       <SubType>Designer</SubType>
-    </None>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Resources\" />

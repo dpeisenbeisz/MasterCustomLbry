@@ -1,4 +1,5 @@
-﻿Imports System.Windows.Forms
+﻿'(c) David Eisenbeisz 2023
+Imports System.Windows.Forms
 Public Class ArrowTypeBox
 
 

@@ -1,4 +1,5 @@
-﻿Imports System
+﻿'(C) David Eisenbeisz 2023
+Imports System
 Imports System.Drawing
 Imports System.Drawing.Text
 Imports Autodesk.AutoCAD.DatabaseServices
