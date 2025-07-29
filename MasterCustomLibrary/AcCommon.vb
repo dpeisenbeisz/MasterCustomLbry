@@ -18,6 +18,7 @@ Imports System.Xml.Schema
 Imports System.Reflection
 
 Namespace AcCommon
+
     Public Module Layers
         Public Function AddNewLayer(ByVal sLayerName As String, ByVal ColorNo As Integer) As String
 
@@ -356,7 +357,7 @@ Namespace AcCommon
                     Dim dict As DictionaryWithDefaultDictionary = acTrans.GetObject(dwgDB.PlotStyleNameDictionaryId, OpenMode.ForRead)
                     Dim ent As Entity = TryCast(acTrans.GetObject(entID, OpenMode.ForWrite), Entity)
                     If ent IsNot Nothing Then
-                        If dwgDB.PlotStyleMode Then ent.PlotStyleName = PstyleName
+                        ent.PlotStyleName = PstyleName
                     End If
                     acTrans.Commit()
                 End Using
@@ -373,7 +374,7 @@ Namespace AcCommon
                 Dim dict As DictionaryWithDefaultDictionary = acTrans.GetObject(dwgDB.PlotStyleNameDictionaryId, OpenMode.ForRead)
                 Dim ent As Entity = TryCast(acTrans.GetObject(entID, OpenMode.ForWrite), Entity)
                 If ent IsNot Nothing Then
-                    If dwgDB.PlotStyleMode Then ent.PlotStyleName = PstyleName
+                    ent.PlotStyleName = PstyleName
                     'ent.PlotStyleNameId = dict.Item(PstyleName)
                 End If
                 acTrans.Commit()
@@ -682,7 +683,7 @@ Namespace AcCommon
                                     Dim refName As String = bRef.Name
                                     If bRef.IsDynamicBlock Then
                                         Dim bid As ObjectId = bRef.DynamicBlockTableRecord
-                                        Dim dyBref As BlockTableRecord = TryCast(actrans.GetObject(bid, OpenMode.ForRead), BlockTableRecord)
+                                        Dim dyBref As BlockTableRecord = TryCast(acTrans.GetObject(bid, OpenMode.ForRead), BlockTableRecord)
                                         If dyBref IsNot Nothing Then bName = dyBref.Name
                                     End If
                                     If refName = bName Then
@@ -1131,6 +1132,8 @@ Namespace AcCommon
 
     Public Module FileUtilities
 
+        Private m_fldr As String
+
         Public Function GetSchemaSet(SchemaResourceName As String, Optional xmlNameSpace As String = "") As XmlSchemaSet
 
             'Dim myXml As New XmlDocument
@@ -1151,29 +1154,29 @@ Namespace AcCommon
                 wr.Close()
                 rdr.Close()
 
-                XSDfileName = tmpFilePath
+                xsdFileName = tmpFilePath
                 'add the schema to the xml file
                 'myXml.Schemas.Add(Nothing, tmpFilePath)
 
                 If String.IsNullOrEmpty(xmlNameSpace) Then
-                    ss.Add(Nothing, XSDfileName)
+                    ss.Add(Nothing, xsdFileName)
                 Else
-                    ss.Add(xmlNameSpace, XSDfileName)
+                    ss.Add(xmlNameSpace, xsdFileName)
                 End If
 
             Catch e As Exception
                 Try
-                    XSDfileName = GetMyXSDFileName()
+                    xsdFileName = GetMyXSDFileName()
 
-                    If XSDfileName = "" Then
+                    If xsdFileName = "" Then
                         MessageBox.Show("No XSD file specified.")
                         Return Nothing
                         Exit Function
                     Else
                         If String.IsNullOrEmpty(xmlNameSpace) Then
-                            ss.Add(Nothing, XSDfileName)
+                            ss.Add(Nothing, xsdFileName)
                         Else
-                            ss.Add(xmlNameSpace, XSDfileName)
+                            ss.Add(xmlNameSpace, xsdFileName)
                         End If
                     End If
                 Catch
@@ -1363,6 +1366,7 @@ skipit:
                 & "Text Files (*.txt)|*.txt"
                     '.InitialDirectory = "H:\VS Repos"
                     '.InitialDirectory = "\\EESSERVER\datadisk\LITIGATION\Active Cases"
+                    If Not m_fldr = "" Then .InitialDirectory = m_fldr
                     .Title = "Select properly formatted CSV file"
                     .CheckFileExists = False
                 End With
@@ -1377,6 +1381,7 @@ skipit:
 
                 ElseIf xmlResult = DialogResult.OK Then
                     fName = fDialog.FileName
+                    m_fldr = Path.GetDirectoryName(fName)
                 Else
                     MessageBox.Show("Error. File not selected")
                     Return ""
@@ -1408,7 +1413,11 @@ skipit:
                 With fDialog
                     .Reset()
                     .ShowNewFolderButton = True
-                    If Not sfName = "" Then .SelectedPath = sfName
+                    If Not sfName = "" Then
+                        .SelectedPath = sfName
+                    ElseIf Not m_fldr = "" Then
+                        .SelectedPath = m_fldr
+                    End If
                 End With
 
                 'get the dialog result or return nothing
@@ -1419,6 +1428,7 @@ skipit:
                 ElseIf fldrResult = DialogResult.OK Then
                     fName = fDialog.SelectedPath
                     retval = fName
+                    m_fldr = fName
                 Else
                     MessageBox.Show("Error. Folder not selected")
                     retval = ""
@@ -1449,7 +1459,7 @@ skipit:
                     .Filter = "Schema Files (*.xsd)|*.xsd|" _
                 & "Text Files (*.txt)|*.txt"
                     .FilterIndex = 1
-                    '.InitialDirectory = "\\EESSERVER\datadisk\Civil\ENGINEERING\Traffic Studies\"
+                    If Not m_fldr = "" Then .InitialDirectory = m_fldr
                     .Title = "Select properly formatted XSD file"
                     .CheckFileExists = True
                 End With
@@ -1464,6 +1474,7 @@ skipit:
 
                 ElseIf xsdResult = DialogResult.OK Then
                     fName = fDialog.FileName
+                    m_fldr = Path.GetDirectoryName(fName)
                 Else
                     MessageBox.Show("Error. XSD file not selected")
                     Return ""
@@ -1517,6 +1528,11 @@ skipit:
         End Function
 
         Public Function AllDwgFilesInFolder(fpath As String, recurseDir As Boolean) As FileInfo()
+
+            If String.IsNullOrEmpty(fpath) Then
+                Return Nothing
+                Exit Function
+            End If
 
             Dim di As New DirectoryInfo(fpath)
             Dim dFiles() As FileInfo
@@ -2035,7 +2051,7 @@ tryAgain:
             ElseIf IsNumeric(colorStr) Then
                 acdColor = Color.FromColorIndex(ColorMethod.ByAci, CInt(colorStr))
             Else
-                Select Case UCase(colorStr)
+                Select Case colorStr.ToUpper
                     Case Is = "RED"
                         acdColor = Color.FromColorIndex(ColorMethod.ByAci, 1)
                     Case Is = "YELLOW"
@@ -2051,9 +2067,10 @@ tryAgain:
                     Case Is = "WHITE"
                         acdColor = Color.FromColorIndex(ColorMethod.ByAci, 7)
                     Case Else
-                        acdColor = Color.FromColorIndex(ColorMethod.ByAci, 7)
+                        acdColor = Nothing
                 End Select
             End If
+
             Return acdColor
 
         End Function
@@ -4111,8 +4128,8 @@ TryAgain:
             pSetVal.SetPlotType(pset, Autodesk.AutoCAD.DatabaseServices.PlotType.Layout)
             'pSetVal.SetPlotRotation(pset, PlotRotation.Degrees000)
             pSetVal.SetZoomToPaperOnUpdate(pset, True)
-
             Return layId
+
         End Function
 
         Public Function GetPlotSetup() As String
@@ -4322,10 +4339,10 @@ TryAgain:
         Friend Function GetEntityGeoExtents(ByVal entId As ObjectId) As Extents3d
             Dim ext As Extents3d
 
-            Using tran = entId.Database.TransactionManager.StartTransaction()
-                Dim ent = CType(tran.GetObject(entId, OpenMode.ForRead), Entity)
-                ext = ent.GeometricExtents
-                tran.Commit()
+            Using acTrans = entId.Database.TransactionManager.StartTransaction()
+                Dim ent As Entity = TryCast(acTrans.GetObject(entId, OpenMode.ForRead), Entity)
+                If ent IsNot Nothing Then ext = ent.GeometricExtents
+                acTrans.Commit()
             End Using
 
             Return ext

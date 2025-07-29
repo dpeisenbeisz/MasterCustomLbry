@@ -1,19 +1,20 @@
-﻿Imports System.IO
+﻿Imports System.Collections.Specialized
+Imports System.IO
 Imports System.Math
+Imports System.Reflection
 Imports System.Text
 Imports System.Windows.Forms
+'Imports Autodesk.AutoCAD.PlottingServices
+Imports System.Xml
+Imports System.Xml.Schema
+Imports System.Xml.Serialization
 Imports Autodesk.AutoCAD.ApplicationServices
+Imports Autodesk.AutoCAD.Colors
 Imports Autodesk.AutoCAD.DatabaseServices
 Imports Autodesk.AutoCAD.EditorInput
 Imports Autodesk.AutoCAD.Geometry
 Imports Autodesk.AutoCAD.Runtime
-'Imports Autodesk.AutoCAD.PlottingServices
-Imports System.Xml
-Imports System.Xml.Schema
-Imports Autodesk.AutoCAD.Colors
-Imports System.Xml.Serialization
 Imports MasterCustomLibrary.AcCommon
-Imports Autodesk.AutoCAD.Internal
 
 
 'project and file (c) David Eisenbeisz 2023
@@ -172,6 +173,8 @@ Namespace AcCommands
 
 
     Public Module BlockCommands
+
+        Friend m_fldr As String
 
         <CommandMethod("LABLKSCUST", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
         Public Sub LabelBlocksGeneric()
@@ -613,6 +616,110 @@ Namespace AcCommands
             End If
         End Sub
 
+        <CommandMethod("CHBLKCOLOR")>
+        Public Sub ChangeBlockColor()
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim docMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim DwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            ed.WriteMessage("Select folder containing blocks to change:")
+            Dim fldr As String = GetMyFolderName()
+
+            Dim fi As FileInfo() = AllDwgFilesInFolder(fldr, False)
+
+            If fi Is Nothing Then Exit Sub
+            Dim oldClr As Color = Nothing
+            Dim newClr As Color = Nothing
+
+            Try
+                ed.WriteMessage(vbLf & "Pick color to replace...")
+
+                Dim clrdia As New Autodesk.AutoCAD.Windows.ColorDialog
+                Dim clrRes As DialogResult = clrdia.ShowDialog
+                Dim clrStr As String = ""
+
+                If clrRes = DialogResult.OK Then
+                    oldClr = clrdia.Color
+                End If
+
+                ed.WriteMessage(vbLf & "Pick new color...")
+
+                clrdia = New Autodesk.AutoCAD.Windows.ColorDialog
+                clrRes = clrdia.ShowDialog
+
+                If clrRes = DialogResult.OK Then
+                    newClr = clrdia.Color
+                End If
+
+            Catch
+                ed.WriteMessage("Bad color.  Command cancelled")
+                Exit Sub
+            End Try
+
+
+            If newClr IsNot Nothing And oldClr IsNot Nothing Then
+
+                Dim changeDic As New Dictionary(Of String, Long)
+
+                For i As Integer = 0 To fi.Length - 1
+
+                    'Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+
+                    'create a new autocad drawing database to be used out-of-process
+                    Dim sourceDb As New Database(False, True)
+
+                    'read dwg file into database
+                    Try
+                        sourceDb.ReadDwgFile(fi(i).FullName, System.IO.FileShare.Read, False, "")
+                        sourceDb.CloseInput(True)
+                    Catch __unusedException1__ As System.Exception
+                        MessageBox.Show(vbLf & "Unable to read drawing file.")
+                        Return
+                    End Try
+
+                    'Dim tempDoc As Document = DocumentCollectionExtension.Add(docMgr, fi(i).FullName)
+
+                    Dim j As Long = 0
+
+                    Using actrans2 As Transaction = sourceDb.TransactionManager.StartTransaction
+
+                        Dim blktbl As BlockTable = actrans2.GetObject(sourceDb.BlockTableId, OpenMode.ForRead)
+                        For Each btrId As ObjectId In blktbl
+                            Dim btr As BlockTableRecord = actrans2.GetObject(btrId, OpenMode.ForWrite)
+                            For Each entId As ObjectId In btr
+                                Dim ent As Entity = actrans2.GetObject(entId, OpenMode.ForRead)
+                                If ent.Color = oldClr Then
+                                    ent.UpgradeOpen()
+                                    ent.Color = newClr
+                                    j += 1
+                                End If
+                            Next
+                        Next
+
+                        Try
+                            If j > 0 Then sourceDb.SaveAs(fi(i).FullName, False, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, sourceDb.SecurityParameters)
+                        Catch ex As Exception
+                            MessageBox.Show("Unable to save drawing file." & vbLf & ex.Message)
+                        End Try
+
+                        changeDic.Add(fi(i).Name, j)
+                        actrans2.Commit()
+                    End Using
+
+                    'acTrans.Commit()
+                    'End Using
+
+                Next
+
+                For Each k As String In changeDic.Keys
+                    ed.WriteMessage(vbLf & k.ToString & vbTab & changeDic(k).ToString & " Entities changed color")
+                Next
+
+            End If
+        End Sub
+
+
         <CommandMethod("RENBLKS")>
         Public Sub RenameAllBlocks()
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -1015,17 +1122,21 @@ Namespace AcCommands
         <CommandMethod("SetDwgsBase")>
         Public Sub SetDwgsBase()
 
+            Dim acDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+
             Dim filepath As String = ""
             Dim blkFolder As String
             Dim folderpicker As New FolderBrowserDialog
             With folderpicker
                 .Description = "Select folder containing drawing files to change."
                 .ShowNewFolderButton = False
+                If Not String.IsNullOrEmpty(m_fldr) Then .SelectedPath = m_fldr
             End With
 
             If folderpicker.ShowDialog = DialogResult.OK Then
                 filepath = folderpicker.SelectedPath
                 blkFolder = folderpicker.SelectedPath
+                m_fldr = blkFolder
             End If
 
 skipit:
@@ -1305,7 +1416,7 @@ SkipIt:
 
             With pckr
                 .TopLabel.Text = "Pick DWG files to update thumbnail"
-                .Text = "BLock Picker"
+                .Text = "DWG Picker"
             End With
 
             Dim fileList As Collection
@@ -1335,6 +1446,10 @@ SkipIt:
                     pMax = tempDb.Extmax
                     'End If
 
+                    Dim dViewRatio As Double
+                    Dim imHt As Double
+                    Dim imwidth As Double
+
                     Using acView As ViewTableRecord = ed2.GetCurrentView()
                         Dim eExtents As Extents3d
                         '' Translate WCS coordinates to DCS
@@ -1347,7 +1462,7 @@ SkipIt:
                             eExtents = New Extents3d(acLine.Bounds.Value.MinPoint, acLine.Bounds.Value.MaxPoint)
                         End Using
                         '' Calculate the ratio between the width and height of the current view
-                        Dim dViewRatio As Double = (acView.Width / acView.Height)
+                        dViewRatio = (acView.Width / acView.Height)
                         '' Tranform the extents of the view
                         matWCS2DCS = matWCS2DCS.Inverse()
                         eExtents.TransformBy(matWCS2DCS)
@@ -1363,10 +1478,14 @@ SkipIt:
                         pNewCentPt = New Point2d(((eExtents.MaxPoint.X + eExtents.MinPoint.X) * 0.5), ((eExtents.MaxPoint.Y + eExtents.MinPoint.Y) * 0.5))
 
                         'dHeight = dWidth / dViewRatio
-                        If dWidth >= dHeight Then
-                            dHeight = dWidth / dViewRatio
+                        If dHeight >= dWidth / dViewRatio Then
+                            dWidth = dHeight * dViewRatio
+                            imHt = 600
+                            imwidth = 600 * dViewRatio
                         Else
-                            dWidth = dHeight / dViewRatio
+                            dHeight = dWidth / dViewRatio
+                            imwidth = 800
+                            imHt = 800 / dViewRatio
                         End If
                         'dHeight = dWidth * dViewRatio
 
@@ -1379,7 +1498,7 @@ SkipIt:
                         ed2.SetCurrentView(acView)
                     End Using
 
-                    Dim bm As Drawing.Bitmap = tempDoc.CapturePreviewImage(800, 600)
+                    Dim bm As Drawing.Bitmap = tempDoc.CapturePreviewImage(imwidth, imHt)
                     tempDb.ThumbnailBitmap = bm
 
                     tempDb.SaveAs(pathList(ky), True, DwgVersion.AC1027, Nothing)
@@ -1426,38 +1545,51 @@ SkipIt:
 
             For Each ky As String In pathList.Keys
                 Try
-                    Dim acDoc As Document = acDwgMgr.Open(pathList(ky), False)
-                    Using actrans As Transaction = acDoc.TransactionManager.StartTransaction
-                        Using docLock As DocumentLock = acDoc.LockDocument
-                            Dim acdb As Database = acDoc.Database
-                            Dim tst As TextStyleTable = actrans.GetObject(acdb.TextStyleTableId, OpenMode.ForWrite)
-                            Dim cStyleID As ObjectId = acdb.Textstyle
-                            Dim cStyle As TextStyleTableRecord = actrans.GetObject(cStyleID, OpenMode.ForRead)
-                            If Not cStyle.Name = "Standard" Then
-                                Dim tempID As ObjectId = tst("Standard")
-                                If Not tempID.IsNull Then acdb.Textstyle = tempID
-                            End If
 
-                            For Each stId As ObjectId In tst
-                                Dim prgList As New ObjectIdCollection
-                                Dim myStyle As TextStyleTableRecord = actrans.GetObject(stId, OpenMode.ForWrite)
-                                If Not myStyle.Name = "Standard" Then
-                                    prgList.Add(stId)
-                                    acdb.Purge(prgList)
-                                    Try
-                                        myStyle.Erase(True)
-                                    Catch ex As Exception
-                                        Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
-                                    End Try
-                                End If
-                            Next
-                        End Using
+                    Dim acDB As New Database(False, True)
+
+                    'read dwg file into database
+                    Try
+                        acDB.ReadDwgFile(pathList(ky), System.IO.FileShare.Read, False, "")
+                        acDB.CloseInput(True)
+                    Catch __unusedException1__ As System.Exception
+                        MessageBox.Show(vbLf & "Unable to read drawing file.")
+                        Return
+                    End Try
+
+                    'Dim acDoc As Document = acDwgMgr.Open(pathList(ky), False)
+                    Using actrans As Transaction = acDB.TransactionManager.StartTransaction
+                        'Using docLock As DocumentLock = acDoc.LockDocument
+                        'Dim acdb As Database = acDoc.Database
+                        Dim tst As TextStyleTable = actrans.GetObject(acDB.TextStyleTableId, OpenMode.ForWrite)
+                        Dim cStyleID As ObjectId = acDB.Textstyle
+                        Dim cStyle As TextStyleTableRecord = actrans.GetObject(cStyleID, OpenMode.ForRead)
+                        If Not cStyle.Name = "Standard" Then
+                            Dim tempID As ObjectId = tst("Standard")
+                            If Not tempID.IsNull Then acDB.Textstyle = tempID
+                        End If
+
+                        For Each stId As ObjectId In tst
+                            Dim prgList As New ObjectIdCollection
+                            Dim myStyle As TextStyleTableRecord = actrans.GetObject(stId, OpenMode.ForWrite)
+                            If Not myStyle.Name = "Standard" Then
+                                prgList.Add(stId)
+                                acDB.Purge(prgList)
+                                Try
+                                    myStyle.Erase(True)
+                                Catch ex As Exception
+                                    Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
+                                End Try
+                            End If
+                        Next
+                        'End Using
 
                         actrans.Commit()
 
                     End Using
 
-                    acDoc.CloseAndSave(pathList(ky))
+                    'acDoc.CloseAndSave(pathList(ky))
+                    acDB.SaveAs(pathList(ky), False, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, acDB.SecurityParameters)
 
                 Catch ex As Exception
                 End Try
@@ -1514,8 +1646,8 @@ SkipIt:
             Dim ed As Editor = curDwg.Editor
             Dim dwgDB As Database = curDwg.Database
 
-            Dim sName As String = curDwg.Name
-            Dim savef As String = Path.GetDirectoryName(sName) '& "\testFldr\"
+            'Dim sName As String = curDwg.Name
+            'Dim savef As String = Path.GetDirectoryName(sName) '& "\testFldr\"
 
             Dim dr As DialogResult = MessageBox.Show("This command will change the units of all selected blocks.  Do you want to continue?", "Alert", MessageBoxButtons.YesNo)
             If dr = DialogResult.No Then Exit Sub
@@ -2124,7 +2256,7 @@ TryAgain:
 
                         'get the layout ID
                         Dim loID As ObjectId = layDict(loName)
-                        Dim lo As Layout = acTrans.GetObject(loID, OpenMode.ForRead)
+                        Dim lo As Layout = TryCast(acTrans.GetObject(loID, OpenMode.ForRead), Layout)
 
                         'get the layout's paperspace block table record 
                         Dim curSpace As BlockTableRecord = acTrans.GetObject(lo.BlockTableRecordId, OpenMode.ForRead)
@@ -2148,7 +2280,7 @@ TryAgain:
                                             For Each prop As DynamicBlockReferenceProperty In bref.DynamicBlockReferencePropertyCollection
                                                 If prop.PropertyName = "Visibility1" Then
                                                     If pkResult = "Toggle" Then
-                                                        If prop.Value = "Signature" Then
+                                                        If prop.Value.ToString = "Signature" Then
                                                             ChangeVisState(id, "No Signature", "Visibility1")
                                                         Else
                                                             ChangeVisState(id, "Signature", "Visibility1")
@@ -2176,6 +2308,633 @@ TryAgain:
     Public Module GeometryCommands
 
         Private m_area As Double
+
+        <CommandMethod("MKST")>
+        Public Sub MkSt()
+            Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim DwgDB As Database = CurDwg.Database
+            Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+            Try
+
+                Dim ppo As New PromptPointOptions(vbLf & "Select the center of the inscribed circle.")
+                With ppo
+                    .AllowNone = False
+                End With
+
+                Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+                Dim cPt As Point3d
+
+                If ppr.Status = PromptStatus.OK Then
+                    cPt = ppr.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim pdro As New PromptDistanceOptions(vbLf & "Enter or pick the radius of the inscribed circle.")
+                With pdro
+                    .AllowNegative = False
+                    .AllowNone = False
+                    .UseBasePoint = True
+                    .BasePoint = cPt
+                    .UseDashedLine = True
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                End With
+
+                Dim pdr1 As PromptDoubleResult = ed.GetDistance(pdro)
+                Dim rad As Double
+
+                If pdr1.Status = PromptStatus.OK Then
+                    rad = pdr1.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim pio As New PromptIntegerOptions(vbLf & "Enter the number of star points (5 minimum)")
+                With pio
+                    .AllowNegative = False
+                    .AllowZero = False
+                    .LowerLimit = 5
+                    .AllowArbitraryInput = True
+                End With
+
+                Dim pts As Integer
+                Dim pir As PromptIntegerResult = ed.GetInteger(pio)
+
+                If pir.Status = PromptStatus.OK Then
+                    pts = pir.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim centAngle As Double = (2 * PI) / pts
+                Dim tips As New Point2dCollection
+
+                For i As Integer = 0 To pts - 1
+                    Dim tempX As Double = rad * Cos(i * centAngle)
+                    Dim tempy As Double = rad * Sin(i * centAngle)
+                    tips.Add(New Point2d(tempX, tempy))
+                Next
+
+                'figure out the type of star to make
+                Dim sType As Integer = 1
+                Dim starPts As New Point2dCollection
+                Dim pl As New Polyline
+                Dim transVect As Vector3d = New Point3d(0, 0, 0).GetVectorTo(cPt)
+
+
+                If pts > 6 Then
+
+                    'get the type of star to draw  The more points there are the more types of stars are possible
+
+                    Dim pio2 As New PromptIntegerOptions("")
+
+                    Dim msg As String
+                    If pts < 9 Then
+                        msg = vbLf & "Type 1 or type 2 star?"
+                        pio2.UpperLimit = 2
+                    ElseIf pts > 8 And pts < 11 Then
+                        msg = vbLf & "Type 1, 2, or 3 star?"
+                        pio2.UpperLimit = 3
+                    Else
+                        msg = vbLf & "Type 1, 2, 3, or 4 star?"
+                        pio2.UpperLimit = 4
+                    End If
+
+                    With pio2
+                        .Message = msg
+                        .AllowNegative = False
+                        .AllowZero = False
+                        .LowerLimit = 1
+                        .AllowArbitraryInput = True
+                    End With
+
+                    Dim pir2 As PromptIntegerResult = ed.GetInteger(pio2)
+
+                    If pir2.Status = PromptStatus.OK Then
+                        sType = pir2.Value
+                    Else
+                        Exit Sub
+                    End If
+                Else
+                    'only one type for 5 or 6 pointed star
+                    sType = 1
+                End If
+
+                If sType = 1 Then
+                    Dim linLst As New List(Of Line2d)
+
+                    For p As Integer = 0 To pts - 1
+                        Dim r As Integer = (p + 2) Mod pts
+                        linLst.Add(New Line2d(tips(p), tips(r)))
+                        'z = (z + 2) Mod pts
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim m As Integer = (j + pts - 1) Mod pts
+                        Dim testLn2 As Line2d = linLst(m)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+
+                ElseIf sType = 2 Then
+
+                    Dim linLst As New List(Of Line2d)
+
+                    For z As Integer = 0 To pts - 1
+                        Debug.Print(tips(z).ToString)
+                        Dim r As Integer = (z + 3) Mod pts
+                        linLst.Add(New Line2d(tips(z), tips(r)))
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim s As Integer = (j + pts - 2) Mod pts
+                        Dim testLn2 As Line2d = linLst(s)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+
+                ElseIf sType = 3 Then
+                    Dim linLst As New List(Of Line2d)
+
+                    For z As Integer = 0 To pts - 1
+                        Debug.Print(tips(z).ToString)
+                        Dim r As Integer = (z + 4) Mod pts
+                        linLst.Add(New Line2d(tips(z), tips(r)))
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim s As Integer = (j + pts - 3) Mod pts
+                        Dim testLn2 As Line2d = linLst(s)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+
+                Else
+
+                    Dim linLst As New List(Of Line2d)
+
+                    For z As Integer = 0 To pts - 1
+                        Debug.Print(tips(z).ToString)
+                        Dim r As Integer = (z + 5) Mod pts
+                        linLst.Add(New Line2d(tips(z), tips(r)))
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim s As Integer = (j + pts - 4) Mod pts
+                        Dim testLn2 As Line2d = linLst(s)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+                End If
+
+                For x As Integer = 0 To starPts.Count - 1
+                    pl.AddVertexAt(x, starPts(x), 0, 0, 0)
+                Next
+
+                pl.Closed = True
+                pl.TransformBy(Matrix3d.Displacement(transVect))
+
+                If pts Mod 2 = 1 Then
+                    Dim rotAng As Double = centAngle / 4
+                    pl.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
+                End If
+
+                Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                    Dim blktbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blktbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+
+                    mdlSpace.AppendEntity(pl)
+                    acTrans.AddNewlyCreatedDBObject(pl, True)
+                    acTrans.Commit()
+                End Using
+
+                If pl IsNot Nothing Then pl.Dispose()
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+            End Try
+
+        End Sub
+
+        <CommandMethod("MKSTE")>
+        Public Sub MkStarEllipse()
+            Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim DwgDB As Database = CurDwg.Database
+            Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+            Try
+
+                Dim ppo As New PromptPointOptions(vbLf & "Select the center of the inscribed ellipse.")
+                With ppo
+                    .AllowNone = False
+                End With
+
+                Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+                Dim cPt As Point3d
+
+                If ppr.Status = PromptStatus.OK Then
+                    cPt = ppr.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim cPt2d As Point2d = New Point2d(cPt.X, cPt.Y)
+
+                Dim pdrao As New PromptPointOptions(vbLf & "pick the radius of the major axis of the ellipse")
+                With pdrao
+                    .AllowNone = False
+                    .UseBasePoint = True
+                    .BasePoint = cPt
+                    .UseDashedLine = True
+                    .AllowArbitraryInput = True
+                End With
+
+                Dim pdra1 As PromptPointResult = ed.GetPoint(pdrao)
+                Dim rada As Double
+                Dim ptA As Point2d
+                Dim elAng As Double
+
+                If pdra1.Status = PromptStatus.OK Then
+                    Dim ptATemp As Point3d = pdra1.Value
+                    ptA = New Point2d(ptATemp.X, ptATemp.Y)
+                    rada = ptA.GetDistanceTo(cPt2d)
+                    elAng = GetAngleFromXaxis(cPt, ptATemp)
+                Else
+                    Exit Sub
+                End If
+
+                Dim pdrbo As New PromptPointOptions(vbLf & "Enter or pick the radius of the minor axis of the ellipse")
+                With pdrbo
+                    .AllowNone = False
+                    .UseBasePoint = True
+                    .BasePoint = cPt
+                    .UseDashedLine = True
+                    .AllowArbitraryInput = True
+                End With
+
+                Dim pdrb1 As PromptPointResult = ed.GetPoint(pdrbo)
+                Dim ptB As Point2d
+                Dim radb As Double
+
+                If pdrb1.Status = PromptStatus.OK Then
+                    Dim ptBTemp As Point3d = pdrb1.Value
+                    ptB = New Point2d(ptBTemp.X, ptBTemp.Y)
+                    radb = ptB.GetDistanceTo(cPt2d)
+                Else
+                    Exit Sub
+                End If
+
+                Dim pio As New PromptIntegerOptions(vbLf & "Enter the number of star points (5 minimum)")
+                With pio
+                    .AllowNegative = False
+                    .AllowZero = False
+                    .LowerLimit = 5
+                    .AllowArbitraryInput = True
+                End With
+
+                Dim pts As Integer
+                Dim pir As PromptIntegerResult = ed.GetInteger(pio)
+
+                If pir.Status = PromptStatus.OK Then
+                    pts = pir.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim centAngle As Double = (2 * PI) / pts
+                Dim tips As New Point2dCollection
+
+                For i As Integer = 0 To pts - 1
+                    Dim ca As Double = (centAngle * i) + centAngle / 4
+                    Dim radAtPt As Double = (rada * radb) / Sqrt((rada ^ 2 * Sin(ca) ^ 2) + (radb ^ 2 * Cos(ca) ^ 2))
+                    Dim tempx As Double = radAtPt * Cos(ca)
+                    Dim tempy As Double = radAtPt * Sin(ca)
+                    tips.Add(New Point2d(tempx, tempy))
+                Next
+
+                'figure out the type of star to make
+                Dim sType As Integer = 1
+                Dim starPts As New Point2dCollection
+                Dim pl As New Polyline
+                Dim transVect As Vector3d = New Point3d(0, 0, 0).GetVectorTo(cPt)
+
+
+                If pts > 6 Then
+
+                    'get the type of star to draw  The more points there are the more types of stars are possible
+
+                    Dim pio2 As New PromptIntegerOptions("")
+
+                    Dim msg As String
+                    If pts < 9 Then
+                        msg = vbLf & "Type 1 or type 2 star?"
+                        pio2.UpperLimit = 2
+                    ElseIf pts > 8 And pts < 11 Then
+                        msg = vbLf & "Type 1, 2, or 3 star?"
+                        pio2.UpperLimit = 3
+                    Else
+                        msg = vbLf & "Type 1, 2, 3, or 4 star?"
+                        pio2.UpperLimit = 4
+                    End If
+
+                    With pio2
+                        .Message = msg
+                        .AllowNegative = False
+                        .AllowZero = False
+                        .LowerLimit = 1
+                        .AllowArbitraryInput = True
+                    End With
+
+                    Dim pir2 As PromptIntegerResult = ed.GetInteger(pio2)
+
+                    If pir2.Status = PromptStatus.OK Then
+                        sType = pir2.Value
+                    Else
+                        Exit Sub
+                    End If
+                Else
+                    'only one type for 5 or 6 pointed star
+                    sType = 1
+                End If
+
+                If sType = 1 Then
+                    Dim linLst As New List(Of Line2d)
+
+                    For p As Integer = 0 To pts - 1
+                        Debug.Print(tips(p).ToString)
+                        Dim r As Integer = (p + 2) Mod pts
+                        linLst.Add(New Line2d(tips(p), tips(r)))
+                        'z = (z + 2) Mod pts
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim m As Integer = (j + pts - 1) Mod pts
+                        Dim testLn2 As Line2d = linLst(m)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+
+                ElseIf sType = 2 Then
+
+                    Dim linLst As New List(Of Line2d)
+
+                    For z As Integer = 0 To pts - 1
+                        Debug.Print(tips(z).ToString)
+                        Dim r As Integer = (z + 3) Mod pts
+                        linLst.Add(New Line2d(tips(z), tips(r)))
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim s As Integer = (j + pts - 2) Mod pts
+                        Dim testLn2 As Line2d = linLst(s)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+
+                ElseIf sType = 3 Then
+                    Dim linLst As New List(Of Line2d)
+
+                    For z As Integer = 0 To pts - 1
+                        Debug.Print(tips(z).ToString)
+                        Dim r As Integer = (z + 4) Mod pts
+                        linLst.Add(New Line2d(tips(z), tips(r)))
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim s As Integer = (j + pts - 3) Mod pts
+                        Dim testLn2 As Line2d = linLst(s)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+
+                Else
+
+                    Dim linLst As New List(Of Line2d)
+
+                    For z As Integer = 0 To pts - 1
+                        Debug.Print(tips(z).ToString)
+                        Dim r As Integer = (z + 5) Mod pts
+                        linLst.Add(New Line2d(tips(z), tips(r)))
+                    Next
+
+                    'Dim j As Integer = 0
+
+                    For j As Integer = 0 To pts - 1
+                        starPts.Add(tips(j))
+                        Dim testLn1 As Line2d = linLst(j)
+                        Dim s As Integer = (j + pts - 4) Mod pts
+                        Dim testLn2 As Line2d = linLst(s)
+                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                        starPts.Add(tempPt(0))
+                    Next
+                End If
+
+                For x As Integer = 0 To starPts.Count - 1
+                    pl.AddVertexAt(x, starPts(x), 0, 0, 0)
+                Next
+
+                pl.Closed = True
+                pl.TransformBy(Matrix3d.Displacement(transVect))
+
+                'If pts Mod 2 = 1 Then
+                '    Dim rotAng As Double = centAngle / 4
+                '    pl.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
+                'End If
+
+                Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                    Dim blktbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blktbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+
+                    mdlSpace.AppendEntity(pl)
+                    acTrans.AddNewlyCreatedDBObject(pl, True)
+                    acTrans.Commit()
+                End Using
+
+                If pl IsNot Nothing Then pl.Dispose()
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+            End Try
+
+        End Sub
+
+        <CommandMethod("MKSTAR")>
+        Public Sub MkStar()
+            Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim DwgDB As Database = CurDwg.Database
+            Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+            Try
+
+                Dim ppo As New PromptPointOptions(vbLf & "Select the center of the inscribed circle.")
+                With ppo
+                    .AllowNone = False
+                End With
+
+                Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+                Dim cPt As Point3d
+
+                If ppr.Status = PromptStatus.OK Then
+                    cPt = ppr.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim pdro As New PromptDistanceOptions(vbLf & "Enter or pick the radius of the inscribed circle.")
+                With pdro
+                    .AllowNegative = False
+                    .AllowNone = False
+                    .UseBasePoint = True
+                    .BasePoint = cPt
+                    .UseDashedLine = True
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                End With
+
+                Dim pdr1 As PromptDoubleResult = ed.GetDistance(pdro)
+                Dim rad As Double
+
+                If pdr1.Status = PromptStatus.OK Then
+                    rad = pdr1.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim pio As New PromptIntegerOptions(vbLf & "Enter the number of star points (5 minimum)")
+                With pio
+                    .AllowNegative = False
+                    .AllowZero = False
+                    .LowerLimit = 5
+                    .AllowArbitraryInput = True
+                End With
+
+                Dim pts As Integer
+                Dim pir As PromptIntegerResult = ed.GetInteger(pio)
+
+                If pir.Status = PromptStatus.OK Then
+                    pts = pir.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim centAngle As Double = (2 * PI) / pts
+                Dim tips As New Point3dCollection
+
+                For i As Integer = 0 To pts - 1
+                    Dim tempX As Double = rad * Cos(i * centAngle)
+                    Dim tempy As Double = rad * Sin(i * centAngle)
+                    tips.Add(New Point3d(tempX, tempy, 0))
+                Next
+
+                Dim transVect As Vector3d = New Point3d(0, 0, 0).GetVectorTo(cPt)
+
+                Dim linLst As New List(Of Line)
+
+                Dim incr As Integer
+                Dim figs As Integer = 1
+                Dim nolines As Integer
+
+
+                If pts Mod 5 > 0 AndAlso pts \ 2 > 5 Then
+                    incr = pts \ 2 - 1
+                ElseIf pts Mod 4 > 0 AndAlso pts \ 2 > 4 Then
+                    incr = pts \ 2 - 1
+                ElseIf pts Mod 3 > 0 AndAlso pts \ 2 > 3 Then
+                    incr = pts \ 2 - 1
+                ElseIf pts Mod 2 > 0 AndAlso pts \ 2 > 2 Then
+                    incr = pts \ 2 - 1
+                ElseIf pts = 5 Then
+                    incr = 2
+                Else
+                    If pts Mod 5 = 0 Then
+                        nolines = pts / 5 And pts / 2 > 5
+                        incr = 5
+                    ElseIf pts Mod 4 = 0 And pts / 2 > 4 Then
+                        nolines = pts / 4
+                        incr = 4
+                    ElseIf pts Mod 3 = 0 And pts / 2 > 3 Then
+                        nolines = pts / 3
+                        incr = 3
+                    Else
+                        nolines = pts / 2
+                        incr = 2
+                    End If
+                    figs = pts / nolines
+                End If
+
+                Dim startPt As Integer = 0
+
+                If figs > 1 Then
+                    For f = 0 To figs - 1
+                        For p As Integer = 0 To (pts / figs) - 1
+                            Dim r As Integer = (startPt + p + incr) Mod pts
+                            linLst.Add(New Line(tips((startPt + p) Mod pts), tips(r)))
+                            startPt += 1
+                        Next
+                    Next
+                Else
+                    For p As Integer = 0 To pts - 1
+                        Dim r As Integer = (p + incr) Mod pts
+                        linLst.Add(New Line(tips(p), tips(r)))
+                    Next
+                End If
+
+                Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                    Dim blktbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blktbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+
+                    For x As Integer = 0 To linLst.Count - 1
+                        Dim subLine As Line = linLst(x)
+                        Dim rotAng As Double
+                        If pts Mod 2 > 0 Then
+                            rotAng = centAngle / 4
+                        Else
+                            rotAng = centAngle / 2
+                        End If
+                        subLine.TransformBy(Matrix3d.Displacement(transVect))
+                        subLine.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
+                        mdlSpace.AppendEntity(subLine)
+                        acTrans.AddNewlyCreatedDBObject(subLine, True)
+                    Next
+                    acTrans.Commit()
+
+                End Using
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+            End Try
+
+        End Sub
 
         <CommandMethod("CBYA")>
         Public Sub CircleByArea()
@@ -3009,6 +3768,102 @@ NextPoint:
 
         End Sub
 
+        <CommandMethod("PICKVPFRZLAY", CommandFlags.UsePickSet)>
+        Public Sub PickVPFrzLayer()
+            'by David Eisenbeisz (c)2024
+            'freezes viewport layers by picking entities
+
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim DwgDB As Database = curDwg.Database
+            Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+            Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+
+            'If Not SelResult.Status = PromptStatus.OK Then Exit Sub
+
+            If SelResult.Status = PromptStatus.Error Then
+                Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select objects to freeze their layers in current viewport")}
+                'Seloptions.MessageForAdding = String.Format(vbLf & "Select centerline(s)")
+                SelResult = ed.GetSelection(Seloptions)
+            Else
+                ed.SetImpliedSelection(New ObjectId(-1) {})
+            End If
+
+            If Not SelResult.Status = PromptStatus.OK Then Exit Sub
+
+            Dim selSet As SelectionSet = SelResult.Value
+            Dim obIds() As ObjectId = selSet.GetObjectIds
+
+            'Dim layoutDic As SortedDictionary(Of Integer, String) = LayoutTabList()
+
+            Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+
+                Dim fzLayers As New ObjectIdCollection
+
+                For i = 0 To obIds.Count - 1
+                    Dim ent As Entity = TryCast(acTrans.GetObject(obIds(i), OpenMode.ForRead), Entity)
+                    If ent IsNot Nothing Then
+                        Dim entLayID As ObjectId = ent.LayerId
+                        fzLayers.Add(entLayID)
+                        ent.Dispose()
+                    End If
+                Next
+
+                Dim layoutDbDict As DBDictionary = acTrans.GetObject(DwgDB.LayoutDictionaryId, OpenMode.ForRead)
+
+                'pick the layouts to be adjusted
+                Dim lPicker As New LayoutPicker
+                Dim loList As SortedDictionary(Of Integer, String) = LayoutTabList()
+
+                'add layout names to the picker form
+                For Each lN As String In loList.Values
+                    Dim lName As String = lN
+                    If Not lName = "Model" Then
+                        lPicker.ListBox1.Items.Add(lName)
+                    End If
+                Next
+
+                lPicker.PickerLabel.Text = "Select layouts to update:"
+
+                'create a list variable and show the form
+                Dim layoutLst As List(Of String)
+                lPicker.ShowDialog()
+
+                If lPicker.DialogResult = DialogResult.Cancel Then
+                    Exit Sub
+                Else
+                    layoutLst = lPicker.PickedList
+                End If
+
+                For Each layo As String In layoutLst
+                    Dim layoutID As ObjectId = layoutDbDict(layo)
+                    Dim lo As Layout = acTrans.GetObject(layoutID, OpenMode.ForRead)
+
+                    Dim vpIds As ObjectIdCollection = lo.GetViewports
+
+                    Dim dr As PromptResult = YesNoResult(vbLf & "Do you want to freeze paperspace layers?")
+
+                    Dim startnumb As Integer
+
+                    If dr.Status = PromptStatus.OK Then
+                        If dr.StringResult = "Yes" Then
+                            startnumb = 0
+                        Else
+                            startnumb = 1
+                        End If
+                    End If
+
+                    For m As Integer = startnumb To vpIds.Count - 1
+                        Dim cVp As Viewport = acTrans.GetObject(vpIds(m), OpenMode.ForWrite)
+                        cVp.FreezeLayersInViewport(fzLayers.GetEnumerator)
+                    Next
+                Next
+                acTrans.Commit()
+            End Using
+
+        End Sub
+
+
         <CommandMethod("LAOFF", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
         Public Sub TurnOffLayers()
             'by David Eisenbeisz (c)2024
@@ -3372,7 +4227,7 @@ Skip:
 
             Dim delLayer As String
             If delLayerCol.Count > 0 Then
-                delLayer = delLayerCol(1)
+                delLayer = delLayerCol(1).ToString
             Else
                 Exit Sub
             End If
@@ -3394,7 +4249,7 @@ Skip:
 
             Dim mergeLayer As String
             If mergeLayerCol.Count > 0 Then
-                mergeLayer = mergeLayerCol(1)
+                mergeLayer = mergeLayerCol(1).ToString
             Else
                 Exit Sub
             End If
@@ -3677,8 +4532,8 @@ Skip:
             End If
 
             'Dim showForm As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORM")
-            Dim cVp As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LAYOUTCREATEVIEWPORT")
-            Dim showForm As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS")
+            Dim cVp As Int16 = DirectCast(Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LAYOUTCREATEVIEWPORT"), Int16)
+            Dim showForm As Integer = DirectCast(Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS"), Integer)
             Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS", 0)
             Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", 1)
 
@@ -4062,9 +4917,6 @@ Skip:
         End Sub
 
 
-
-
-
         <CommandMethod("MSPT")>
         Public Sub ModelSpacePlot()
             'plots all block references in model space
@@ -4122,17 +4974,17 @@ Skip:
                                     Dim fState As String = ""
                                     For Each prop As DynamicBlockReferenceProperty In bRef.DynamicBlockReferencePropertyCollection
                                         If prop.PropertyName = "Visibility1" Then
-                                            pName = " " & prop.Value
+                                            pName = " " & prop.Value.ToString
                                         ElseIf prop.PropertyName = "Flip state1" Then
-                                            fState = " " & prop.Value
+                                            fState = " " & prop.Value.ToString
                                         End If
                                     Next
                                     blkName = blkBTR.Name & pName & fState
                                 Else
-                                    blkName = bRef.Name
+                                    blkName = bRef.Name.ToString
                                 End If
-                                Debug.Print(blkName)
-                                blkName = ReturnValidFileName(blkName)
+                                Dim bNameChars() As Char = blkName.ToCharArray
+                                blkName = ReturnValidFileName(bNameChars)
                                 Dim outFile As String = newPath & blkName
                                 outFile &= ".png"
                                 myFileName = GetNewFileName(outFile)
@@ -4150,8 +5002,13 @@ Skip:
 
         End Sub
 
+
     End Module
+
+
     Public Module MiscCommands
+
+        Private myClr As Autodesk.AutoCAD.Colors.Color
 
         <CommandMethod("LLTS")>
         Public Sub ListLinetypes()
@@ -4166,12 +5023,11 @@ Skip:
             Dim l2x As Double = 225
 
             Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-                Dim ltTbl As LinetypeTable = acTrans.GetObject(dwgDB.LinetypeTableId, OpenMode.ForWrite)
-                Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
-                Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+                Dim ltTbl As LinetypeTable = TryCast(acTrans.GetObject(dwgDB.LinetypeTableId, OpenMode.ForWrite), LinetypeTable)
+                Dim blkTbl As BlockTable = TryCast(acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead), BlockTable)
+                Dim mdlSpace As BlockTableRecord = TryCast(acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite), BlockTableRecord)
                 For Each obID As ObjectId In ltTbl
-                    Using ltRec As LinetypeTableRecord = acTrans.GetObject(obID, OpenMode.ForRead)
-
+                    Using ltRec As LinetypeTableRecord = TryCast(acTrans.GetObject(obID, OpenMode.ForRead), LinetypeTableRecord)
                         Dim ltName As String = ltRec.Name
                         Dim ltRecId = obID
                         Using pl As New Polyline(2)
@@ -4861,6 +5717,338 @@ Skip:
                 tr.Commit()
                 ed.WriteMessage(vbLf & "{0} scales removed from {1} objects.", scaCount, objCount)
             End Using
+        End Sub
+
+
+        <CommandMethod("NEWTEXTMASK", CommandFlags.UsePickSet)>
+        Public Sub NewTextMask()
+
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgDb As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+
+            If SelResult.Status = PromptStatus.Error Then
+                Dim Seloptions As New PromptSelectionOptions
+                Seloptions.MessageForAdding = String.Format(vbLf & "Select dtext entities to mask:")
+                SelResult = ed.GetSelection(Seloptions)
+            Else
+                ed.SetImpliedSelection(New ObjectId(-1) {})
+            End If
+
+            If SelResult.Status = PromptStatus.OK Then
+
+                Dim acSSet As SelectionSet = SelResult.Value
+                Dim MyobjIDs As ObjectId() = acSSet.GetObjectIds
+
+                Dim ofDist As Double = 0.05
+
+                Dim pdo As New PromptDistanceOptions(vbLf & "Enter or pick the distance offset distance for mask:")
+                With pdo
+                    .AllowNegative = False
+                    .DefaultValue = ofDist
+                    .AllowArbitraryInput = True
+                    .Only2d = True
+                End With
+
+                Dim pdr As PromptDoubleResult = ed.GetDistance(pdo)
+                If pdr.Status = PromptStatus.OK Then
+                    ofDist = pdr.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim bgClr As Autodesk.AutoCAD.Colors.Color
+                bgClr = myClr
+
+                If bgClr Is Nothing Then
+                    ed.WriteMessage(vbLf & "Select color for background mask:")
+                    bgClr = PickColor()
+                    If bgClr Is Nothing Then bgClr = Color.FromColorIndex(ColorMethod.ByAci, 255)
+                    myClr = bgClr
+                End If
+
+                Using actrans As Transaction = dwgDb.TransactionManager.StartTransaction()
+                    Dim blkTbl As BlockTable = actrans.GetObject(dwgDb.BlockTableId, OpenMode.ForRead)
+                    Dim curSpace As BlockTableRecord = actrans.GetObject(dwgDb.CurrentSpaceId, OpenMode.ForWrite)
+                    Dim gd As DBDictionary = CType(actrans.GetObject(dwgDb.GroupDictionaryId, OpenMode.ForRead), DBDictionary)
+
+                    For Each objID As ObjectId In MyobjIDs
+                        Dim dbObj As DBObject = actrans.GetObject(objID, OpenMode.ForRead)
+                        If TypeOf dbObj Is DBText Then
+                            Dim textEnt As DBText = CType(dbObj, DBText)
+                            Dim textRot As Double = textEnt.Rotation
+                            Dim textinspt As Point3d = textEnt.Position
+
+                            textEnt.UpgradeOpen()
+                            textEnt.Rotation = 0
+                            Dim textext As Extents3d = textEnt.GeometricExtents
+
+                            Dim llPt As New Point3d(textext.MinPoint.X - ofDist, textext.MinPoint.Y - ofDist, 0)
+                            Dim urPt As New Point3d(textext.MaxPoint.X + ofDist, textext.MaxPoint.Y + ofDist, 0)
+                            Dim ulPt As New Point3d(llPt.X, urPt.Y, 0)
+                            Dim lrPt As New Point3d(urPt.X, llPt.Y, 0)
+                            Dim sld As New Solid(llPt, lrPt, ulPt, urPt)
+
+                            'Dim lLeft As New DBPoint(llPt)
+                            'Dim lright As New DBPoint(lrPt)
+                            'Dim uLeft As New DBPoint(ulPt)
+                            'Dim uRight As New DBPoint(urPt)
+
+                            'curSpace.AppendEntity(lLeft)
+                            'actrans.AddNewlyCreatedDBObject(lLeft, True)
+                            'curSpace.AppendEntity(uLeft)
+                            'actrans.AddNewlyCreatedDBObject(uLeft, True)
+                            'curSpace.AppendEntity(uRight)
+                            'actrans.AddNewlyCreatedDBObject(uRight, True)
+                            'curSpace.AppendEntity(lright)
+                            'actrans.AddNewlyCreatedDBObject(lright, True)
+
+                            Dim sldObjId As ObjectId = curSpace.AppendEntity(sld)
+                            actrans.AddNewlyCreatedDBObject(sld, True)
+
+                            sld.TransformBy(Matrix3d.Rotation(textRot, Vector3d.ZAxis, textinspt))
+                            If bgClr IsNot Nothing Then sld.Color = bgClr
+                            'textEnt.Rotation = textRot
+                            textEnt.TransformBy(Matrix3d.Rotation(textRot, Vector3d.ZAxis, textinspt))
+
+                            Dim sldColl As New ObjectIdCollection
+                            sldColl.Add(sldObjId)
+
+                            Dim orderDic As DrawOrderTable = actrans.GetObject(curSpace.DrawOrderTableId, OpenMode.ForWrite)
+                            orderDic.MoveBelow(sldColl, objID)
+
+                            Dim grp As New Group()
+
+                            gd.UpgradeOpen()
+                            Dim grpId As ObjectId = gd.SetAt("*", grp)
+                            actrans.AddNewlyCreatedDBObject(grp, True)
+
+                            sldColl.Add(objID)
+
+                            grp.InsertAt(0, sldColl)
+                            grp.Selectable = True
+                        ElseIf TypeOf dbObj Is MText Then
+                            MessageBox.Show("Mtext entities cannot be masked with this command.  Use built-in autocad methods for MTEXT instead.")
+                        End If
+                    Next
+                    actrans.Commit()
+                End Using
+            End If
+        End Sub
+
+        <CommandMethod("SETMASKCOLOR")>
+        Public Sub SetMaskColor()
+
+            Dim cd As New Autodesk.AutoCAD.Windows.ColorDialog()
+            Dim cr As System.Windows.Forms.DialogResult = cd.ShowDialog
+
+            If cr = DialogResult.OK Then
+                Dim clr As Autodesk.AutoCAD.Colors.Color = cd.Color
+                myClr = clr
+            End If
+
+        End Sub
+
+        Private Function PickColor() As Autodesk.AutoCAD.Colors.Color
+
+            Dim cd As New Autodesk.AutoCAD.Windows.ColorDialog()
+            Dim cr As System.Windows.Forms.DialogResult = cd.ShowDialog
+
+            If cr = DialogResult.OK Then
+                Dim clr As Autodesk.AutoCAD.Colors.Color = cd.Color
+                myClr = clr
+                Return clr
+            Else
+                Return Nothing
+            End If
+
+        End Function
+
+        <CommandMethod("LCTA")>
+        Public Sub ListCommandsFromThisAssembly()
+            Dim dm As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim ed As Editor = dm.MdiActiveDocument.Editor
+            Dim asm As Assembly = Assembly.GetExecutingAssembly()
+            Dim cmds As String() = GetCommands(asm, False)
+
+            For Each cmd As String In cmds
+                ed.WriteMessage(cmd & vbLf)
+            Next
+        End Sub
+
+        <CommandMethod("LANC")>
+        Public Sub ListAllNetCommands()
+            'Dim cmds As StringCollection = New StringCollection()
+            Dim dm As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim ed As Editor = dm.MdiActiveDocument.Editor
+            Dim asms As Assembly() = AppDomain.CurrentDomain.GetAssemblies()
+
+            For Each asm As Assembly In asms
+                If Not asm.FullName.Contains("Microsoft.Expression.Interactions") Then
+                    'ed.WriteMessage(vbLf & asm.Location.ToString)
+                    'If asm.FullName.Contains("PresentationFramework") Then GoTo Skipit
+                    Try
+                        Dim cmds() As String = GetCommands(asm, False)
+                        For Each cmd As String In cmds
+                            ed.WriteMessage(cmd & vbLf)
+                        Next
+                    Catch ex As Exception
+                        MessageBox.Show(ex.ToString & vbLf & ex.ErrorStatus.ToString)
+                        Return
+                    End Try
+                End If
+
+Skipit:
+            Next
+
+        End Sub
+
+
+        '<CommandMethod("LC")>
+        Public Sub ListCommands()
+            Dim cmds As StringCollection = New StringCollection()
+            Dim dm As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim ed As Editor = dm.MdiActiveDocument.Editor
+            Dim asms As Assembly() = AppDomain.CurrentDomain.GetAssemblies()
+
+            For Each asm As Assembly In asms
+                cmds.AddRange(GetCommands(asm, False))
+            Next
+
+            For Each cmd As String In cmds
+                ed.WriteMessage(cmd & vbLf)
+            Next
+        End Sub
+
+        Private Function GetCommands(ByVal asm As Assembly, ByVal markedOnly As Boolean) As String()
+            Dim sc As StringCollection = New StringCollection()
+            Dim objs As Object() = asm.GetCustomAttributes(GetType(CommandClassAttribute), True)
+            Dim tps As Type()
+            Dim numTypes As Integer = objs.Length
+
+            If numTypes > 0 Then
+                tps = New Type(numTypes - 1) {}
+
+                For i As Integer = 0 To numTypes - 1
+                    Dim cca As CommandClassAttribute = TryCast(objs(i), CommandClassAttribute)
+
+                    If cca IsNot Nothing Then
+                        tps(i) = cca.Type
+                    End If
+                Next
+            Else
+                If Not asm.IsDynamic Then
+                    If markedOnly Then
+                        tps = New Type(-1) {}
+                    Else
+                        tps = asm.GetExportedTypes()
+                    End If
+
+                    For Each tp As Type In tps
+
+                        If tp IsNot Nothing Then
+
+                            Dim meths As MethodInfo()
+                            If tp.GetMethods() Is Nothing Then
+                                GoTo Skipit
+                            Else
+                                meths = tp.GetMethods()
+                            End If
+
+                            If meths IsNot Nothing Then
+                                'meths = tp.GetMethods
+                                'Dim meths() As MethodInfo = tp.GetMethods
+                                For Each meth As MethodInfo In meths
+                                    objs = meth.GetCustomAttributes(GetType(CommandMethodAttribute), True)
+                                    For Each obj As Object In objs
+                                        Dim attb As CommandMethodAttribute = CType(obj, CommandMethodAttribute)
+                                        sc.Add(attb.GlobalName)
+                                    Next
+                                Next
+                            Else
+                            End If
+Skipit:
+                        End If
+
+                    Next
+
+                End If
+
+            End If
+
+            Dim ret As String() = New String(sc.Count - 1) {}
+            sc.CopyTo(ret, 0)
+            Return ret
+
+        End Function
+
+        <CommandMethod("MUTCDCOLORS")>
+        Public Sub MUTCDcolors()
+
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+
+            Try
+                Dim pkwOpts As New PromptKeywordOptions(vbCrLf & "Enter the MUTCD Color to translate: ")
+                With pkwOpts
+                    .Keywords.Add("Red")
+                    .Keywords.Add("Yellow")
+                    .Keywords.Add("Green")
+                    .Keywords.Add("Blue")
+                    .Keywords.Add("Brown")
+                    .Keywords.Add("Orange")
+                    .Keywords.Add("Purple")
+                    .Keywords.Add("Pink")
+                    .Keywords.Add("Yellow-Green")
+                    .Keywords.Add("Red-Pavement")
+                    .Keywords.Add("Green-Pavement")
+                    .AppendKeywordsToMessage = True
+                End With
+
+                Dim pkwRes As PromptResult = ed.GetKeywords(pkwOpts)
+                Dim clrString As String = ""
+
+                If pkwRes.Status = PromptStatus.OK Then
+                    clrString = pkwRes.StringResult
+                Else
+                    Exit Sub
+                End If
+
+                If String.IsNullOrEmpty(clrString) Then Exit Sub
+
+                Select Case clrString
+                    Case Is = "Red"
+                        ed.WriteMessage(vbLf & "Pantone:1805C; RGB:175,39,47; ACI:242")
+                    Case Is = "Yellow"
+                        ed.WriteMessage(vbLf & "Pantone:122C;  RGB:254,209,65;  ACI:53")
+                    Case Is = "Green"
+                        ed.WriteMessage(vbLf & "Pantone:342C;  RGB:0,103,71;  ACI:116")
+                    Case Is = "Blue"
+                        ed.WriteMessage(vbLf & "Pantone:294C;  RGB:0,47,108;  ACI:156")
+                    Case Is = "Orange"
+                        ed.WriteMessage(vbLf & "Pantone:152C;  RGB:229,114,0;  ACI:30")
+                    Case Is = "Yellow-Green"
+                        ed.WriteMessage(vbLf & "Pantone:382C;  RGB:196,214,0;  ACI:52")
+                    Case Is = "Purple"
+                        ed.WriteMessage(vbLf & "Pantone:519C;  RGB:89,49,95;  ACI:219")
+                    Case Is = "Brown"
+                        ed.WriteMessage(vbLf & "Pantone:469C;  RGB:105,63,35;  ACI:27")
+                    Case Is = "Pink"
+                        ed.WriteMessage(vbLf & "Pantone:198C;  RGB:223,70,97;  ACI:13")
+                    Case Is = "Green-Pavement"
+                        ed.WriteMessage(vbLf & "Pantone:802C;  RGB:68,214,44;  ACI:82")
+                    Case Is = "Red-Pavement"
+                        ed.WriteMessage(vbLf & "Pantone:485C;  RGB:218,41,28;  ACI:22")
+                End Select
+
+                Exit Sub
+
+            Catch ex As Exception
+                ed.WriteMessage("Fatal Error.")
+            End Try
+
         End Sub
 
     End Module

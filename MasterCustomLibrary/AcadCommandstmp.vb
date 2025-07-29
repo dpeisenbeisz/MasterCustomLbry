@@ -1709,6 +1709,8 @@ Public Module LayerCommands
             .IgnoreWhitespace = True
             .Async = False
         End With
+
+
         Dim layset As AcdLayers
         Using xr As XmlReader = XmlReader.Create(xmlNameStr, sets)
             'Dim xsets As New XmlSerializerNamespaces
