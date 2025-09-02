@@ -555,7 +555,7 @@ Namespace AcCommon
             Dim ltName As String
             Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
                 Dim ltTbl As LinetypeTable = actrans.GetObject(dwgDB.LinetypeTableId, OpenMode.ForRead)
-                If ltID.IsValid Then
+                If ltTbl.Has(ltID) Then
                     Dim ob As Object = actrans.GetObject(ltID, OpenMode.ForRead)
                     If TypeOf ob Is LinetypeTableRecord Then
                         Dim ltr As LinetypeTableRecord = actrans.GetObject(ltID, OpenMode.ForRead)

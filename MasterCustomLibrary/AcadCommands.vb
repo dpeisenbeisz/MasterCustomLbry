@@ -76,7 +76,7 @@ Namespace AcCommands
             End Using
         End Sub
 
-        <CommandMethod("LISTARCDATA")>
+        <CommandMethod("LISTARCDATA", CommandFlags.UsePickSet)>
         Public Sub ListArcData()
             'by David Eisenbeisz
 
@@ -87,54 +87,87 @@ Namespace AcCommands
             Dim mypt2 As Point3d
             Dim mypt3 As Point3d
             Dim myArcID As ObjectId
-            Dim aD As ArcData
+            Dim aD As New ArcData
+            Dim pickedFirst As Boolean
+            Dim arcCol As New Collection
 
-            Dim pp0 As New PromptPointOptions(vbLf & "Select first point on arc or press escape to select arc entity: ")
-            Dim pp0Res As PromptPointResult = ed.GetPoint(pp0)
-            If pp0Res.Status = PromptStatus.OK Then
-                mypt1 = pp0Res.Value
-                Dim pp1 As New PromptPointOptions(vbLf & "Select second point on arc: ")
-                Dim pp1Res As PromptPointResult = ed.GetPoint(pp1)
-                If pp1Res.Status = PromptStatus.OK Then
-                    mypt2 = pp1Res.Value
-                    Dim pp2 As New PromptPointOptions(vbLf & "Select third point on arc: ")
-                    Dim pp2Res As PromptPointResult = ed.GetPoint(pp2)
-                    If pp2Res.Status = PromptStatus.OK Then
-                        mypt3 = pp2Res.Value
+            Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+            Dim acSSet As SelectionSet
+            Dim entObjID As ObjectId
+
+            If SelResult.Status = PromptStatus.OK Then
+                acSSet = SelResult.Value
+                If acSSet.Count > 0 Then
+                    Dim MyobjIDs() As ObjectId = acSSet.GetObjectIds
+                    entObjID = MyobjIDs(0)
+                End If
+                pickedFirst = True
+            Else
+                Dim pp0 As New PromptPointOptions(vbLf & "Select first point on arc or press escape to select arc entities: ")
+                Dim pp0Res As PromptPointResult = ed.GetPoint(pp0)
+                If pp0Res.Status = PromptStatus.OK Then
+                    mypt1 = pp0Res.Value
+                    Dim pp1 As New PromptPointOptions(vbLf & "Select second point on arc: ")
+                    Dim pp1Res As PromptPointResult = ed.GetPoint(pp1)
+                    If pp1Res.Status = PromptStatus.OK Then
+                        mypt2 = pp1Res.Value
+                        Dim pp2 As New PromptPointOptions(vbLf & "Select third point on arc: ")
+                        Dim pp2Res As PromptPointResult = ed.GetPoint(pp2)
+                        If pp2Res.Status = PromptStatus.OK Then
+                            mypt3 = pp2Res.Value
+                        Else
+                            ed.WriteMessage(vbLf & "Command Cancelled.")
+                            Exit Sub
+                        End If
                     Else
                         ed.WriteMessage(vbLf & "Command Cancelled.")
                         Exit Sub
                     End If
-                Else
-                    ed.WriteMessage(vbLf & "Command Cancelled.")
-                    Exit Sub
-                End If
-                aD = New ArcData(mypt1, mypt2, mypt3)
+                    aD = New ArcData(mypt1, mypt2, mypt3)
 
-            Else
-                Dim peo As New PromptEntityOptions(vbLf & "Select arc entity")
-                With peo
-                    .SetRejectMessage(vbLf & "Selected entity must be an arc.")
-                    .AddAllowedClass(GetType(Arc), True)
-                End With
-                Dim peR As PromptEntityResult = ed.GetEntity(peo)
-                If peR.Status = PromptStatus.OK Then
-                    myArcID = peR.ObjectId
                 Else
-                    ed.WriteMessage(vbLf & "Command Cancelled.")
-                    Exit Sub
-                End If
+                    Dim peo As New PromptEntityOptions(vbLf & "Select arc entity")
+                    With peo
+                        .SetRejectMessage(vbLf & "Selected entity must be an arc.")
+                        .AddAllowedClass(GetType(Arc), True)
+                    End With
+                    Dim peR As PromptEntityResult = ed.GetEntity(peo)
+                    If peR.Status = PromptStatus.OK Then
+                        myArcID = peR.ObjectId
+                    Else
+                        ed.WriteMessage(vbLf & "Command Cancelled.")
+                        Exit Sub
+                    End If
 
-                Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-                    Dim myArc As Arc = acTrans.GetObject(myArcID, OpenMode.ForRead)
-                    'Dim acArc As New CircularArc2d(New Point2d(myArc.StartPoint.X, myArc.StartPoint.Y), New Point2d(myArc.EndPoint.X, myArc.EndPoint.Y), GetArcBulge(myArc), False)
-                    Dim midPt As Point3d = myArc.GetPointAtDist(myArc.Length / 2)
-                    Dim tpt1 As New Point2d(myArc.StartPoint.X, myArc.StartPoint.Y)
-                    Dim tpt3 As New Point2d(myArc.EndPoint.X, myArc.EndPoint.Y)
-                    Dim tpt2 As New Point2d(midPt.X, midPt.Y)
-                    Dim acArc As New CircularArc2d(tpt1, tpt2, tpt3)
-                    aD = New ArcData(acArc, mypt1.Z)
-                End Using
+                    Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                        Dim myArc As Arc = acTrans.GetObject(myArcID, OpenMode.ForRead)
+                        'Dim acArc As New CircularArc2d(New Point2d(myArc.StartPoint.X, myArc.StartPoint.Y), New Point2d(myArc.EndPoint.X, myArc.EndPoint.Y), GetArcBulge(myArc), False)
+                        Dim midPt As Point3d = myArc.GetPointAtDist(myArc.Length / 2)
+                        Dim tpt1 As New Point2d(myArc.StartPoint.X, myArc.StartPoint.Y)
+                        Dim tpt3 As New Point2d(myArc.EndPoint.X, myArc.EndPoint.Y)
+                        Dim tpt2 As New Point2d(midPt.X, midPt.Y)
+                        Dim acArc As New CircularArc2d(tpt1, tpt2, tpt3)
+                        aD = New ArcData(acArc, mypt1.Z)
+                    End Using
+                End If
+            End If
+
+            If pickedFirst Then
+                If Not entObjID = ObjectId.Null Then
+                    Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                        Dim myEnt As Entity = acTrans.GetObject(entObjID, OpenMode.ForRead)
+                        If TypeOf myEnt Is Arc Then
+                            Dim myArc As Arc = TryCast(myEnt, Arc)
+                            If myArc Is Nothing Then Exit Sub
+                            Dim midPt As Point3d = myArc.GetPointAtDist(myArc.Length / 2)
+                            Dim tpt1 As New Point2d(myArc.StartPoint.X, myArc.StartPoint.Y)
+                            Dim tpt3 As New Point2d(myArc.EndPoint.X, myArc.EndPoint.Y)
+                            Dim tpt2 As New Point2d(midPt.X, midPt.Y)
+                            Dim acArc As New CircularArc2d(tpt1, tpt2, tpt3)
+                            aD = New ArcData(acArc, mypt1.Z)
+                        End If
+                    End Using
+                End If
             End If
 
             Dim sb As New StringBuilder
@@ -1056,7 +1089,7 @@ Namespace AcCommands
 
             Dim SelResult As PromptSelectionResult = ed.SelectImplied()
             If SelResult.Status = PromptStatus.Error Then
-                Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select blocks to change subenty color to ByLayer:")}
+                Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select blocks to change entity plotstyles to ByLayer:")}
                 SelResult = ed.GetSelection(Seloptions)
             Else
                 ed.SetImpliedSelection(New ObjectId(-1) {})
@@ -1738,7 +1771,7 @@ SkipIt:
             ed.WriteMessage(vbLf & "All blocks updated")
         End Sub
 
-        <CommandMethod("CPMLT", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
+        <CommandMethod("CPMLT", CommandFlags.UsePickSet)>
         Public Sub ChangePvmntMarkingsLineTypes()
             'by David Eisenbeisz (c)2023
 
@@ -1748,8 +1781,6 @@ SkipIt:
 
             Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction()
                 Dim blkTbl As BlockTable = actrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-                'Dim acSSet As SelectionSet = SelResult.Value
-                'Dim MyobjIDs As ObjectId() = acSSet.GetObjectIds
 
                 'Dim i As Integer = 0
                 For Each btrID As ObjectId In blkTbl
@@ -2307,7 +2338,7 @@ TryAgain:
 
     Public Module GeometryCommands
 
-        Private m_area As Double
+        Friend m_area As Double
 
         <CommandMethod("MKST")>
         Public Sub MkSt()
@@ -2383,6 +2414,11 @@ TryAgain:
                 Dim pl As New Polyline
                 Dim transVect As Vector3d = New Point3d(0, 0, 0).GetVectorTo(cPt)
 
+                Dim openShape As Boolean = YesNoQuery(vbLf & "Plot star as open shape?")
+                Dim linLst As New List(Of Line2d)
+                Dim acLinLst As New List(Of Line)
+
+                Dim typeMax As Integer = pts \ 2 - 2
 
                 If pts > 6 Then
 
@@ -2398,8 +2434,7 @@ TryAgain:
                         msg = vbLf & "Type 1, 2, or 3 star?"
                         pio2.UpperLimit = 3
                     Else
-                        msg = vbLf & "Type 1, 2, 3, or 4 star?"
-                        pio2.UpperLimit = 4
+                        msg = vbLf & "Type 1, 2, 3, or up to type " & typeMax.ToString & "?"
                     End If
 
                     With pio2
@@ -2423,110 +2458,138 @@ TryAgain:
                 End If
 
                 If sType = 1 Then
-                    Dim linLst As New List(Of Line2d)
 
                     For p As Integer = 0 To pts - 1
                         Dim r As Integer = (p + 2) Mod pts
                         linLst.Add(New Line2d(tips(p), tips(r)))
+                        acLinLst.Add(New Line(New Point3d(tips(p).X, tips(p).Y, 0), New Point3d(tips(r).X, tips(r).Y, 0)))
                         'z = (z + 2) Mod pts
                     Next
 
                     'Dim j As Integer = 0
 
-                    For j As Integer = 0 To pts - 1
-                        starPts.Add(tips(j))
-                        Dim testLn1 As Line2d = linLst(j)
-                        Dim m As Integer = (j + pts - 1) Mod pts
-                        Dim testLn2 As Line2d = linLst(m)
-                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
-                        starPts.Add(tempPt(0))
-                    Next
+                    If openShape Then
+                        For j As Integer = 0 To pts - 1
+                            starPts.Add(tips(j))
+                            Dim testLn1 As Line2d = linLst(j)
+                            Dim m As Integer = (j + pts - 1) Mod pts
+                            Dim testLn2 As Line2d = linLst(m)
+                            Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                            starPts.Add(tempPt(0))
+                        Next
+                    End If
 
                 ElseIf sType = 2 Then
-
-                    Dim linLst As New List(Of Line2d)
 
                     For z As Integer = 0 To pts - 1
                         Debug.Print(tips(z).ToString)
                         Dim r As Integer = (z + 3) Mod pts
                         linLst.Add(New Line2d(tips(z), tips(r)))
+                        acLinLst.Add(New Line(New Point3d(tips(z).X, tips(z).Y, 0), New Point3d(tips(r).X, tips(r).Y, 0)))
                     Next
 
                     'Dim j As Integer = 0
 
-                    For j As Integer = 0 To pts - 1
-                        starPts.Add(tips(j))
-                        Dim testLn1 As Line2d = linLst(j)
-                        Dim s As Integer = (j + pts - 2) Mod pts
-                        Dim testLn2 As Line2d = linLst(s)
-                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
-                        starPts.Add(tempPt(0))
-                    Next
+                    If openShape Then
+                        For j As Integer = 0 To pts - 1
+                            starPts.Add(tips(j))
+                            Dim testLn1 As Line2d = linLst(j)
+                            Dim s As Integer = (j + pts - 2) Mod pts
+                            Dim testLn2 As Line2d = linLst(s)
+                            Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                            starPts.Add(tempPt(0))
+                        Next
+                    End If
 
                 ElseIf sType = 3 Then
-                    Dim linLst As New List(Of Line2d)
 
                     For z As Integer = 0 To pts - 1
                         Debug.Print(tips(z).ToString)
                         Dim r As Integer = (z + 4) Mod pts
                         linLst.Add(New Line2d(tips(z), tips(r)))
+                        acLinLst.Add(New Line(New Point3d(tips(z).X, tips(z).Y, 0), New Point3d(tips(r).X, tips(r).Y, 0)))
                     Next
 
                     'Dim j As Integer = 0
 
-                    For j As Integer = 0 To pts - 1
-                        starPts.Add(tips(j))
-                        Dim testLn1 As Line2d = linLst(j)
-                        Dim s As Integer = (j + pts - 3) Mod pts
-                        Dim testLn2 As Line2d = linLst(s)
-                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
-                        starPts.Add(tempPt(0))
-                    Next
+                    If openShape Then
+                        For j As Integer = 0 To pts - 1
+                            starPts.Add(tips(j))
+                            Dim testLn1 As Line2d = linLst(j)
+                            Dim s As Integer = (j + pts - 3) Mod pts
+                            Dim testLn2 As Line2d = linLst(s)
+                            Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                            starPts.Add(tempPt(0))
+                        Next
+                    End If
 
                 Else
 
-                    Dim linLst As New List(Of Line2d)
-
                     For z As Integer = 0 To pts - 1
                         Debug.Print(tips(z).ToString)
-                        Dim r As Integer = (z + 5) Mod pts
+                        Dim r As Integer = (z + (sType + 1)) Mod pts
                         linLst.Add(New Line2d(tips(z), tips(r)))
+                        acLinLst.Add(New Line(New Point3d(tips(z).X, tips(z).Y, 0), New Point3d(tips(r).X, tips(r).Y, 0)))
                     Next
 
                     'Dim j As Integer = 0
 
-                    For j As Integer = 0 To pts - 1
-                        starPts.Add(tips(j))
-                        Dim testLn1 As Line2d = linLst(j)
-                        Dim s As Integer = (j + pts - 4) Mod pts
-                        Dim testLn2 As Line2d = linLst(s)
-                        Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
-                        starPts.Add(tempPt(0))
+                    If openShape Then
+                        For j As Integer = 0 To pts - 1
+                            starPts.Add(tips(j))
+                            Dim testLn1 As Line2d = linLst(j)
+                            Dim s As Integer = (j + pts - sType) Mod pts
+                            Dim testLn2 As Line2d = linLst(s)
+                            Dim tempPt As Point2d() = testLn1.IntersectWith(testLn2)
+                            starPts.Add(tempPt(0))
+                        Next
+                    End If
+
+                End If
+
+                If openShape Then
+                    For x As Integer = 0 To starPts.Count - 1
+                        pl.AddVertexAt(x, starPts(x), 0, 0, 0)
                     Next
+
+                    pl.Closed = True
+                    pl.TransformBy(Matrix3d.Displacement(transVect))
+
+                    If pts Mod 2 = 1 Then
+                        Dim rotAng As Double = centAngle / 4
+                        pl.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
+                    End If
+
+                    Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                        Dim blktbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                        Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blktbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+                        mdlSpace.AppendEntity(pl)
+                        acTrans.AddNewlyCreatedDBObject(pl, True)
+                        acTrans.Commit()
+                    End Using
+
+                    If pl IsNot Nothing Then pl.Dispose()
+                Else
+                    Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+                        For p As Integer = 0 To acLinLst.Count - 1
+                            Dim blktbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                            Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blktbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
+                            Dim myLine As Line = acLinLst(p)
+                            'Dim acLine As New Line(New Point3d(myLine.StartPoint.X, myLine.StartPoint.Y, 0), New Point3d(myLine.EndPoint.X, myLine.EndPoint.Y, 0))
+                            myLine.TransformBy(Matrix3d.Displacement(transVect))
+
+                            If pts Mod 2 = 1 Then
+                                Dim rotAng As Double = centAngle / 4
+                                myLine.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
+                            End If
+
+                            mdlSpace.AppendEntity(myLine)
+                            acTrans.AddNewlyCreatedDBObject(myLine, True)
+                        Next
+                        acTrans.Commit()
+                    End Using
+
                 End If
-
-                For x As Integer = 0 To starPts.Count - 1
-                    pl.AddVertexAt(x, starPts(x), 0, 0, 0)
-                Next
-
-                pl.Closed = True
-                pl.TransformBy(Matrix3d.Displacement(transVect))
-
-                If pts Mod 2 = 1 Then
-                    Dim rotAng As Double = centAngle / 4
-                    pl.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
-                End If
-
-                Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
-                    Dim blktbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-                    Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blktbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
-
-                    mdlSpace.AppendEntity(pl)
-                    acTrans.AddNewlyCreatedDBObject(pl, True)
-                    acTrans.Commit()
-                End Using
-
-                If pl IsNot Nothing Then pl.Dispose()
 
             Catch ex As Exception
                 MessageBox.Show(ex.Message)
@@ -2556,7 +2619,7 @@ TryAgain:
                     Exit Sub
                 End If
 
-                Dim cPt2d As Point2d = New Point2d(cPt.X, cPt.Y)
+                Dim cPt2d As New Point2d(cPt.X, cPt.Y)
 
                 Dim pdrao As New PromptPointOptions(vbLf & "pick the radius of the major axis of the ellipse")
                 With pdrao
@@ -3653,61 +3716,6 @@ NextPoint:
                 End Using
             End If
         End Sub
-
-        Public Function GetVertexCoords(dbObjId As ObjectId) As Object
-            Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
-            Dim ed As Editor = doc.Editor
-            Dim db As Database = doc.Database
-            Dim tr As Transaction = db.TransactionManager.StartTransaction()
-            Dim retVal As Object
-
-            Using tr
-                Dim obj As DBObject = tr.GetObject(dbObjId, OpenMode.ForRead)
-
-                If TypeOf obj Is Polyline Then
-                    Dim lwp As Autodesk.AutoCAD.DatabaseServices.Polyline = TryCast(obj, Autodesk.AutoCAD.DatabaseServices.Polyline)
-                    Dim vn As Integer = lwp.NumberOfVertices
-                    Dim retCol As New Point2dCollection
-                    For i As Integer = 0 To vn - 1
-                        Dim pt As Point2d = lwp.GetPoint2dAt(i)
-                        ed.WriteMessage(vbLf & pt.ToString())
-                        retCol.Add(pt)
-                    Next
-                    retVal = TryCast(retCol, Object)
-
-                ElseIf TypeOf obj Is Polyline2d Then
-                    Dim p2d As Polyline2d = TryCast(obj, Polyline2d)
-                    Dim retCol As New Point3dCollection
-                    For Each vId As ObjectId In p2d
-                        Dim v2d As Vertex2d = CType(tr.GetObject(vId, OpenMode.ForRead), Vertex2d)
-                        Dim pt As Point3d = v2d.Position
-                        ed.WriteMessage(vbLf & pt.ToString())
-                        retCol.Add(pt)
-                    Next
-                    retVal = TryCast(retCol, Object)
-
-                ElseIf TypeOf obj Is Polyline3d Then
-                    Dim p3d As Polyline3d = TryCast(obj, Polyline3d)
-                    Dim retCol As New Point3dCollection
-                    For Each vId As ObjectId In p3d
-                        Dim v3d As PolylineVertex3d = CType(tr.GetObject(vId, OpenMode.ForRead), PolylineVertex3d)
-                        Dim pt As Point3d = v3d.Position
-                        ed.WriteMessage(vbLf & pt.ToString())
-                        retCol.Add(pt)
-                    Next
-                    retVal = TryCast(retCol, Object)
-                Else
-                    retVal = Nothing
-                End If
-
-                Return retVal
-                tr.Commit()
-            End Using
-
-        End Function
-
-
-
     End Module
 
     Public Module LayerCommands
@@ -3771,7 +3779,7 @@ NextPoint:
         <CommandMethod("PICKVPFRZLAY", CommandFlags.UsePickSet)>
         Public Sub PickVPFrzLayer()
             'by David Eisenbeisz (c)2024
-            'freezes viewport layers by picking entities
+            'freezes viewport layers by picking entities and viewports
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
@@ -3997,7 +4005,9 @@ NextPoint:
             Dim sets As New XmlReaderSettings
 
             Dim badPstyles As New Dictionary(Of String, String)
+            Dim badLinetypes As New Dictionary(Of String, String)
             Dim hasBadPstyles As Boolean = False
+            Dim hasBadLinetypes As Boolean = False
 
             If ss IsNot Nothing Then
                 With sets
@@ -4015,7 +4025,6 @@ NextPoint:
                 End With
             End If
 
-
             Dim layset As AcdLayers
             Using xr As XmlReader = XmlReader.Create(xmlNameStr, sets)
                 'Dim xsets As New XmlSerializerNamespaces
@@ -4025,6 +4034,7 @@ NextPoint:
             End Using
             Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
                 Dim lTbl As LayerTable = actrans.GetObject(dwgDB.LayerTableId, OpenMode.ForRead)
+                Dim ltypeTbl As LinetypeTable = actrans.GetObject(dwgDB.LinetypeTableId, OpenMode.ForRead)
                 Dim lz As LayerTableRecord = TryCast(actrans.GetObject(dwgDB.LayerZero, OpenMode.ForRead), LayerTableRecord)
 
                 For i = 0 To layset.Count - 1
@@ -4036,38 +4046,52 @@ NextPoint:
                             If lTR = lz Then GoTo Skip
                             lTR.UpgradeOpen()
 
-                            If aLayer.Remove And Not String.IsNullOrEmpty(aLayer.MergeWith) Then
-                                If lTbl.Has(aLayer.MergeWith) Then MergeThenDeleteLayer(aLayer.Name, aLayer.MergeWith, True)
-                            ElseIf aLayer.Remove And String.IsNullOrEmpty(aLayer.MergeWith) Then
-                                DeleteMyLayer(aLayer.Name)
-                            ElseIf Not aLayer.Remove And Not String.IsNullOrEmpty(aLayer.MergeWith) Then
-                                If lTbl.Has(aLayer.MergeWith) Then MergeThenDeleteLayer(aLayer.Name, aLayer.MergeWith, False)
-                            Else
-                                With lTR
-                                    .ViewportVisibilityDefault = aLayer.VpVisDefault
-                                    .IsOff = aLayer.IsOff
-                                    .IsFrozen = aLayer.IsFrozen
-                                    .IsLocked = aLayer.IsLocked
-                                    .IsPlottable = aLayer.IsPlottable
-                                    .IsHidden = aLayer.IsHidden
-                                    Dim acdColor As Color = GetColor(aLayer.Color)
-                                    .Color = acdColor
-                                    .Transparency = GetTransparencyAlpha(CInt(aLayer.Transparency))
-                                    .LinetypeObjectId = GetLTId(aLayer.Linetype)
-                                    '.PlotStyleName = aLayer.PlotStyle
-                                    If Not dwgDB.PlotStyleMode Then
-                                        Try
-                                            .PlotStyleName = aLayer.PlotStyle
-                                        Catch
-                                            Err.Clear()
-                                            .PlotStyleName = "Normal"
-                                            hasBadPstyles = True
-                                            badPstyles.Add(aLayer.Name, aLayer.PlotStyle)
-                                        End Try
-                                    End If
-                                    .Description = aLayer.Description
-                                End With
+                            If aLayer.Remove Then
+                                If Not String.IsNullOrEmpty(aLayer.MergeWith) Then
+                                    If lTbl.Has(aLayer.MergeWith) Then MergeThenDeleteLayer(aLayer.Name, aLayer.MergeWith, True)
+                                ElseIf String.IsNullOrEmpty(aLayer.MergeWith) Then
+                                    DeleteMyLayer(aLayer.Name)
+                                End If
+                            ElseIf Not aLayer.remove Then
+
+                                If Not String.IsNullOrEmpty(aLayer.MergeWith) Then
+                                    If lTbl.Has(aLayer.MergeWith) Then MergeThenDeleteLayer(aLayer.Name, aLayer.MergeWith, False)
+                                End If
                             End If
+
+                            With lTR
+                                .ViewportVisibilityDefault = aLayer.VpVisDefault
+                                .IsOff = aLayer.IsOff
+                                .IsFrozen = aLayer.IsFrozen
+                                .IsLocked = aLayer.IsLocked
+                                .IsPlottable = aLayer.IsPlottable
+                                .IsHidden = aLayer.IsHidden
+                                Dim acdColor As Color = GetColor(aLayer.Color)
+                                .Color = acdColor
+                                .Transparency = GetTransparencyAlpha(CInt(aLayer.Transparency))
+                                Dim myLtId As ObjectId = GetLTId(aLayer.Linetype)
+                                If myLtId = ObjectId.Null Then
+                                    ed.WriteMessage(vbLf & "Using Continuous linetype for layer " & aLayer.Name)
+                                    .LinetypeObjectId = ltypeTbl("Continuous")
+                                    badLinetypes.Add(aLayer.Name, aLayer.Linetype)
+                                    hasBadLinetypes = True
+                                Else
+                                    .LinetypeObjectId = myLtId
+                                End If
+
+                                '.PlotStyleName = aLayer.PlotStyle
+                                If Not dwgDB.PlotStyleMode Then
+                                    Try
+                                        .PlotStyleName = aLayer.PlotStyle
+                                    Catch
+                                        Err.Clear()
+                                        .PlotStyleName = "Normal"
+                                        hasBadPstyles = True
+                                        badPstyles.Add(aLayer.Name, aLayer.PlotStyle)
+                                    End Try
+                                End If
+                                .Description = aLayer.Description
+                            End With
                         Else
                             Dim lTR As New LayerTableRecord
                             With lTR
@@ -4088,8 +4112,18 @@ NextPoint:
                                 Dim acdColor As Color = GetColor(aLayer.Color)
                                 .Color = acdColor
                                 .Transparency = GetTransparencyAlpha(CInt(aLayer.Transparency))
-                                .LinetypeObjectId = GetLTId(aLayer.Linetype)
+                                Dim myLtId As ObjectId = GetLTId(aLayer.Linetype)
+                                If myLtId = ObjectId.Null Then
+                                    ed.WriteMessage(vbLf & "Using Continuous linetype for layer " & aLayer.Name)
+                                    .LinetypeObjectId = ltypeTbl("Continuous")
+                                    badLinetypes.Add(aLayer.Name, aLayer.Linetype)
+                                    hasBadLinetypes = True
+                                Else
+                                    .LinetypeObjectId = myLtId
+                                End If
+
                                 .Description = aLayer.Description
+
                                 If Not dwgDB.PlotStyleMode Then
                                     Try
                                         .PlotStyleName = aLayer.PlotStyle
@@ -4113,29 +4147,198 @@ Skip:
                 actrans.Commit()
             End Using
 
-            If hasBadPstyles Then
+            If hasBadPstyles Or hasBadLinetypes Then
                 Dim dwgName As String = curDwg.Name
                 Dim folderName As String = Path.GetDirectoryName(dwgName)
                 Dim tFileName As String = folderName & "\BadLayers.txt"
                 If File.Exists(tFileName) Then Kill(tFileName)
 
                 Using sr As StreamWriter = My.Computer.FileSystem.OpenTextFileWriter(tFileName, False)
+                    sr.WriteLine("Bad Plotstyles (changed to Normal)")
                     sr.WriteLine("Layer:Plotstyle")
                     For Each ky As String In badPstyles.Keys
                         Dim outStr As String = ky & ":" & badPstyles(ky)
                         sr.WriteLine(outStr)
                     Next
+                    sr.WriteLine()
+                    sr.WriteLine("Bad Linetypes (changed to Continuous)")
+                    sr.WriteLine("Layer:Linetype")
+                    For Each ky As String In badLinetypes.Keys
+                        Dim outStr As String = ky & ":" & badLinetypes(ky)
+                        sr.WriteLine(outStr)
+                    Next
                 End Using
 
-                MessageBox.Show("One or more plotstyles could not be assigned to the imported layers. " _
-                            & "This occurs when a plotstyle is assigned to a layer before any objects in the drawing " _
-                            & "are assigned that plotstyle.  To work around this bug, ensure that all needed plotstyles " _
-                            & "are assigned to temporary objects before importing the layers.  A text file has been " _
-                            & "created in the drawing folder that has the names of the failed layers and the plotstyles that could not be assigned.  " _
-                            & "The Normal plotstyle has been assigned to these layers.")
+                Dim erMsg As String = ""
+
+                If hasBadPstyles Then
+                    erMsg = "One or more plotstyles could not be assigned to the imported layers. " _
+                             & "This occurs when a plotstyle is assigned to a layer before any objects in the drawing " _
+                             & "are assigned that plotstyle.  To work around this bug, ensure that all needed plotstyles " _
+                             & "are assigned to temporary objects before importing the layers.  A text file has been " _
+                             & "created in the drawing folder that has the names of the failed layers and the plotstyles that could not be assigned.  " _
+                             & "The Normal plotstyle has been assigned to these layers.  Run this command again after the missing plotsytles have been assigned to an object." & vbLf
+                End If
+
+                If hasBadLinetypes Then
+                    erMsg = erMsg & "One or more linetypes could not be assigned to the imported layers.  The linetypes for these layers has been changed to Continuous " _
+                               & "A text file has been created In the drawing folder that has the names Of the failed layers And the linetypes that could Not be assigned."
+                End If
+
+                MessageBox.Show(erMsg)
+
             End If
 
         End Sub
+
+        <CommandMethod("UpdateLayers")>
+        Public Sub UpdateExistingLayers()
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim dwgDB As Database = curDwg.Database
+            Dim xmlNameStr As String = GetMyXMLFileName()
+            If String.IsNullOrEmpty(xmlNameStr) Then Exit Sub
+            Dim mySchemaPath As String = "MasterCustomLibrary.LayerSchema1.xsd"
+
+            Dim ss As XmlSchemaSet = GetLayerSchemaSet("")
+
+            Dim sets As New XmlReaderSettings
+
+            Dim badPstyles As New Dictionary(Of String, String)
+            Dim badLinetypes As New Dictionary(Of String, String)
+            Dim hasBadPstyles As Boolean = False
+            Dim hasBadLinetypes As Boolean = False
+
+            If ss IsNot Nothing Then
+                With sets
+                    .ValidationType = ValidationType.Schema
+                    .Schemas = ss
+                    .CloseInput = True
+                    .IgnoreWhitespace = True
+                    .Async = False
+                End With
+            Else
+                With sets
+                    .CloseInput = True
+                    .IgnoreWhitespace = True
+                    .Async = False
+                End With
+            End If
+
+            Dim layset As AcdLayers
+            Using xr As XmlReader = XmlReader.Create(xmlNameStr, sets)
+                'Dim xsets As New XmlSerializerNamespaces
+                'xsets.Add("xs", "http://tempuri.org/LayerSchema1.xsd")
+                Dim xmlS As New XmlSerializer(GetType(AcdLayers), "http://tempuri.org/LayerSchema1.xsd")
+                layset = xmlS.Deserialize(xr)
+            End Using
+            Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                Dim lTbl As LayerTable = actrans.GetObject(dwgDB.LayerTableId, OpenMode.ForRead)
+                Dim ltypeTbl As LinetypeTable = actrans.GetObject(dwgDB.LinetypeTableId, OpenMode.ForRead)
+                Dim lz As LayerTableRecord = TryCast(actrans.GetObject(dwgDB.LayerZero, OpenMode.ForRead), LayerTableRecord)
+
+                For i = 0 To layset.Count - 1
+                    Dim aLayer As AcdLayer = layset.AcdLayer(i)
+                    If String.IsNullOrEmpty(aLayer.Name) Then GoTo Skip
+                    Try
+                        If Not lTbl.Has(aLayer.Name) Then
+                            Continue For
+
+                        ElseIf lTbl.Has(aLayer.Name) Then
+                            Dim lTR As LayerTableRecord = TryCast(actrans.GetObject(lTbl(aLayer.Name), OpenMode.ForRead), LayerTableRecord)
+                            If lTR = lz Then GoTo Skip
+                            lTR.UpgradeOpen()
+
+                            With lTR
+                                .ViewportVisibilityDefault = aLayer.VpVisDefault
+                                .IsOff = aLayer.IsOff
+                                .IsFrozen = aLayer.IsFrozen
+                                .IsLocked = aLayer.IsLocked
+                                .IsPlottable = aLayer.IsPlottable
+                                .IsHidden = aLayer.IsHidden
+                                Dim acdColor As Color = GetColor(aLayer.Color)
+                                .Color = acdColor
+                                .Transparency = GetTransparencyAlpha(CInt(aLayer.Transparency))
+                                Dim myLtId As ObjectId = GetLTId(aLayer.Linetype)
+                                If myLtId = ObjectId.Null Then
+                                    ed.WriteMessage(vbLf & "Using Continuous linetype for layer " & aLayer.Name)
+                                    .LinetypeObjectId = ltypeTbl("Continuous")
+                                    badLinetypes.Add(aLayer.Name, aLayer.Linetype)
+                                    hasBadLinetypes = True
+                                Else
+                                    .LinetypeObjectId = myLtId
+                                End If
+                                '.PlotStyleName = aLayer.PlotStyle
+                                If Not dwgDB.PlotStyleMode Then
+                                    Try
+                                        .PlotStyleName = aLayer.PlotStyle
+                                    Catch
+                                        Err.Clear()
+                                        .PlotStyleName = "Normal"
+                                        hasBadPstyles = True
+                                        badPstyles.Add(aLayer.Name, aLayer.PlotStyle)
+                                    End Try
+                                End If
+                                .Description = aLayer.Description
+                            End With
+
+                        End If
+
+                    Catch ex As Exception
+                        If ex.ErrorStatus = ErrorStatus.AmbiguousInput Then
+                            Err.Clear()
+                        End If
+                    End Try
+Skip:
+                Next
+                actrans.Commit()
+            End Using
+
+            If hasBadPstyles Or hasBadLinetypes Then
+                Dim dwgName As String = curDwg.Name
+                Dim folderName As String = Path.GetDirectoryName(dwgName)
+                Dim tFileName As String = folderName & "\BadLayers.txt"
+                If File.Exists(tFileName) Then Kill(tFileName)
+
+                Using sr As StreamWriter = My.Computer.FileSystem.OpenTextFileWriter(tFileName, False)
+                    sr.WriteLine("Bad Plotstyles (changed to Normal)")
+                    sr.WriteLine("Layer:Plotstyle")
+                    For Each ky As String In badPstyles.Keys
+                        Dim outStr As String = ky & ":" & badPstyles(ky)
+                        sr.WriteLine(outStr)
+                    Next
+                    sr.WriteLine()
+                    sr.WriteLine("Bad Linetypes (changed to Continuous)")
+                    sr.WriteLine("Layer:Linetype")
+                    For Each ky As String In badLinetypes.Keys
+                        Dim outStr As String = ky & ":" & badLinetypes(ky)
+                        sr.WriteLine(outStr)
+                    Next
+                End Using
+
+                Dim erMsg As String = ""
+
+                If hasBadPstyles Then
+                    erMsg = "One or more plotstyles could not be assigned to the imported layers. " _
+                             & "This occurs when a plotstyle is assigned to a layer before any objects in the drawing " _
+                             & "are assigned that plotstyle.  To work around this bug, ensure that all needed plotstyles " _
+                             & "are assigned to temporary objects before importing the layers.  A text file has been " _
+                             & "created in the drawing folder that has the names of the failed layers and the plotstyles that could not be assigned.  " _
+                             & "The Normal plotstyle has been assigned to these layers.  Run this command again after the missing plotsytles have been assigned to an object." & vbLf
+                End If
+
+                If hasBadLinetypes Then
+                    erMsg = erMsg & "One or more linetypes could not be assigned to the imported layers.  The linetypes for these layers has been changed to Continuous " _
+                               & "A text file has been created In the drawing folder that has the names Of the failed layers And the linetypes that could Not be assigned."
+                End If
+
+                MessageBox.Show(erMsg)
+
+            End If
+
+
+        End Sub
+
 
         <CommandMethod("EML")>
         Public Sub EraseMyLayers()
@@ -4179,7 +4382,7 @@ Skip:
             If layBox IsNot Nothing Then layBox.Dispose()
 
             For Each myLayer In myLayers
-                Call DeleteMyLayer(myLayer)
+                DeleteMyLayer(myLayer)
             Next
         End Sub
 
@@ -4916,7 +5119,6 @@ Skip:
 
         End Sub
 
-
         <CommandMethod("MSPT")>
         Public Sub ModelSpacePlot()
             'plots all block references in model space
@@ -5008,7 +5210,7 @@ Skip:
 
     Public Module MiscCommands
 
-        Private myClr As Autodesk.AutoCAD.Colors.Color
+        Friend myClr As Autodesk.AutoCAD.Colors.Color
 
         <CommandMethod("LLTS")>
         Public Sub ListLinetypes()
@@ -5482,8 +5684,6 @@ Skip:
 
         End Sub
 
-
-
         <CommandMethod("MDAR")>
         Public Sub MakeDirectionalArrows()
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -5674,8 +5874,7 @@ Skip:
             Dim ed As Editor = curDwg.Editor
             Dim ocm As ObjectContextManager = dwgDb.ObjectContextManager
             Dim occ As ObjectContextCollection = ocm.GetContextCollection("ACDB_ANNOTATIONSCALES")
-            Dim pso As PromptSelectionOptions = New PromptSelectionOptions()
-            pso.MessageForAdding = vbLf & "Select annotative objects"
+            Dim pso As New PromptSelectionOptions() With {.MessageForAdding = vbLf & "Select annotative objects"}
             Dim psr As PromptSelectionResult = ed.GetSelection(pso)
             If psr.Status <> PromptStatus.OK Then Return
             Dim objCount As Integer = 0, scaCount As Integer = 0
@@ -5730,8 +5929,7 @@ Skip:
             Dim SelResult As PromptSelectionResult = ed.SelectImplied()
 
             If SelResult.Status = PromptStatus.Error Then
-                Dim Seloptions As New PromptSelectionOptions
-                Seloptions.MessageForAdding = String.Format(vbLf & "Select dtext entities to mask:")
+                Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select dtext entities to mask:")}
                 SelResult = ed.GetSelection(Seloptions)
             Else
                 ed.SetImpliedSelection(New ObjectId(-1) {})
@@ -5851,21 +6049,6 @@ Skip:
 
         End Sub
 
-        Private Function PickColor() As Autodesk.AutoCAD.Colors.Color
-
-            Dim cd As New Autodesk.AutoCAD.Windows.ColorDialog()
-            Dim cr As System.Windows.Forms.DialogResult = cd.ShowDialog
-
-            If cr = DialogResult.OK Then
-                Dim clr As Autodesk.AutoCAD.Colors.Color = cd.Color
-                myClr = clr
-                Return clr
-            Else
-                Return Nothing
-            End If
-
-        End Function
-
         <CommandMethod("LCTA")>
         Public Sub ListCommandsFromThisAssembly()
             Dim dm As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
@@ -5873,6 +6056,17 @@ Skip:
             Dim asm As Assembly = Assembly.GetExecutingAssembly()
             Dim cmds As String() = GetCommands(asm, False)
 
+            For Each cmd As String In cmds
+                ed.WriteMessage(cmd & vbLf)
+            Next
+        End Sub
+
+        <CommandMethod("LFTA")>
+        Public Sub ListfunctionsFromThisAssembly()
+            Dim dm As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim ed As Editor = dm.MdiActiveDocument.Editor
+            Dim asm As Assembly = Assembly.GetExecutingAssembly()
+            Dim cmds As String() = GetFunctions(asm)
             For Each cmd As String In cmds
                 ed.WriteMessage(cmd & vbLf)
             Next
@@ -5887,10 +6081,10 @@ Skip:
 
             For Each asm As Assembly In asms
                 If Not asm.FullName.Contains("Microsoft.Expression.Interactions") Then
-                    'ed.WriteMessage(vbLf & asm.Location.ToString)
                     'If asm.FullName.Contains("PresentationFramework") Then GoTo Skipit
                     Try
                         Dim cmds() As String = GetCommands(asm, False)
+                        If cmds.Length > 0 Then ed.WriteMessage(vbLf & vbLf & asm.FullName.ToString)
                         For Each cmd As String In cmds
                             ed.WriteMessage(cmd & vbLf)
                         Next
@@ -5899,7 +6093,6 @@ Skip:
                         Return
                     End Try
                 End If
-
 Skipit:
             Next
 
@@ -5907,82 +6100,6 @@ Skipit:
 
 
         '<CommandMethod("LC")>
-        Public Sub ListCommands()
-            Dim cmds As StringCollection = New StringCollection()
-            Dim dm As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
-            Dim ed As Editor = dm.MdiActiveDocument.Editor
-            Dim asms As Assembly() = AppDomain.CurrentDomain.GetAssemblies()
-
-            For Each asm As Assembly In asms
-                cmds.AddRange(GetCommands(asm, False))
-            Next
-
-            For Each cmd As String In cmds
-                ed.WriteMessage(cmd & vbLf)
-            Next
-        End Sub
-
-        Private Function GetCommands(ByVal asm As Assembly, ByVal markedOnly As Boolean) As String()
-            Dim sc As StringCollection = New StringCollection()
-            Dim objs As Object() = asm.GetCustomAttributes(GetType(CommandClassAttribute), True)
-            Dim tps As Type()
-            Dim numTypes As Integer = objs.Length
-
-            If numTypes > 0 Then
-                tps = New Type(numTypes - 1) {}
-
-                For i As Integer = 0 To numTypes - 1
-                    Dim cca As CommandClassAttribute = TryCast(objs(i), CommandClassAttribute)
-
-                    If cca IsNot Nothing Then
-                        tps(i) = cca.Type
-                    End If
-                Next
-            Else
-                If Not asm.IsDynamic Then
-                    If markedOnly Then
-                        tps = New Type(-1) {}
-                    Else
-                        tps = asm.GetExportedTypes()
-                    End If
-
-                    For Each tp As Type In tps
-
-                        If tp IsNot Nothing Then
-
-                            Dim meths As MethodInfo()
-                            If tp.GetMethods() Is Nothing Then
-                                GoTo Skipit
-                            Else
-                                meths = tp.GetMethods()
-                            End If
-
-                            If meths IsNot Nothing Then
-                                'meths = tp.GetMethods
-                                'Dim meths() As MethodInfo = tp.GetMethods
-                                For Each meth As MethodInfo In meths
-                                    objs = meth.GetCustomAttributes(GetType(CommandMethodAttribute), True)
-                                    For Each obj As Object In objs
-                                        Dim attb As CommandMethodAttribute = CType(obj, CommandMethodAttribute)
-                                        sc.Add(attb.GlobalName)
-                                    Next
-                                Next
-                            Else
-                            End If
-Skipit:
-                        End If
-
-                    Next
-
-                End If
-
-            End If
-
-            Dim ret As String() = New String(sc.Count - 1) {}
-            sc.CopyTo(ret, 0)
-            Return ret
-
-        End Function
 
         <CommandMethod("MUTCDCOLORS")>
         Public Sub MUTCDcolors()
@@ -6051,7 +6168,212 @@ Skipit:
 
         End Sub
 
+        <CommandMethod("CLRTOENT", CommandFlags.UsePickSet)>
+        Public Sub AssignColorToEntity()
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgDb As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+
+            If SelResult.Status = PromptStatus.Error Then
+                Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select entities to change their color from ByLayer to direct assignment.")}
+                SelResult = ed.GetSelection(Seloptions)
+            Else
+                ed.SetImpliedSelection(New ObjectId(-1) {})
+            End If
+
+            If SelResult.Status = PromptStatus.OK Then
+                Dim acSSet As SelectionSet = SelResult.Value
+                Dim MyobjIDs As ObjectId() = acSSet.GetObjectIds
+                Try
+
+                    Using actrans As Transaction = dwgDb.TransactionManager.StartTransaction()
+                        Dim lyrTbl As LayerTable = actrans.GetObject(dwgDb.LayerTableId, OpenMode.ForRead)
+
+                        For Each objID As ObjectId In MyobjIDs
+                            Dim dbObj As DBObject = actrans.GetObject(objID, OpenMode.ForRead)
+                            If TypeOf dbObj Is Entity Then
+                                Dim ent As Entity = TryCast(dbObj, Entity)
+                                If ent Is Nothing Then Continue For
+                                If Not ent.IsWriteEnabled Then ent.UpgradeOpen()
+                                Dim lyrId As ObjectId = ent.LayerId
+                                Dim ltr As LayerTableRecord = actrans.GetObject(lyrId, OpenMode.ForRead)
+                                Dim clr As Color = ltr.Color
+                                ent.Color = clr
+                            End If
+                        Next
+                        actrans.Commit()
+                    End Using
+
+                Catch ex As Exception
+                    MessageBox.Show(ex.Message)
+                End Try
+
+            End If
+
+        End Sub
+
+        <CommandMethod("CTARGET", CommandFlags.UsePickSet)>
+        Public Sub MatchColorTarget()
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgDb As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+            Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+
+            If SelResult.Status = PromptStatus.Error Then
+                Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select target entities to change color:")}
+                SelResult = ed.GetSelection(Seloptions)
+            Else
+                ed.SetImpliedSelection(New ObjectId(-1) {})
+            End If
+
+            Dim peo2 As New PromptEntityOptions(vbLf & "Select source entity to copy color from:")
+            With peo2
+                .SetRejectMessage(vbLf & "Object must be an AutoCAD entity")
+                .AddAllowedClass(GetType(Entity), False)
+                .AllowNone = False
+            End With
+
+            Dim per2 As PromptEntityResult = ed.GetEntity(peo2)
+
+            Dim fromEntId As ObjectId
+            If per2.Status = PromptStatus.OK Then
+                fromEntId = per2.ObjectId
+            Else
+                Exit Sub
+            End If
+            Try
+                If SelResult.Status = PromptStatus.OK Then
+                    Dim acSSet As SelectionSet = SelResult.Value
+                    Dim MyobjIDs As ObjectId() = acSSet.GetObjectIds
+
+                    Using actrans As Transaction = dwgDb.TransactionManager.StartTransaction()
+                        Dim frmEnt As Entity = actrans.GetObject(fromEntId, OpenMode.ForRead)
+
+                        For Each toEntId As ObjectId In MyobjIDs
+                            Dim toEnt As Entity = actrans.GetObject(toEntId, OpenMode.ForWrite)
+                            toEnt.Color = frmEnt.Color
+                        Next
+                        actrans.Commit()
+                    End Using
+                Else
+                    Exit Sub
+                End If
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+            End Try
+
+        End Sub
+
+        <CommandMethod("CUSTOMHELP")>
+        Public Sub CustomHelp()
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim dwgDB As Database = curDwg.Database
+            Dim menuPath As String
+
+            Try
+                menuPath = HostApplicationServices.Current.FindFile("CustomNetAssemblyHelp.chm", dwgDB, FindFileHint.[Default])
+            Catch ex As Exception
+                menuPath = ""
+            End Try
+
+            If String.IsNullOrEmpty(menuPath) Then
+                MessageBox.Show("Help file Not found.  Select the folder where the menu file is stored")
+
+                Dim fp As String = GetMyFolderName()
+                If fp IsNot Nothing Then
+                    Dim menuP(1) As String
+                    menuP(0) = fp
+                    menuP(1) = "CustomNetAssemblyHelp.chm"
+                    menuPath = Path.Combine(menuP)
+                End If
+            End If
+
+            If File.Exists(menuPath) Then Help.ShowHelp(Nothing, menuPath, 0)
+
+        End Sub
+
+
+        Public Enum EHelp_MasterCustomLIbraryHelp
+
+            HELP_CommandList = 0
+            HELP_ArcCommands = 2
+            HELP_LISTARCDATA = 3
+            HELP_BlockCommands = 4
+            HELP_LABLKCUST = 5
+            HELP_LABLKS = 6
+            HELP_CHBLKCOLOR = 7
+            HELP_RENBLKS = 8
+            HELP_CBTZ = 9
+            HELP_CBBL = 10
+            HELP_CPSBL = 11
+            HELP_SetDwgsBase = 12
+            HELP_BLKDATA = 13
+            HELP_INSALL = 14
+            HELP_THUMBS = 15
+            HELP_PATF = 16
+            HELP_WBTF = 17
+            HELP_CBU = 18
+            HELP_CPMLT = 19
+            HELP_CPM = 20
+            HELP_CPMW = 21
+            HELP_SealSig = 22
+            HELP_GeometryCommands = 23
+            HELP_MKST = 24
+            HELP_MKSTE = 25
+            HELP_MKSTAR = 26
+            HELP_CBYA = 27
+            HELP_SBYA = 28
+            HELP_ETAN = 29
+            HELP_ITAN = 30
+            HELP_TANPT = 31
+            HELP_TESTVECTS = 32
+            HELP_RgnCentroid = 33
+            HELP_LV = 34
+            HELP_LayerCommands = 35
+            HELP_FRZVPLAY = 36
+            HELP_LAOFF = 37
+            HELP_LAON = 38
+            HELP_ExpLayers = 39
+            HELP_ImpLayers = 40
+            HELP_EML = 41
+            HELP_MDL = 42
+            HELP_PlotLayoutCommands = 43
+            HELP_ListStyleTables = 44
+            HELP_ListPstyles = 45
+            HELP_ShowPstyles = 46
+            HELP_IMVS = 47
+            HELP_RLO = 48
+            HELP_ALTS = 49
+            HELP_MSPT = 50
+            HELP_MiscCommands = 51
+            HELP_LLTS = 52
+            HELP_LLAYS = 53
+            HELP_LSTS = 54
+            HELP_EXLTS = 55
+            HELP_MAH = 56
+            HELP_MDAR = 57
+            HELP_RABCS = 58
+            HELP_LCTA = 59
+            HELP_LANC = 60
+            HELP_MUTCDCOLORS = 61
+            HELP_Wallsvb = 62
+            HELP_WALLSTPS = 63
+            HELP_WALLPROFILES = 64
+            HELP_FTLO = 65
+            HELP_FTBOT = 66
+            HELP_WallLine = 67
+        End Enum
+
+
+
     End Module
+
+
+
 
 End Namespace
 

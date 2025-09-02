@@ -17,6 +17,7 @@ Imports Autodesk.AutoCAD.PlottingServices
 Imports System.Xml.Schema
 Imports System.Reflection
 
+
 Namespace AcCommon
 
     Public Module Layers
@@ -279,9 +280,7 @@ Namespace AcCommon
                             If uR Then
                                 For k As Integer = 0 To delList.Count - 1
                                     Dim myEnt As Entity = CType(acTrans.GetObject(delList(k), OpenMode.ForWrite), Entity)
-                                    If myEnt IsNot Nothing Then
-                                        myEnt.Erase(True)
-                                    End If
+                                    If myEnt IsNot Nothing Then myEnt.Erase(True)
                                 Next
                             Else
                                 Exit Sub
@@ -307,7 +306,7 @@ Namespace AcCommon
             End Using
         End Sub
 
-        Public Function ExistLyrSet(ByVal LayName As String) As Boolean
+        Public Function SetCurrentLyr(ByVal LayName As String) As Boolean
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
 
@@ -588,7 +587,7 @@ Namespace AcCommon
 
         End Function
 
-        Private Function BTRfromRef(bRefId As ObjectId) As ObjectId
+        Public Function BTRfromRef(bRefId As ObjectId) As ObjectId
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
             Dim btrObjId As ObjectId
@@ -846,6 +845,7 @@ Namespace AcCommon
         End Function
 
         Public Function SelBlock() As String
+            'returns block name
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -938,6 +938,7 @@ Namespace AcCommon
         End Sub
 
         Public Function GetBlkName(bNameStr As String) As String
+            'creates a unique block name by changing trailing number until name is unique
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
@@ -970,37 +971,56 @@ Namespace AcCommon
         End Function
 
         Public Function GetNewFileName(fName As String, Optional filetype As String = "") As String
+            'returns a file name that is unique within the directory of a given file.
+            'Changes file extension to PNG or an optional assigned extension
 
             Dim fi As New FileInfo(fName)
             Dim di As New DirectoryInfo(fi.DirectoryName)
             Dim myfiles() As FileInfo = di.GetFiles
-            Dim stripName As String = Path.ChangeExtension(fi.Name, vbNullString)
-            Dim outName As String
+            Dim stripName As String = Path.GetFileNameWithoutExtension(fi.Name)
+            Dim outName As String = fName
+            Dim fNameParts() As String
+            ReDim fNameParts(1)
+            fNameParts(0) = di.FullName
+            fNameParts(1) = stripName & "-2"
 
             If System.IO.File.Exists(fName) Then
                 Dim newfile As String
+
                 If String.IsNullOrEmpty(filetype) Then
-                    newfile = di.FullName & "\" & stripName & "-2.png"
+                    newfile = Path.Combine(fNameParts)
+                    newfile = Path.ChangeExtension(newfile, "png")
+                    'newfile = di.FullName & "\" & stripName & "-2.png"
                 Else
-                    newfile = di.FullName & "\" & stripName & "." & filetype
+                    newfile = Path.Combine(fNameParts)
+                    newfile = Path.ChangeExtension(newfile, filetype)
+                    'newfile = di.FullName & "\" & stripName & "." & filetype
                 End If
 
                 Dim j As Integer = 3
 
-                If String.IsNullOrEmpty(filetype) Then
-                    Do While System.IO.File.Exists(newfile)
-                        newfile = di.FullName & "\" & stripName & "-" & j.ToString & ".png"
-                        j += 1
-                    Loop
-                Else
-                    Do While System.IO.File.Exists(newfile)
-                        newfile = di.FullName & "\" & stripName & "-" & j.ToString & "." & filetype
-                        j += 1
-                    Loop
+                If File.Exists(newfile) Then
+                    If String.IsNullOrEmpty(filetype) Then
+                        Do While System.IO.File.Exists(newfile)
+                            fNameParts(1) = stripName & "-" & j.ToString
+                            newfile = Path.Combine(fNameParts)
+                            newfile = Path.ChangeExtension(newfile, "png")
+                            'newfile = di.FullName & "\" & stripName & "-" & j.ToString & ".png"
+                            j += 1
+                        Loop
+                    Else
+                        Do While System.IO.File.Exists(newfile)
+                            fNameParts(1) = stripName & "-" & j.ToString
+                            newfile = Path.Combine(fNameParts)
+                            newfile = Path.ChangeExtension(newfile, filetype)
+                            'newfile = di.FullName & "\" & stripName & "-" & j.ToString & "." & filetype
+                            j += 1
+                        Loop
+                    End If
+                    outName = newfile
                 End If
-                outName = newfile
             Else
-                outName = fName
+
             End If
 
             Return outName
@@ -1008,6 +1028,8 @@ Namespace AcCommon
         End Function
 
         Public Function SelBlockRef() As ObjectId
+            'returns objectID of a selected block reference.
+
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
@@ -1034,6 +1056,8 @@ Namespace AcCommon
         End Function
 
         Public Function SubBlockExists(blkName As String, sbName As String) As Boolean
+            'looks for nested block in another block's table record
+
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
@@ -1068,6 +1092,7 @@ Namespace AcCommon
         End Function
 
         Public Function ChangeVisState(bkRefID As ObjectId, visState As String, PropName As String) As Boolean
+            'changes visibility state of a block reference
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
@@ -1099,6 +1124,7 @@ Namespace AcCommon
         End Function
 
         Public Function ChangeVisState(acTrans As Transaction, bkRefID As ObjectId, visState As String, PropName As String) As Boolean
+            'changes visibility state of a block reference
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
@@ -1135,6 +1161,7 @@ Namespace AcCommon
         Private m_fldr As String
 
         Public Function GetSchemaSet(SchemaResourceName As String, Optional xmlNameSpace As String = "") As XmlSchemaSet
+            'extracts xml schema from this assembly
 
             'Dim myXml As New XmlDocument
             'myXml.Load(XMLName)
@@ -1146,7 +1173,7 @@ Namespace AcCommon
             Dim xsdFileName As String
 
             Try
-                'create a textreader object to read the XSD file embedded in the Kinematics assembly
+                'create a textreader object to read the XSD file embedded in this assembly
                 Dim rdr As TextReader = New StreamReader(Assembly.GetExecutingAssembly().GetManifestResourceStream(SchemaResourceName))
                 'use a textwriter object to write the XSD file to the temporary file
                 Dim wr As TextWriter = New StreamWriter(tmpFilePath, False)
@@ -1194,8 +1221,8 @@ Namespace AcCommon
 
         End Function
 
-
         Public Function GetEmbeddedResource(ResourceName As String) As String
+            'extracts a textfile resource from this assembly
 
             'create a temporary text file to use for output
             Dim tmpFilePath As String = Path.GetTempFileName()
@@ -1219,6 +1246,8 @@ Namespace AcCommon
         End Function
 
         Public Function ReturnValidFileName(Value() As Char) As String
+            'tests filename for validity
+
             Dim TempStringBuilder As New StringBuilder
             For i = 0 To Value.Length - 1
                 If Not ("^\.@~".Contains(Value(i))) And Not Value(i) = ChrW(34) Then
@@ -1275,7 +1304,55 @@ skipit:
 
         End Function
 
+        Public Function GetMyFileName(filtrString As String, diaTitle As String) As String
+            'function for getting filename of a particular file type.
+
+            Try
+                Dim fName As String = ""
+
+                'declare a new open file dialog
+                Dim fDialog As New OpenFileDialog()
+                With fDialog
+                    .Reset()
+                    .Filter = filtrString _
+                & "All Files (*.*)|*.*"
+                    .FilterIndex = 1
+                    '.InitialDirectory = "\\EESSERVER\datadisk\LITIGATION\Active Cases"
+                    .Title = diaTitle
+                    .CheckFileExists = True
+                End With
+
+                'get the dialog result or return nothing
+                Dim xmlResult As DialogResult = fDialog.ShowDialog()
+
+                If xmlResult = DialogResult.Cancel Then
+                    MessageBox.Show("Error. File not selected")
+                    Return ""
+                    Exit Function
+
+                ElseIf xmlResult = DialogResult.OK Then
+                    fName = fDialog.FileName
+                Else
+                    MessageBox.Show("Error. File not selected")
+                    Return ""
+                    Exit Function
+                End If
+
+skipit:
+                'return the name and path of the file
+                Return fName
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message & vbLf & "Error selecting File.")
+                Return ""
+                Exit Function
+            End Try
+
+        End Function
+
         Public Function GetFileNameSameAsDWG(Optional filetype As String = "") As String
+
+            'gets a filename same as current dwg but with different extension
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgName As String = curDwg.Name
@@ -1445,7 +1522,6 @@ skipit:
 
         End Function
 
-
         Public Function GetMyXSDFileName() As String
 
             'function for getting filename of schema file.
@@ -1494,6 +1570,8 @@ skipit:
         End Function
 
         Public Function PrettyXml(ByVal str As String, ByVal Optional settings As XmlWriterSettings = Nothing) As String
+            'formats xml string with indents and line breaks
+
             If String.IsNullOrWhiteSpace(str) Then Return str
 
             Try
@@ -1528,6 +1606,7 @@ skipit:
         End Function
 
         Public Function AllDwgFilesInFolder(fpath As String, recurseDir As Boolean) As FileInfo()
+            'gets a list of all drawings in a folder as an array of fileinfo vbjects
 
             If String.IsNullOrEmpty(fpath) Then
                 Return Nothing
@@ -1556,11 +1635,11 @@ skipit:
 
     End Module
 
-
-
-    Public Module TextDIms
+    Public Module TextDims
 
         Public Function NewDimStyle(dimName As String) As ObjectId
+            'creates a new dimension style
+
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim db As Database = curDwg.Database
 
@@ -1592,6 +1671,8 @@ skipit:
         End Function
 
         Public Function AddMyTstyle(ByVal tStyleName As String) As String
+            'asks user to pick current drawing textstyle, pick an entity for textstyle, select a textstyle from a list,
+            'or create a new textstyle
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
@@ -1729,6 +1810,7 @@ tryAgain:
         End Function
 
         Public Function PickSysFnt() As String
+            'lets user pick a system font
 
             Dim fntPicker As New FontPicker
             Dim fntName As String
@@ -1755,6 +1837,8 @@ tryAgain:
         End Function
 
         Public Function TStyleCreate(tempStyleName As String, Optional sysFontName As String = "") As String
+
+            'creates a new non-annotative textstyle
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
@@ -1811,6 +1895,7 @@ tryAgain:
         End Function
 
         Public Function PickStyleName() As String
+            'function for picking a textstyle name
 
             Dim fntPicker As New FontPicker
             Dim styleName As String
@@ -1834,6 +1919,8 @@ tryAgain:
         End Function
 
         Public Function SetMyDimStyle(dsName As String) As ObjectId
+            'sets current dimstyle and returns its objectid
+            'if dimstyle does not exist, create a new dimstyle with the given name
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -1851,7 +1938,7 @@ tryAgain:
                 Dim dsRec0 As ObjectId = DwgDB.Dimstyle
                 Dim cDimRec As DimStyleTableRecord
 
-                If dSTbl.Has(dsName) = False Then
+                If Not dSTbl.Has(dsName) Then
                     If dSTbl.IsWriteEnabled = False Then dSTbl.UpgradeOpen()
                     cDimRec = New DimStyleTableRecord() With {.Name = dsName}
                     dsId = dSTbl.Add(cDimRec)
@@ -1863,16 +1950,7 @@ tryAgain:
 
                 Dim dsCopy As DimStyleTableRecord = DwgDB.GetDimstyleData
 
-                With cDimRec
-                    .Dimarcsym = 2
-                    .Dimse1 = True
-                    .Dimse2 = True
-                    '.Dimblk1 = GetArrowObjectId("_None")
-                    .Dimblk2 = ObjectId.Null
-                End With
-
-                Return cDimRec.ObjectId
-
+                Return dsId
                 acTrans.Commit()
             End Using
 
@@ -1881,6 +1959,9 @@ tryAgain:
     End Module
 
     Public Module Properties
+
+        Private m_ltFname As String
+
         Public Function DwgVersion(filename As String) As String
             Using reader As New StreamReader(filename)
                 Select Case reader.ReadLine().Substring(0, 6)
@@ -1904,9 +1985,8 @@ tryAgain:
             End Using
         End Function
 
-
-
         Friend Function GetTransparency(trans As Integer) As Transparency
+            'gets the transparency value of an integer
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
             Dim dwgDB As Database = curDwg.Database
@@ -1921,6 +2001,7 @@ tryAgain:
         End Function
 
         Public Function GetTransparencyAlpha(ByVal idx As Integer) As Transparency
+            'gets the alpha value of a tranpsarency
             Dim transparencies As Dictionary(Of Integer, Byte) = TransToAlpha()
             If transparencies.ContainsKey(idx) Then
                 Return New Autodesk.AutoCAD.Colors.Transparency(transparencies(idx))
@@ -1930,6 +2011,8 @@ tryAgain:
         End Function
 
         Friend Function TransToAlpha() As Dictionary(Of Integer, Byte)
+            'returns the alpha of a transparency value
+
             Dim transp As New Dictionary(Of Integer, Byte)
             transp(0) = 255
             transp(1) = 252
@@ -2036,6 +2119,8 @@ tryAgain:
         End Function
 
         Public Function GetColor(colorStr As String) As Color
+            'returns an autocad color from a string
+
             If String.IsNullOrEmpty(colorStr) Then
                 Return Nothing
                 Exit Function
@@ -2074,39 +2159,68 @@ tryAgain:
             Return acdColor
 
         End Function
-        Public Function GetLTId(ltName As String) As ObjectId
-            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
-            Dim ed As Editor = curDwg.Editor
-            Dim dwgDB As Database = curDwg.Database
-            Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
-                Dim ltTbl As LinetypeTable = actrans.GetObject(dwgDB.LinetypeTableId, OpenMode.ForRead)
-                Dim obID As ObjectId
-                If ltTbl.Has(ltName) Then
-                    obID = ltTbl(ltName)
-                    Return obID
-                Else
-                    Return ltTbl("Continuous")
-                End If
-            End Using
-        End Function
 
-        Public Function GetMatId(ltName As String) As ObjectId
+        Public Function GetLTId(ltName As String) As ObjectId
+            'gets a linetype's objectid from its name
+
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
             Dim dwgDB As Database = curDwg.Database
+            Dim ltId As ObjectId
+
             Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
                 Dim ltTbl As LinetypeTable = actrans.GetObject(dwgDB.LinetypeTableId, OpenMode.ForRead)
-                Dim obID As ObjectId
                 If ltTbl.Has(ltName) Then
-                    obID = ltTbl(ltName)
-                    Return obID
+                    ltId = ltTbl(ltName)
                 Else
-                    Return Nothing
+                    Try
+                        dwgDB.LoadLineTypeFile(ltName, "Acad.lin")
+                        ltId = ltTbl(ltName)
+
+                    Catch ex As Exception
+                        If String.IsNullOrEmpty(m_ltFname) Then
+                            Dim linFname As String = GetMyFileName("AutoCAD Linetype File (*.lin)|*.lin|", "Select Linetype File")
+
+                            If Not String.IsNullOrEmpty(linFname) AndAlso File.Exists(linFname) Then
+                                Try
+                                    dwgDB.LoadLineTypeFile(ltName, linFname)
+                                    m_ltFname = linFname
+                                    ltId = ltTbl(ltName)
+                                Catch ex2 As Exception
+                                    ed.WriteMessage(vbLf & "Linetype not defined in the selected file or bad linetype definition.")
+                                    ltId = ObjectId.Null
+                                End Try
+                            Else
+                                ed.WriteMessage(vbLf & "Linetype definition file not found.")
+                                ltId = ObjectId.Null
+                            End If
+                        Else
+                            If File.Exists(m_ltFname) Then
+                                Try
+                                    dwgDB.LoadLineTypeFile(ltName, m_ltFname)
+                                    ltId = ltTbl(ltName)
+                                Catch ex3 As Exception
+                                    m_ltFname = ""
+                                    ed.WriteMessage(vbLf & "Linetype not defined in " & m_ltFname & " or bad linetype definition.")
+                                    ltId = ObjectId.Null
+                                End Try
+                            Else
+                                ed.WriteMessage(vbLf & "Linetype definition file " & m_ltFname & " not found.")
+                                m_ltFname = ""
+                                ltId = ObjectId.Null
+                            End If
+                        End If
+                    End Try
                 End If
+
+                Return ltId
+
             End Using
         End Function
 
         Public Function GetPlotStyleID(psName As String) As ObjectId
+            'gets a plotstyle objectid from its name
+
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
             Dim dwgDB As Database = curDwg.Database
@@ -2118,17 +2232,169 @@ tryAgain:
 
                 obID = DirectCast(psDic(psName), ObjectId)
 
-                If Not obID = ObjectId.Null Then
-                    Return obID
-                Else
-                    Return Nothing
-                End If
+                Return If(Not obID = ObjectId.Null, obID, Nothing)
                 actrans.Commit()
 
             End Using
 
         End Function
 
+        Public Function PickColor() As Autodesk.AutoCAD.Colors.Color
+            'lets user pick a color from the autocad color dialog
+
+            Dim cd As New Autodesk.AutoCAD.Windows.ColorDialog()
+            Dim cr As System.Windows.Forms.DialogResult = cd.ShowDialog
+
+            If cr = DialogResult.OK Then
+                Dim clr As Autodesk.AutoCAD.Colors.Color = cd.Color
+                AcCommands.MiscCommands.myClr = clr
+                Return clr
+            Else
+                Return Nothing
+            End If
+
+        End Function
+
+        Public Sub ListCommands()
+            'lists commands in this assembly and returns as a collection
+
+            Dim cmds As New StringCollection()
+            Dim dm As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim ed As Editor = dm.MdiActiveDocument.Editor
+            Dim asms As Assembly() = AppDomain.CurrentDomain.GetAssemblies()
+
+            For Each asm As Assembly In asms
+                cmds.AddRange(GetCommands(asm, False))
+            Next
+
+            For Each cmd As String In cmds
+                ed.WriteMessage(cmd & vbLf)
+            Next
+        End Sub
+
+        Friend Function GetCommands(ByVal asm As Assembly, ByVal markedOnly As Boolean) As String()
+            'returns commands in this assembly as an array of strings
+
+            Dim sc As New StringCollection()
+            Dim objs As Object() = asm.GetCustomAttributes(GetType(CommandClassAttribute), True)
+            Dim tps As Type()
+            Dim numTypes As Integer = objs.Length
+
+            If numTypes > 0 Then
+                tps = New Type(numTypes - 1) {}
+
+                For i As Integer = 0 To numTypes - 1
+                    Dim cca As CommandClassAttribute = TryCast(objs(i), CommandClassAttribute)
+
+                    If cca IsNot Nothing Then
+                        tps(i) = cca.Type
+                    End If
+                Next
+            Else
+                If Not asm.IsDynamic Then
+                    If markedOnly Then
+                        tps = New Type(-1) {}
+                    Else
+                        tps = asm.GetExportedTypes()
+                    End If
+
+                    For Each tp As Type In tps
+
+                        If tp IsNot Nothing Then
+
+                            Dim meths As MethodInfo()
+                            If tp.GetMethods() Is Nothing Then
+                                GoTo Skipit
+                            Else
+                                meths = tp.GetMethods()
+                            End If
+
+                            If meths IsNot Nothing Then
+                                'meths = tp.GetMethods
+                                'Dim meths() As MethodInfo = tp.GetMethods
+                                For Each meth As MethodInfo In meths
+                                    objs = meth.GetCustomAttributes(GetType(CommandMethodAttribute), True)
+                                    For Each obj As Object In objs
+                                        Dim attb As CommandMethodAttribute = CType(obj, CommandMethodAttribute)
+                                        sc.Add(attb.GlobalName)
+                                    Next
+                                Next
+                            Else
+                            End If
+Skipit:
+                        End If
+
+                    Next
+
+                End If
+
+            End If
+
+            Dim ret As String() = New String(sc.Count - 1) {}
+            sc.CopyTo(ret, 0)
+            Return ret
+
+        End Function
+
+        Friend Function GetFunctions(ByVal asm As Assembly) As String()
+            'returns functions in this assembly as an array of strings
+
+            Dim sc As New StringCollection()
+            For Each myMod As System.Reflection.Module In asm.GetModules
+
+            Next
+
+            Dim tps As Type()
+
+            If Not asm.IsDynamic Then
+
+                tps = asm.GetExportedTypes()
+
+
+                For Each tp As Type In tps
+                    If tp IsNot Nothing Then
+                        Dim meths As MethodInfo()
+                        If tp.IsPublic Then
+                            If tp.IsClass And tp.Namespace.ToString = "MasterCustomLibrary.AcCommon" Then
+                                If tp.GetMethods() Is Nothing Then
+                                    GoTo Skipit
+                                Else
+                                    meths = tp.GetMethods()
+                                End If
+
+                                If meths IsNot Nothing Then
+                                    'meths = tp.GetMethods
+                                    'Dim meths() As MethodInfo = tp.GetMethods
+                                    For Each meth As MethodInfo In meths
+                                        If meth.IsPublic Then
+                                            Dim thisType As Type = meth.ReturnType
+                                            If thisType IsNot GetType(System.Void) Then
+                                                Dim params() As ParameterInfo = meth.GetParameters
+                                                Dim pline As String = ""
+                                                For Each param As ParameterInfo In params
+                                                    pline &= "," & param.Name
+                                                Next
+                                                Dim nm As String = meth.Name
+                                                Dim ln As String = nm & pline & "," & thisType.ToString
+                                                sc.Add(ln)
+                                            End If
+                                        End If
+                                    Next
+                                Else
+
+                                End If
+Skipit:
+                            End If
+                        End If
+                    End If
+                Next
+            End If
+
+            Dim ret As String() = New String(sc.Count - 1) {}
+            sc.CopyTo(ret, 0)
+            Return ret
+
+        End Function
 
     End Module
 
@@ -2155,6 +2421,8 @@ tryAgain:
         End Function
 
         Public Function GetTangentPoints(ptP As Point3d, c1 As Circle, Optional verbose As Boolean = False) As Point2dCollection
+
+            'gets points on a circle that are tangent to an exterior point
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
@@ -2239,6 +2507,8 @@ tryAgain:
         End Function
 
         Public Function GetTangentPoints(ptP As Point3d, dbObj As DBObject) As Point2dCollection
+
+            'gets points on a circle that are tangent to an exterior point
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
@@ -2352,6 +2622,7 @@ tryAgain:
         End Function
 
         Public Function ExtTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject, Optional verbose As Boolean = False) As Point2dCollection
+            'gets any existing exterior tangents of two circles
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -2656,6 +2927,7 @@ tryAgain:
         End Function
 
         Public Function IntTan2Circles(dbObj1 As DBObject, DBObj2 As DBObject, Optional verbose As Boolean = False) As Point2dCollection
+            'gets the interior tangent points on two circles 
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -2882,13 +3154,17 @@ tryAgain:
 
             Return poly.ObjectId
         End Function
+
         Public Function GetArcBulge(ByVal arc As Arc) As Double
+            'gets the bulge value of an arc
+
             Dim deltaAng As Double = arc.EndAngle - arc.StartAngle
             'If deltaAng < 0 Then deltaAng += 2 * Math.PI
             Return Tan(deltaAng * 0.25)
         End Function
 
         Public Function GetTangentBulge(v1 As Vector2d, v2 As Vector2d) As Double
+            'gets bulge from the tangent of an arc
 
             Dim blg As Double
             If v1 = v2 Then
@@ -2903,7 +3179,6 @@ tryAgain:
         End Function
 
         Public Function GetTangentBulge(l1 As Line, l2 As Line) As Double
-
             'get tangent bulge between two lines
 
             Dim blg As Double
@@ -2928,7 +3203,6 @@ tryAgain:
         End Function
 
         Public Function GetTangentBulge(vert1 As Vertex2d, vert2 As Vertex2d, vert3 As Vertex2d, vert4 As Vertex2d) As Double
-
             'get tangent bulge between polyline segments
 
             Dim blg As Double
@@ -3085,6 +3359,7 @@ tryAgain:
         End Function
 
         Public Function Roundmult(numb As Double, rMult As Long) As Long
+            'rounds a number to a multiple of some integer
 
             Dim remRad As Double = numb Mod rMult
             Dim radlong As Long
@@ -3107,7 +3382,7 @@ tryAgain:
         End Function
 
         Public Function UnitVector3d(vect As Vector3d) As Vector3d
-
+            'returns the unit vector of any 3d vector
             Dim unitVect As Vector3d
             Try
                 'UnitVector components
@@ -3125,6 +3400,7 @@ tryAgain:
         End Function
 
         Public Function UnitVector2d(vect As Vector2d) As Vector2d
+            'returns the unit vector of any 2d vector
 
             Dim unitVect As Vector2d
             Try
@@ -3141,6 +3417,7 @@ tryAgain:
         End Function
 
         Public Function MakeNewUCS(orgPt As Point3d, xAxPt As Point3d, ucsName As String) As Boolean
+            'creates a new ucs from an origin point and a point on the x-axis
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -3281,6 +3558,7 @@ tryAgain:
 
         End Function
         Public Function GetUCSMatrix2D(oPt As Point3d, xPt As Point3d) As Matrix2d
+            'gets a 2D UCS matrix from an origin point and a point on the x axis.
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -3331,6 +3609,7 @@ tryAgain:
 
         End Function
         Public Function GetUCSMatrix3D(orgPt As Point3d, xAxPt As Point3d) As Matrix3d
+            'gets a 3D UCS matrix from an origin point and a point on the x axis.
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
@@ -3394,6 +3673,7 @@ tryAgain:
         End Function
 
         Public Function GetNewUCSName(uName As String) As String
+            'Gets a unique ucs name
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
@@ -3426,6 +3706,7 @@ UCSExists:
         End Function
 
         Public Function RegionCentroid(tReg As Region) As Point2d
+            'gets a point2d that is the centroid of a region
             Try
                 Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
                 Dim DwgDB As Database = CurDwg.Database
@@ -3441,6 +3722,7 @@ UCSExists:
         End Function
 
         Public Function GetVertices(cvObId As ObjectId) As Point3dCollection
+            'gets all vertices in a polyline as a collection of points
 
             Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = doc.Editor
@@ -3494,6 +3776,7 @@ UCSExists:
         End Function
 
         Public Function MkArrowHead(p1 As Point3d, p2 As Point3d, paramA As Double) As ObjectId
+            'makes a caltrans arrowhead
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
@@ -3587,6 +3870,7 @@ UCSExists:
             End Using
 
         End Function
+
         Public Sub MkDirectionalArrowType1(p1 As Point3d, aobj As ArrowObj)
             'Creates directional arrow types 1 through 3
             'per California Sign Specifications Appendix
@@ -3706,7 +3990,7 @@ UCSExists:
         End Sub
 
         Public Sub MkDirectionalArrowType4(p1 As Point3d, aobj As ArrowObj)
-            'Creates a 1 line horizontal, vertical, or diagonal directional arrow
+            'Creates a 1 line horizontal, vertical, or diagonal directional arrow (type 4)
             'per California Sign Specifications Appendix
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -3818,11 +4102,13 @@ OtherSide:
             End Using
 
         End Sub
+
     End Module
 
     Public Module PlotLayout
 
         Public Sub PlotDirect(pSet As PlotSettings, psetVal As PlotSettingsValidator, ByVal toFile As String)
+            'plots directly from a layout
 
             '' Get the current document and database
             Dim acDoc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -3859,7 +4145,6 @@ OtherSide:
                     .MediaMatchingPolicy = MatchingPolicy.MatchEnabled
                     .Validate(acPlInfo)
                 End With
-
 
                 '' Check whether a plot job is in progress
                 If PlotFactory.ProcessPlotState = Autodesk.AutoCAD.PlottingServices.
@@ -3940,6 +4225,7 @@ OtherSide:
         End Function
 
         Public Function LayoutTabList() As SortedDictionary(Of Integer, String)
+            'gets a dictionary of existing layouts using their order index as the key
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
@@ -3959,6 +4245,7 @@ OtherSide:
         End Function
 
         Public Function GetSheetName(psetVal As PlotSettingsValidator, pset As PlotSettings) As String
+            'gets a list of available sheets in a plot setup
 
             Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
             Dim mySheet As String
@@ -4077,7 +4364,7 @@ TryAgain:
         End Sub
 
         Public Function CreateVP(vtr As ViewTableRecord, vpLayerName As String, hsize As Double, vsize As Double, acTrans As Transaction, pset As PlotSettings, sheetNm As String) As ObjectId
-
+            'creates viewports in existing layouts
             'used by the ImageMasterViews sub
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -4133,6 +4420,7 @@ TryAgain:
         End Function
 
         Public Function GetPlotSetup() As String
+            'lets user pick an available plot setup
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
@@ -4162,6 +4450,7 @@ TryAgain:
         End Function
 
         Public Function GetPrinter(psetval As PlotSettingsValidator) As String
+            'lets user pick a plotter
 
             Dim myPlotters As StringCollection = psetval.GetPlotDeviceList
             Dim myPtr As String
@@ -4201,6 +4490,7 @@ TryAgain:
     End Module
     Public Module OtherMethods
         Public Function LtIsLoaded(ltName As String) As Boolean
+            'tests if linetype is currently loaded
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
 
@@ -4215,18 +4505,20 @@ TryAgain:
         End Function
 
         Public Function IsInModel() As Boolean
+            'true = current window is model space, false = it is a layout
             If Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Database.TileMode Then
                 Return True
             Else
                 Return False
             End If
         End Function
-
         Public Function IsInLayout() As Boolean
+            'returns true if current space is a modelspace window in a layout
             Return Not IsInModel()
         End Function
 
         Public Function IsInLayoutPaper() As Boolean
+            'returns true if current space is a layout paperspace
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
@@ -4249,6 +4541,7 @@ TryAgain:
         End Function
 
         Public Function IsInLayoutViewport() As Boolean
+            'returns true if current space is a modelspace viewport in a layout
             If IsInLayout() Then
                 If IsInLayoutPaper() Then
                     Return False
@@ -4262,6 +4555,7 @@ TryAgain:
         End Function
 
         Public Function YesNoQuery(msgStr As String) As Boolean
+            'generic yes no query returns boolean
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
@@ -4294,7 +4588,7 @@ TryAgain:
         End Function
 
         Public Function YesNoResult(msgStr As String) As PromptResult
-
+            'generic yes no query returns a promptresult
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
 
@@ -4314,6 +4608,7 @@ TryAgain:
         End Function
 
         Friend Function GetZoomWindow(ByVal entId As ObjectId) As Array()
+            'gets current zoom window
             Dim ext As Extents3d = GetEntityGeoExtents(entId)
             Dim h As Double = ext.MaxPoint.Y - ext.MinPoint.Y
             Dim w As Double = ext.MaxPoint.X - ext.MinPoint.X
@@ -4337,6 +4632,8 @@ TryAgain:
         End Function
 
         Friend Function GetEntityGeoExtents(ByVal entId As ObjectId) As Extents3d
+            'returns the extents of an entity from its objectid
+
             Dim ext As Extents3d
 
             Using acTrans = entId.Database.TransactionManager.StartTransaction()
@@ -4349,6 +4646,8 @@ TryAgain:
         End Function
 
         Friend Function GetMyEntity(tp As Type, addmsg As String, Optional rejectMsg As String = "", Optional exactMatch As Boolean = False) As ObjectId
+            'generic function for returning the objectid of a picked entity
+
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
@@ -4369,8 +4668,6 @@ TryAgain:
             End If
 
         End Function
-
-
 
     End Module
 

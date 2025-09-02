@@ -5,9 +5,12 @@ Imports Autodesk.AutoCAD.DatabaseServices
 Imports System.Windows.Forms
 Imports Autodesk.AutoCAD.Geometry
 Imports System.Math
-Imports MasterCustomLibrary.AcCommon
+'Imports System.Windows.Forms.Help
 
-Namespace Walls
+Imports MasterCustomLibrary.AcCommon
+Imports System.Windows.Documents
+
+Namespace AcCommon
     Public Module WallCommands
 
         Friend m_Wallwidth As Double
@@ -323,14 +326,14 @@ SkipPt:
             Dim DwgDB As Database = CurDwg.Database
             Dim ed As Editor = CurDwg.Editor
 
-            'Dim hasConcreteBase As Boolean = False
             Dim topConcId As ObjectId
             Dim pb1 As Point3d
-            'Dim pbConc As Point3d
-            'Dim unadjFootStep As Double
+
+            'create a retaining wall object
             Dim rwData As New RetainingWall
             Dim useCurrent As Boolean = False
 
+            'check for current data
             If m_RWallData IsNot Nothing Then
                 useCurrent = YesNoQuery(vbLf & "Do you want to use the previous retaining wall parameters?")
                 If useCurrent Then rwData = m_RWallData
@@ -350,23 +353,23 @@ SkipPt:
 
                 Dim pdrVFact As PromptDoubleResult = ed.GetDistance(pdoVFact)
 
-                'Dim vFact As Double
-
+                'save vert factor in rwall object
                 If pdrVFact.Status = PromptStatus.OK Then
                     rwData.VertFactor = pdrVFact.Value
-                    'vFact = pdrVFact.Value
                 Else
                     Exit Sub
                 End If
 
                 Dim concreteQ As PromptResult = YesNoResult("Does the wall have a reinforced concrete stem at its base?")
 
+                'ask if there is a concrete base ask for footing step height because it does not need to use CMU height
                 If concreteQ.Status = PromptStatus.OK Then
                     Dim pRes As String = concreteQ.StringResult
                     If pRes = "Yes" Then
                         'hasConcreteBase = True
                         rwData.HasConcreteBase = True
 
+                        'get footing step height - can be anything with a concrete stem, but usually a CMU height if a block wall is to be placed on top
                         Dim footopts As New PromptDistanceOptions(vbLf & "Pick or enter the vertical distance for each step in the top of the footing")
                         With footopts
                             If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingStepHeight Else .DefaultValue = 0.67
@@ -386,6 +389,7 @@ SkipPt:
                     End If
                 End If
 
+                'cover dimension
                 Dim pdoCover As New PromptDistanceOptions(vbLf & "Enter or pick minimum distance between top of footing and ground elevation")
 
                 With pdoCover
@@ -398,16 +402,14 @@ SkipPt:
 
                 Dim pdrCover As PromptDoubleResult = ed.GetDistance(pdoCover)
 
-                'Dim cover As Double
-
                 If pdrCover.Status = PromptStatus.OK Then
-                    'cover = pdrCover.Value
                     rwData.FootingCover = pdrCover.Value
                 Else
                     Exit Sub
                 End If
 
 
+                'get length of a CMU.  1/2 of this value will be used for each check of wall height and footing depth
                 Dim pdo2 As New PromptDistanceOptions(vbLf & "Enter or pick length of a single brick in feet")
 
                 With pdo2
@@ -420,15 +422,14 @@ SkipPt:
 
                 Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
 
-                'Dim blen As Double
-
                 If pdr2.Status = PromptStatus.OK Then
-                    'blen = pdr2.Value
                     rwData.BrickLength = pdr2.Value
                 Else
                     Exit Sub
                 End If
 
+
+                'get height of a CMU.  Reference line must be within 1 CMU of the top of the wall.  Also used for footing step if CMU for full height
                 Dim pdo3 As New PromptDistanceOptions(vbLf & "Enter or pick the true height of a single brick in feet")
 
                 With pdo3
@@ -441,15 +442,11 @@ SkipPt:
 
                 Dim pdr3 As PromptDoubleResult = ed.GetDistance(pdo3)
 
-                'Dim bht As Double
-                'Dim trueBht As Double
 
+                'unless the wall has a concrete stem at bottom, use brick height to set footing step height
                 If pdr3.Status = PromptStatus.OK Then
                     rwData.BrickHeight = pdr3.Value
                     If Not rwData.HasConcreteBase Then rwData.FootingStepHeight = pdr3.Value
-
-                    'trueBht = pdr3.Value
-                    'bht = trueBht * vFact
                 Else
                     Exit Sub
                 End If
@@ -467,18 +464,13 @@ SkipPt:
 
                 Dim pdrFoot As PromptDoubleResult = ed.GetDistance(pdoFoot)
 
-                'Dim footThk As Double
-
                 If pdrFoot.Status = PromptStatus.OK Then
-                    'footThk = pdrFoot.Value
                     rwData.FootingThickness = pdrFoot.Value
                 Else
                     Exit Sub
                 End If
 
-                'Dim footstep As Double
-
-                ''''''''''''''''''''''''''''''Pick Data
+                ''''''''''''''''''''''''''''''Pick points and reference lines for location of wall profile'''''''''''''''''''''''''''''''''''''''''''''
 
             End If
 
@@ -540,43 +532,30 @@ SkipPt:
             End If
 
 
-            'Dim ppo As New PromptPointOptions(vbLf & "Pick point for the top of concrete stem at start point")
-            '    With ppo
-            '        .AllowNone = False
-            '    End With
-
-            '    Dim ppr As PromptPointResult = ed.GetPoint(ppo)
-
-            '    If ppr.Status = PromptStatus.OK Then
-            '        pbConc = ppr.Value
-            '    Else
-            '        Exit Sub
-            '    End If
-
             Dim ppo As New PromptPointOptions(vbLf & "Pick point for the top of wall at start point")
 
             With ppo
                 .AllowNone = False
             End With
 
-                Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+            Dim ppr As PromptPointResult = ed.GetPoint(ppo)
 
-                If ppr.Status = PromptStatus.OK Then
-                    pb1 = ppr.Value
-                Else
-                    Exit Sub
-                End If
+            If ppr.Status = PromptStatus.OK Then
+                pb1 = ppr.Value
+            Else
+                Exit Sub
+            End If
 
-                Dim ppo2 As New PromptPointOptions(vbLf & "Pick approximate location where the wall will end.")
+            Dim ppo2 As New PromptPointOptions(vbLf & "Pick approximate location where the wall will end.")
 
-                Dim dirPt As Point3d
-                Dim ppr2 As PromptPointResult = ed.GetPoint(ppo2)
+            Dim dirPt As Point3d
+            Dim ppr2 As PromptPointResult = ed.GetPoint(ppo2)
 
-                If ppr2.Status = PromptStatus.OK Then
-                    dirPt = ppr2.Value
-                Else
-                    Exit Sub
-                End If
+            If ppr2.Status = PromptStatus.OK Then
+                dirPt = ppr2.Value
+            Else
+                Exit Sub
+            End If
 
             Dim pltSide As Integer
 
@@ -599,7 +578,7 @@ SkipPt:
 
             Try
 
-                ''''''''''''''''''''''''''''''''''Start Geometry
+                ''''''''''''''''''''''''''''''''''Wall Geometry'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 
                 Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
@@ -628,21 +607,20 @@ SkipPt:
                     'get the top of the wall and EG (toe elevation)
                     Dim baseline As DBObject = acTrans.GetObject(twId, OpenMode.ForRead)
                     Dim bl As Polyline = TryCast(baseline, Polyline)
-                    'Dim egLine As Polyline = TryCast(acTrans.GetObject(egID, OpenMode.ForRead), Polyline)
 
-                    'temporary coordinates for vertical line
+                    'temporary coordinates of vertical line for testing y coordinates
                     Dim temppos2d As New Point2d(curX, pb1.Y - 1000)
                     Dim tempneg2d As New Point2d(curX, pb1.Y + 1000)
 
+                    'make sure bline is good object
                     If bl Is Nothing OrElse bl.Closed = True Then
                         MessageBox.Show("Error.  Picked entity cannot be used for top of wall or polyline is closed.")
                         acTrans.Abort()
                         Exit Sub
                     End If
 TryAgain:
+                    'make sure the z coordinate of the reference pline is 0
                     If bl.Elevation <> 0 Then bl.Elevation = 0
-                    'If egLine.Elevation <> 0 Then egLine.Elevation = 0
-                    'If fsLine.Elevation <> 0 Then fsLine.Elevation = 0
 
                     Dim brk As Integer = 0
                     Dim failsafe As Integer = 0
@@ -650,6 +628,7 @@ TryAgain:
 
                     If pltSide = 1 Then  'reference moves from left to right
                         Do
+                            'create a temporary line for testing y coordinates
                             Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
                             Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
 
@@ -672,7 +651,7 @@ TryAgain:
                                     Dim refY As Double = pts2d(0).Y
                                     Dim minY As Double = refY - bht
 
-                                    If curY > minY Then  'cury is above minimum 
+                                    If curY > minY Then  'cury is above minimum elevation
                                         If curY <= refY Then  'cury is below reference line so this is a good point
                                             'keep track of x value for later and move down the wall
                                             lastx = curX
@@ -695,7 +674,7 @@ TryAgain:
                                                 End If
                                                 fSafe += 1
                                             Loop While fSafe < 50
-                                            'set a point for the bottom of the previous step and the top of the current step
+                                            'set points for the bottom of the previous step and the top of the current step
                                             Dim tps1 As New Point2d(curX, lasty)
                                             Dim tps2 As New Point2d(curX + 0.02, curY)
                                             topPts.Add(tps1)
@@ -712,6 +691,7 @@ TryAgain:
                                             End If
                                             fSafe += 1
                                         Loop While fSafe < 50
+                                        'set points for the bottom of the previous step and the top of the current step
                                         Dim tps1 As New Point2d(curX, lasty)
                                         Dim tps2 As New Point2d(curX + 0.02, curY)
                                         topPts.Add(tps1)
@@ -863,7 +843,7 @@ SkipPt:
 
         End Sub
 
-        Public Function TopConcPfile(pb1 As Point3d, topConcId As ObjectId, rwData As RetainingWall, endX As Double, pltSide As Double, acTrans As Transaction) As Point2d
+        Private Function TopConcPfile(pb1 As Point3d, topConcId As ObjectId, rwData As RetainingWall, endX As Double, pltSide As Double, acTrans As Transaction) As Point2d
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -1148,7 +1128,7 @@ SkipPt:
         End Function
 
 
-        Friend Function TopConcStem(egId As ObjectId, twid As ObjectId, tcID As ObjectId, pb1 As Point3d, pltside As Integer, endX As Double, vfact As Double, bht As Double, blen As Double, acTrans As Transaction) As Point2d
+        Private Function TopConcStem(egId As ObjectId, twid As ObjectId, tcID As ObjectId, pb1 As Point3d, pltside As Integer, endX As Double, vfact As Double, bht As Double, blen As Double, acTrans As Transaction) As Point2d
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
             Dim ed As Editor = CurDwg.Editor
@@ -1447,7 +1427,7 @@ TryAgain:
 
         End Function
 
-        Friend Function TopFooting(egId As ObjectId, twStart As Point3d, dirPt As Point3d, pltside As Integer, rwData As RetainingWall, acTrans As Transaction) As ObjectId
+        Private Function TopFooting(egId As ObjectId, twStart As Point3d, dirPt As Point3d, pltside As Integer, rwData As RetainingWall, acTrans As Transaction) As ObjectId
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
             Dim ed As Editor = CurDwg.Editor
@@ -1765,9 +1745,9 @@ SkipPt:
             Dim pltSide As Integer
 
             If dirPt.X > pb1.X Then
-                pltSide = 1
+                pltSide = 1  'wall plots from left to right
             Else
-                pltSide = -1
+                pltSide = -1  'wall plots from right to left
             End If
 
             Dim pdoVFact As New PromptDistanceOptions(vbLf & "Enter the vertical exaggeration factor.")
@@ -1870,25 +1850,7 @@ SkipPt:
                         Exit Sub
                     End If
 
-TryAgain:
-                    'Dim spX As Double = tbl.StartPoint.X
-                    'Dim epX As Double = tbl.EndPoint.X
-
-                    'If pltSide < 0 Then
-                    '    If spX < epX Then
-                    '        If Not tbl.IsWriteEnabled Then tbl.UpgradeOpen()
-                    '        tbl.ReverseCurve()
-                    '        'tempObj = GetVertexCoords(bl.ObjectId)
-                    '        GoTo TryAgain
-                    '    End If
-                    'Else
-                    '    If spX > epX Then
-                    '        If Not tbl.IsWriteEnabled Then tbl.UpgradeOpen()
-                    '        tbl.ReverseCurve()
-                    '        'tempObj = GetVertexCoords(bl.ObjectId)
-                    '        GoTo TryAgain
-                    '    End If
-                    'End If
+                    'TryAgain:
 
                     Dim ofPt As New Point3d(tbl.StartPoint.X, tbl.StartPoint.Y - cover, 0)
                     Dim transVect As Vector3d = tbl.StartPoint.GetVectorTo(ofPt)
@@ -1919,7 +1881,6 @@ TryAgain:
                                     .AddVertexAt(1, pospt2d, 0, 0, 0)
                                 End With
 
-
                                 If tLine.Elevation <> 0 Then tLine.Elevation = 0
 
                                 Dim pts2d As New Point3dCollection
@@ -1943,33 +1904,41 @@ TryAgain:
                                         If curY <= refY Then  'cury is below reference line
                                             'Dim lastx As Double = curX
                                             lastx = curX
-                                            curX = startX + (brk * 0.5 * blen)
+                                            curX = startX + (brk * 0.5 * blen * pltSide)
                                             'if next point is beyond end of bl then create one final point
-                                            If curX > endX Then
-                                                Dim tps1 As New Point2d(curX, curY)
-                                                footPts.Add(tps1)
+
+                                            If pltSide = 1 Then
+                                                If curX > endX Then
+                                                    Dim tps1 As New Point2d(curX, curY)
+                                                    footPts.Add(tps1)
+                                                End If
+                                            Else
+                                                If curX < endX Then
+                                                    Dim tps1 As New Point2d(curX, curY)
+                                                    footPts.Add(tps1)
+                                                End If
                                             End If
                                             brk += 1
+
                                         Else  'cury is above reference line
                                             'lastx = curX - blen
                                             Dim fSafe As Integer = 0
                                             lasty = curY
                                             Do
                                                 curY -= bht
-                                                If curY < refY Then
-                                                    'curY -= bht
-                                                    Exit Do
-                                                End If
+                                                If curY < refY Then Exit Do
                                                 fSafe += 1
                                             Loop While fSafe < 50
                                             Dim tps1 As New Point2d(curX, lasty)
-                                            Dim tps2 As New Point2d(curX + 0.02, curY)
+                                            Dim tps2 As New Point2d(curX + (0.02 * pltSide), curY)
+
                                             footPts.Add(tps1)
                                             footPts.Add(tps2)
                                         End If
                                     Else    'cury is below minimum
                                         Dim fSafe As Integer = 0
                                         lasty = curY
+
                                         Do
                                             curY += bht
                                             If curY > minY Then
@@ -1978,7 +1947,7 @@ TryAgain:
                                             fSafe += 1
                                         Loop While fSafe < 50
                                         Dim tps1 As New Point2d(curX, lasty)
-                                        Dim tps2 As New Point2d(curX + 0.02, curY)
+                                        Dim tps2 As New Point2d(curX + (0.02 * pltSide), curY)
                                         footPts.Add(tps1)
                                         footPts.Add(tps2)
                                     End If
@@ -1987,9 +1956,13 @@ TryAgain:
 
                             End Using
 
-                            'lastx = curX
                             failsafe += 1
-                            If curX > endX Then Exit Do
+
+                            If pltSide = 1 Then
+                                If curX > endX Then Exit Do
+                            Else
+                                If curX < endX Then Exit Do
+                            End If
 
                         Loop While failsafe < 5000
 
@@ -2062,7 +2035,7 @@ TryAgain:
                                         footPts.Add(tps2)
                                     End If
                                 End If
-SkipPt:
+                                'SkipPt:
                             End Using
 
                             failsafe += 1
@@ -2460,7 +2433,7 @@ SkipPt:
                                     linePts.Add(botstep)
                                 Else   'current vertex is not a step
                                 End If
-                                End If
+                            End If
                         Next
                     Else  'reference moves from right to left
                         For i = 0 To numverts - 1
@@ -2525,12 +2498,29 @@ SkipPt:
 
         End Function
 
-        <CommandMethod("WallLine")>
+        <CommandMethod("WallLine", CommandFlags.UsePickSet)>
         Public Sub WallLine()
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
+            Dim myWallIds As New ObjectIdCollection
+
+            Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+
+            If SelResult.Status = PromptStatus.OK Then
+                ed.SetImpliedSelection(New ObjectId(-1) {})
+            End If
+
+            If SelResult.Status = PromptStatus.OK Then
+                Dim acSSet As SelectionSet = SelResult.Value
+                Dim MyobjIDs As ObjectId() = acSSet.GetObjectIds
+                For Each objid As ObjectId In MyobjIDs
+                    If Not objid = ObjectId.Null Then
+                        myWallIds.Add(objid)
+                    End If
+                Next
+            End If
 
             Dim sLayerName As String = SetLayName()
 
@@ -2547,12 +2537,10 @@ SkipPt:
                 If m_Wallwidth > 0 And m_WDDLength > 0 Then
                     width = m_Wallwidth
                     dashLength = m_WDDLength
-                    goodWall = MakeWallLine(width, dashLength, sLayerName)
-                    If Not goodWall Then
-                        MessageBox.Show("Error in MakeWallLine Function.")
-                        Exit Sub
+                    If myWallIds.Count > 0 Then
+                        MakeWallLine(width, dashLength, sLayerName, myWallIds)
                     Else
-                        Exit Sub
+                        MakeWallLine(width, dashLength, sLayerName)
                     End If
                 End If
             Else
@@ -2601,18 +2589,17 @@ wallWidthInput:
                 m_Wallwidth = width
 
 Skipit:
-                goodWall = MakeWallLine(m_Wallwidth, m_WDDLength, sLayerName)
+                If myWallIds.Count > 0 Then
+                    MakeWallLine(width, dashLength, sLayerName, myWallIds)
+                Else
+                    MakeWallLine(width, dashLength, sLayerName)
+                End If
 EndFunc:
-            End If
-
-
-            If Not goodWall Then
-                MsgBox("ERROR. Check picked entity or input data.")
             End If
 
         End Sub
 
-        Private Function MakeWallLine(ByVal width As Double, ByVal dD As Double, Optional ByVal sLayerName As String = "0") As Boolean
+        Private Sub MakeWallLine(ByVal width As Double, ByVal dD As Double, Optional ByVal sLayerName As String = "0", Optional wallObjIds As ObjectIdCollection = Nothing)
 
             Dim ofdist = width / 2  'set the half-width of the line
 
@@ -2620,111 +2607,160 @@ EndFunc:
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
 
+            Dim cm As ObjectContextManager = dwgDB.ObjectContextManager
+            Dim papU As Double = dwgDB.Cannoscale.PaperUnits
+            Dim dwgU As Double = dwgDB.Cannoscale.DrawingUnits
             Dim DwgLtScale As Double = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LTSCALE")
-            Dim dDL As Double = dD / DwgLtScale
+
+            Dim sclFact As Double = dD / DwgLtScale
+            Dim dDL As Double = sclFact * papU / dwgU
 
             Dim ltName As String
             If Not WLisLoaded("WALLLINE") Then
                 MessageBox.Show("Error Loading Linetype. Manually load WALLLINE linetype from EESCustomLinetypes.lin and invoke command again.")
-                Return False
-                Exit Function
+                Exit Sub
             Else
                 ltName = "WALLLINE"
             End If
 
+            Dim clineID As ObjectId
 Retry:
-            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction()
 
+            If wallObjIds Is Nothing Then
+                wallObjIds = New ObjectIdCollection
                 Dim options As New PromptEntityOptions(String.Format(vbLf & "Select an entity for wall centerline:"))
                 'options.SetRejectMessage(vbLf & "The selected object is not a 2D polyline.")
                 'options.AddAllowedClass(GetType(Polyline), True)
                 Dim result As PromptEntityResult = ed.GetEntity(options)
 
                 If result.Status = PromptStatus.OK Then
-                    Dim cLineID = result.ObjectId
-                    Dim cLinetemp As Curve = acTrans.GetObject(cLineID, OpenMode.ForRead)
-
-                    Dim cLine As Curve = cLinetemp.GetOrthoProjectedCurve(New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis))
-
-                    If cLine Is Nothing Then
-                        Return False
-                        Exit Function
-                    End If
-
-                    'Try
-                    'create collections of objects for the offset curves
-                    Dim acOffColl1 As DBObjectCollection = cLinetemp.GetOffsetCurves(ofdist)
-                    Dim acOffColl2 As DBObjectCollection = cLinetemp.GetOffsetCurves(-ofdist)
-
-                    'convert the collections to curves
-                    Dim Offent1 As Entity = TryCast(acOffColl1(0), Entity)
-                    Dim Offent2 As Entity = TryCast(acOffColl2(0), Entity)
-
-                    'put them on the layer supplied as a parameter
-                    Offent1.Layer = sLayerName
-                    Offent2.Layer = sLayerName
-
-                    'open model space for write
-                    Dim curSpace As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
-
-                    'add offset objects to Database and transaction
-                    curSpace.AppendEntity(Offent1)
-                    curSpace.AppendEntity(Offent2)
-                    acTrans.AddNewlyCreatedDBObject(Offent1, True)
-                    acTrans.AddNewlyCreatedDBObject(Offent2, True)
-
-                    'Determine the type of offset objects and invoke the correct end closing routine
-                    Select Case Offent1.GetType
-                        Case Is = GetType(Polyline)
-                            If Not cLine.Closed Then CloseLines(Offent1, Offent2, "B")
-                        Case Is = GetType(Polyline2d)
-                            If Not cLine.Closed Then CloseLines(Offent1, Offent2, "B")
-                        Case Else
-                            CloseCurves(Offent1, Offent2, sLayerName, "B")
-                    End Select
-
-                    Select Case cLine.GetType
-                        Case Is = GetType(Polyline2d)
-                            Dim cclone As Polyline2d = TryCast(cLine.Clone, Polyline2d)
-                            If Not curSpace.IsWriteEnabled Then curSpace.UpgradeOpen()
-                            curSpace.AppendEntity(cclone)
-                            acTrans.AddNewlyCreatedDBObject(cclone, True)
-                            If Not cclone.IsWriteEnabled Then cLine.UpgradeOpen()
-                            cclone.ConstantWidth = width
-                            cclone.Layer = sLayerName
-                            cclone.Linetype = ltName
-                            cclone.LinetypeScale = dDL
-                            acTrans.Commit()
-
-                        Case Is = GetType(Polyline)
-                            Dim cclone As Polyline = TryCast(cLine.Clone, Polyline)
-                            If Not curSpace.IsWriteEnabled Then curSpace.UpgradeOpen()
-                            curSpace.AppendEntity(cclone)
-                            acTrans.AddNewlyCreatedDBObject(cclone, True)
-                            If Not cclone.IsWriteEnabled Then cclone.UpgradeOpen()
-                            cclone.ConstantWidth = width
-                            cclone.Layer = sLayerName
-                            cclone.Linetype = ltName
-                            cclone.LinetypeScale = dDL
-                            acTrans.Commit()
-
-                        Case Else
-                            MessageBox.Show("Selected Entity cannot have width." & vbLf & "Convert to a 2d Polyline before creating wall.")
-                            Return False
-                            acTrans.Abort()
-                            Exit Function
-                    End Select
-
-                    'Catch ex As Exception
-                    'MessageBox.Show("Error creating offset wall lines.  Abort routine.")
-                    '    Return False
-                    '    acTrans.Abort()
-                    '    Exit Function
-                    'End Try
+                    Dim tempCLineID = result.ObjectId
+                    wallObjIds.Add(tempCLineID)
                 End If
-                Return True
-            End Using
-        End Function
+            End If
+
+            For Each clineID In wallObjIds
+                Try
+
+                    Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction()
+
+                        Dim cLinetemp As DBObject = TryCast(acTrans.GetObject(clineID, OpenMode.ForRead), DBObject)
+                        'Using cLine As Curve = cLinetemp.GetOrthoProjectedCurve(New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis))
+
+                        If cLinetemp Is Nothing Then
+                            acTrans.Abort()
+                            Continue For
+                        End If
+
+                        'Try
+                        'create collections of objects for the offset curves
+                        'Dim acOffColl1 As DBObjectCollection = cLinetemp.GetOffsetCurves(ofdist)
+                        'Dim acOffColl2 As DBObjectCollection = cLinetemp.GetOffsetCurves(-ofdist)
+
+                        'convert the collections to curves
+                        'Dim Offent1 As DBObject = TryCast(acOffColl1(0), DBObject)
+                        'Dim Offent2 As DBObject = TryCast(acOffColl2(0), DBObject)
+
+                        'put them on the layer supplied as a parameter
+
+                        'open model space for write
+                        Dim curSpace As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
+
+                        'add offset objects to Database and transaction
+                        'curSpace.AppendEntity(Offent1)
+                        'curSpace.AppendEntity(Offent2)
+                        'acTrans.AddNewlyCreatedDBObject(Offent1, True)
+                        'acTrans.AddNewlyCreatedDBObject(Offent2, True)
+
+                        'Determine the type of offset objects and invoke the correct end closing routine
+                        If TypeOf cLinetemp Is Polyline Then
+                            Using cline As Polyline = TryCast(cLinetemp, Polyline)
+                                If cline IsNot Nothing Then
+                                    'create collections of objects for the offset curves
+                                    Dim acOffColl1 As DBObjectCollection = cline.GetOffsetCurves(ofdist)
+                                    Dim acOffColl2 As DBObjectCollection = cline.GetOffsetCurves(-ofdist)
+
+                                    'convert the collections to curves
+                                    Dim Offent1 As DBObject = TryCast(acOffColl1(0), DBObject)
+                                    Dim Offent2 As DBObject = TryCast(acOffColl2(0), DBObject)
+
+                                    Using pl1 As Polyline = TryCast(Offent1, Polyline)
+                                        Using pl2 As Polyline = TryCast(Offent2, Polyline)
+                                            Dim l1ID As ObjectId = curSpace.AppendEntity(pl1)
+                                            acTrans.AddNewlyCreatedDBObject(pl1, True)
+                                            Dim l2id As ObjectId = curSpace.AppendEntity(pl2)
+                                            acTrans.AddNewlyCreatedDBObject(pl2, True)
+                                            pl1.Layer = sLayerName
+                                            pl2.Layer = sLayerName
+                                            If Not cline.Closed Then CloseLines(l1ID, l2id, sLayerName, "B")
+                                        End Using
+                                    End Using
+                                    Using cclone As Polyline = cline.Clone
+                                        If cclone IsNot Nothing Then
+                                            cclone.ConstantWidth = width
+                                            cclone.Layer = sLayerName
+                                            cclone.Linetype = ltName
+                                            cclone.LinetypeScale = dDL
+                                            If Not curSpace.IsWriteEnabled Then curSpace.UpgradeOpen()
+                                            curSpace.AppendEntity(cclone)
+                                            acTrans.AddNewlyCreatedDBObject(cclone, True)
+                                        End If
+                                    End Using
+                                End If
+                            End Using
+
+                        ElseIf TypeOf cLinetemp Is Polyline2d Then
+
+                            Using cline As Polyline2d = TryCast(cLinetemp, Polyline2d)
+                                If cline IsNot Nothing Then
+                                    'create collections of objects for the offset curves
+                                    Dim acOffColl1 As DBObjectCollection = cline.GetOffsetCurves(ofdist)
+                                    Dim acOffColl2 As DBObjectCollection = cline.GetOffsetCurves(-ofdist)
+
+                                    'convert the collections to curves
+                                    Dim Offent1 As DBObject = TryCast(acOffColl1(0), DBObject)
+                                    Dim Offent2 As DBObject = TryCast(acOffColl2(0), DBObject)
+
+                                    Using pl2d As Polyline2d = TryCast(Offent1, Polyline2d)
+                                        Using pl22d As Polyline2d = TryCast(Offent2, Polyline2d)
+                                            Dim pl1ID As ObjectId = curSpace.AppendEntity(pl2d)
+                                            acTrans.AddNewlyCreatedDBObject(pl2d, True)
+                                            Dim pl2ID As ObjectId = curSpace.AppendEntity(pl22d)
+                                            acTrans.AddNewlyCreatedDBObject(pl22d, True)
+                                            pl2d.Layer = sLayerName
+                                            pl22d.Layer = sLayerName
+                                            If Not cline.Closed Then CloseLines(pl1ID, pl2ID, sLayerName, "B")
+                                        End Using
+                                    End Using
+
+                                    Dim cclone As Polyline2d = cline.Clone
+                                    If cclone IsNot Nothing Then
+                                        If Not curSpace.IsWriteEnabled Then curSpace.UpgradeOpen()
+                                        curSpace.AppendEntity(cclone)
+                                        acTrans.AddNewlyCreatedDBObject(cclone, True)
+                                        cclone.ConstantWidth = width
+                                        cclone.Layer = sLayerName
+                                        cclone.Linetype = ltName
+                                        cclone.LinetypeScale = dDL
+                                    End If
+                                End If
+                            End Using
+                        Else
+                            ed.WriteMessage(vbLf & "Selected centerline must be a polyline." & vbLf & "Convert to a polyline before creating wall.")
+                            Continue For
+                        End If
+                        acTrans.Commit()
+                    End Using
+
+                Catch ex As Exception
+                    ed.WriteMessage(vbLf & "Error creating wall line." & vbLf & ex.Message)
+                    Continue For
+                End Try
+
+                'End Using
+            Next
+
+        End Sub
 
         Private Function GetWallData() As Boolean
 
@@ -2833,8 +2869,8 @@ Retry:
 
                 laySel.Dispose()
 
-                If Not String.IsNullOrEmpty(res(0)) Then
-                    sLayerName = res(0)
+                If Not String.IsNullOrEmpty(res(1)) Then
+                    sLayerName = res(1)
                     m_AcLayerName = sLayerName
                 Else
                     sLayerName = "0"
@@ -2848,7 +2884,7 @@ Retry:
 
         End Function
 
-        Public Sub CloseLines(Ent1 As Entity, Ent2 As Entity, Optional closer As String = "")
+        Private Sub CloseLines(Ent1 As DBObject, Ent2 As DBObject, tr As Transaction, Optional closer As String = "")
 
             Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = doc.Editor
@@ -2874,81 +2910,348 @@ Retry:
 
             'If per.Status = PromptStatus.OK Then
 
-            Using tr As Transaction = db.TransactionManager.StartTransaction()
-                Dim obj1 As DBObject = tr.GetObject(Ent1.Id, OpenMode.ForRead)
-                Dim obj2 As DBObject = tr.GetObject(Ent2.Id, OpenMode.ForRead)
-                Dim lwp1 As Polyline = TryCast(obj1, Polyline)
-                Dim lwp2 As Polyline = TryCast(obj2, Polyline)
-                If lwp1 IsNot Nothing Then
-                    Dim Spt1 As Point3d = lwp1.StartPoint
-                    Dim Ept1 As Point3d = lwp1.EndPoint
-                    Dim Spt2 As Point3d = lwp2.StartPoint
-                    Dim Ept2 As Point3d = lwp2.EndPoint
+            'Dim obj1 As DBObject = tr.GetObject(Ent1.Id, OpenMode.ForRead)
+            'Dim obj2 As DBObject = tr.GetObject(Ent2.Id, OpenMode.ForRead)
 
-                    Dim currSpace As BlockTableRecord = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+            Dim spt1 As Point3d
+            Dim ept1 As Point3d
+            Dim spt2 As Point3d
+            Dim ept2 As Point3d
 
-                    Select Case myString
-                        Case Is = "B"
-                            Dim startLine As New Polyline
-                            With startLine
-                                .AddVertexAt(0, New Point2d(Spt1.X, Spt1.Y), 0, 0, 0)
-                                .AddVertexAt(1, New Point2d(Spt2.X, Spt2.Y), 0, 0, 0)
-                            End With
+            If TypeOf Ent1 Is Polyline And TypeOf Ent2 Is Polyline Then
+                Using lwp1 As Polyline = TryCast(Ent1, Polyline)
+                    Using lwp2 As Polyline = TryCast(Ent2, Polyline)
+                        lwp1.Elevation = 0
+                        lwp2.Elevation = 0
+
+                        If lwp1 IsNot Nothing And lwp2 IsNot Nothing Then
+                            spt1 = lwp1.StartPoint
+                            ept1 = lwp1.EndPoint
+                            spt2 = lwp2.StartPoint
+                            ept2 = lwp2.EndPoint
+                        End If
+
+
+                        Dim currSpace As BlockTableRecord = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+
+                        Select Case myString
+                            Case Is = "B"
+                                Using startLine As New Polyline
+                                    With startLine
+                                        .AddVertexAt(0, New Point2d(spt1.X, spt1.Y), 0, 0, 0)
+                                        .AddVertexAt(1, New Point2d(spt2.X, spt2.Y), 0, 0, 0)
+                                    End With
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(startLine)
+                                    tr.AddNewlyCreatedDBObject(startLine, True)
+                                    lwp1.JoinEntity(startLine)
+                                    'startLine.Erase()
+                                End Using
+
+                                Using endline As New Polyline
+                                    With endline
+                                        .AddVertexAt(0, New Point2d(ept1.X, ept1.Y), 0, 0, 0)
+                                        .AddVertexAt(1, New Point2d(ept2.X, ept2.Y), 0, 0, 0)
+                                    End With
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(endline)
+                                    tr.AddNewlyCreatedDBObject(endline, True)
+                                    lwp1.JoinEntity(endline)
+                                    lwp1.JoinEntity(lwp2)
+                                    lwp1.Closed = True
+                                    endline.Erase()
+                                End Using
+
+                            Case Is = "E"
+                                Using endline As New Polyline
+                                    With endline
+                                        .AddVertexAt(0, New Point2d(ept1.X, ept1.Y), 0, 0, 0)
+                                        .AddVertexAt(1, New Point2d(ept2.X, ept2.Y), 0, 0, 0)
+                                    End With
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(endline)
+                                    tr.AddNewlyCreatedDBObject(endline, True)
+                                    lwp1.JoinEntity(endline)
+                                    lwp1.JoinEntity(lwp2)
+                                    endline.Erase()
+                                End Using
+
+                            Case Is = "S"
+                                Using Startline As New Polyline
+                                    With Startline
+                                        .AddVertexAt(0, New Point2d(spt1.X, spt1.Y), 0, 0, 0)
+                                        .AddVertexAt(1, New Point2d(spt2.X, spt2.Y), 0, 0, 0)
+                                    End With
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(Startline)
+                                    tr.AddNewlyCreatedDBObject(Startline, True)
+                                    lwp1.JoinEntity(Startline)
+                                    lwp1.JoinEntity(lwp2)
+                                    Startline.Erase()
+                                End Using
+                            Case Is = "N"
+                        End Select
+                        'lwp2.Erase()
+                    End Using
+                End Using
+
+            ElseIf TypeOf Ent1 Is Polyline2d And TypeOf Ent2 Is Polyline2d Then
+
+                Using lwp12D As Polyline2d = TryCast(Ent1, Polyline2d)
+                    Using lwp22D As Polyline2d = TryCast(Ent2, Polyline2d)
+
+                        lwp12D.Elevation = 0
+                        lwp22D.Elevation = 0
+
+                        Dim endseg As New Point3dCollection
+                        Dim startSeg As New Point3dCollection
+                        Dim bulges As New DoubleCollection
+
+                        If lwp12D IsNot Nothing And lwp22D IsNot Nothing Then
+                            spt1 = lwp12D.StartPoint
+                            ept1 = lwp12D.EndPoint
+                            spt2 = lwp22D.StartPoint
+                            ept2 = lwp22D.EndPoint
+                            endseg.Add(ept1)
+                            endseg.Add(ept2)
+                            startSeg.Add(spt1)
+                            startSeg.Add(spt2)
+                        End If
+
+                        Dim currSpace As BlockTableRecord = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+
+                        Select Case myString
+                            Case Is = "B"
+
+                                Using startLine As New Polyline2d(Poly2dType.SimplePoly, startSeg, 0, False, 0, 0, bulges)
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(startLine)
+                                    tr.AddNewlyCreatedDBObject(startLine, True)
+                                    lwp12D.JoinEntity(startLine)
+                                    'startLine.Erase()
+                                End Using
+
+                                Using endline As New Polyline2d(Poly2dType.SimplePoly, endseg, 0, False, 0, 0, bulges)
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(endline)
+                                    tr.AddNewlyCreatedDBObject(endline, True)
+                                    lwp12D.JoinEntity(endline)
+                                    lwp12D.JoinEntity(lwp22D)
+                                    lwp12D.Closed = True
+                                    'endline.Erase()
+                                End Using
+
+                            Case Is = "E"
+                                Using endline As New Polyline2d(Poly2dType.SimplePoly, endseg, 0, False, 0, 0, bulges)
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(endline)
+                                    tr.AddNewlyCreatedDBObject(endline, True)
+                                    lwp12D.JoinEntity(endline)
+                                    lwp12D.JoinEntity(lwp22D)
+                                    lwp12D.Closed = True
+                                    'endline.Erase()
+                                End Using
+
+                            Case Is = "S"
+                                Using Startline As New Polyline2d(Poly2dType.SimplePoly, startSeg, 0, False, 0, 0, bulges)
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(Startline)
+                                    tr.AddNewlyCreatedDBObject(Startline, True)
+                                    lwp12D.JoinEntity(Startline)
+                                    lwp12D.JoinEntity(lwp22D)
+                                    'Startline.Erase()
+                                End Using
+                            Case Is = "N"
+                        End Select
+                        'lwp22D.Erase()
+                    End Using
+                End Using
+            Else
+                ed.WriteMessage(vbLf & "Picked entity must be polyline or a polyline2D.")
+            End If
+
+            Ent1.Dispose()
+            Ent2.Dispose()
+
+        End Sub
+
+        Private Sub CloseCurves(Ent1ID As ObjectId, Ent2ID As ObjectId, sLayerName As String, tr As Transaction, Optional closer As String = "")
+            Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = doc.Editor
+            Dim db As Database = doc.Database
+            Dim myString As String = closer
+
+            If myString = "" Then
+
+                Dim pKeyOpts As New PromptKeywordOptions("")
+                With pKeyOpts
+                    .Message = vbLf & "Close the new feature?  Start (S) End (E) Both (B) or none (N)"
+                    .Keywords.Add("S")
+                    .Keywords.Add("E")
+                    .Keywords.Add("B")
+                    .Keywords.Add("N")
+                    .AllowNone = False
+                    .AppendKeywordsToMessage = True
+                End With
+
+                Dim pKeyRes As PromptResult = ed.GetKeywords(pKeyOpts)
+                myString = pKeyRes.StringResult
+            End If
+
+            'If per.Status = PromptStatus.OK Then
+
+            Dim obj1 As Curve = tr.GetObject(Ent1ID, OpenMode.ForRead)
+            Dim obj2 As Curve = tr.GetObject(Ent2ID, OpenMode.ForRead)
+
+            Dim lwp1 As New Polyline
+            Dim lwp2 As New Polyline
+            Dim lwp12D As New Polyline2d
+            Dim lwp22D As New Polyline2d
+
+            Dim spt1 As Point3d
+            Dim ept1 As Point3d
+            Dim spt2 As Point3d
+            Dim ept2 As Point3d
+
+            If TypeOf obj1 Is Polyline And TypeOf obj2 Is Polyline Then
+                lwp1 = TryCast(obj1, Polyline)
+                lwp2 = TryCast(obj2, Polyline)
+                lwp1.Elevation = 0
+                lwp2.Elevation = 0
+
+                If lwp1 IsNot Nothing And lwp2 IsNot Nothing Then
+                    spt1 = lwp1.StartPoint
+                    ept1 = lwp1.EndPoint
+                    spt2 = lwp2.StartPoint
+                    ept2 = lwp2.EndPoint
+                End If
+
+                Dim currSpace As BlockTableRecord = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+
+                Select Case myString
+                    Case Is = "B"
+                        Dim startLine As New Polyline
+                        With startLine
+                            .AddVertexAt(0, New Point2d(spt1.X, spt1.Y), 0, 0, 0)
+                            .AddVertexAt(1, New Point2d(spt2.X, spt2.Y), 0, 0, 0)
+                        End With
+                        If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                        currSpace.AppendEntity(startLine)
+                        tr.AddNewlyCreatedDBObject(startLine, True)
+
+                        Dim endline As New Polyline
+                        With endline
+                            .AddVertexAt(0, New Point2d(ept1.X, ept1.Y), 0, 0, 0)
+                            .AddVertexAt(1, New Point2d(ept2.X, ept2.Y), 0, 0, 0)
+                        End With
+                        If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                        currSpace.AppendEntity(endline)
+                        tr.AddNewlyCreatedDBObject(endline, True)
+                        lwp1.JoinEntity(startLine)
+                        lwp1.JoinEntity(endline)
+                        lwp1.JoinEntity(lwp2)
+                        lwp1.Closed = True
+                        lwp2.Erase()
+                        endline.Erase()
+                        startLine.Erase()
+
+                    Case Is = "E"
+                        Dim endline As New Polyline
+                        With endline
+                            .AddVertexAt(0, New Point2d(ept1.X, ept1.Y), 0, 0, 0)
+                            .AddVertexAt(1, New Point2d(ept2.X, ept2.Y), 0, 0, 0)
+                        End With
+                        If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                        currSpace.AppendEntity(endline)
+                        tr.AddNewlyCreatedDBObject(endline, True)
+                        lwp1.JoinEntity(endline)
+                        lwp1.JoinEntity(lwp2)
+                        lwp2.Erase()
+                        endline.Erase()
+
+                    Case Is = "S"
+                        Dim Startline As New Polyline
+                        With Startline
+                            .AddVertexAt(0, New Point2d(spt1.X, spt1.Y), 0, 0, 0)
+                            .AddVertexAt(1, New Point2d(spt2.X, spt2.Y), 0, 0, 0)
+                        End With
+                        If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                        currSpace.AppendEntity(Startline)
+                        tr.AddNewlyCreatedDBObject(Startline, True)
+                        lwp1.JoinEntity(Startline)
+                        lwp1.JoinEntity(lwp2)
+                        lwp2.Erase()
+                        Startline.Erase()
+                    Case Is = "N"
+                End Select
+
+            ElseIf TypeOf obj1 Is Polyline2d And TypeOf obj2 Is Polyline2d Then
+                lwp12D = TryCast(obj1, Polyline2d)
+                lwp22D = TryCast(obj2, Polyline2d)
+                lwp12D.Elevation = 0
+                lwp22D.Elevation = 0
+
+                Dim endseg As New Point3dCollection
+                Dim startSeg As New Point3dCollection
+                Dim bulges As New DoubleCollection
+
+                If lwp12D IsNot Nothing And lwp22D IsNot Nothing Then
+                    spt1 = lwp12D.StartPoint
+                    ept1 = lwp12D.EndPoint
+                    spt2 = lwp22D.StartPoint
+                    ept2 = lwp22D.EndPoint
+                    endseg.Add(ept1)
+                    endseg.Add(ept2)
+                    startSeg.Add(spt1)
+                    startSeg.Add(spt2)
+                End If
+
+                Dim currSpace As BlockTableRecord = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+
+                Select Case myString
+                    Case Is = "B"
+
+                        Using startLine As New Polyline2d(Poly2dType.SimplePoly, startSeg, 0, False, 0, 0, bulges)
                             If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
                             currSpace.AppendEntity(startLine)
                             tr.AddNewlyCreatedDBObject(startLine, True)
+                            startLine.Layer = sLayerName
 
-                            Dim endline As New Polyline
-                            With endline
-                                .AddVertexAt(0, New Point2d(Ept1.X, Ept1.Y), 0, 0, 0)
-                                .AddVertexAt(1, New Point2d(Ept2.X, Ept2.Y), 0, 0, 0)
-                            End With
+                            Using endline As New Polyline2d(Poly2dType.SimplePoly, endseg, 0, False, 0, 0, bulges)
+                                If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                currSpace.AppendEntity(endline)
+                                tr.AddNewlyCreatedDBObject(endline, True)
+                                endline.Layer = sLayerName
+                                lwp1.JoinEntity(startLine)
+                                lwp1.JoinEntity(endline)
+                                lwp1.JoinEntity(lwp2)
+                                lwp1.Closed = True
+                            End Using
+                        End Using
+
+                    Case Is = "E"
+                        Using endline As New Polyline2d(Poly2dType.SimplePoly, endseg, 0, False, 0, 0, bulges)
                             If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
                             currSpace.AppendEntity(endline)
                             tr.AddNewlyCreatedDBObject(endline, True)
-                            lwp1.JoinEntity(startLine)
+                            endline.Layer = sLayerName
                             lwp1.JoinEntity(endline)
                             lwp1.JoinEntity(lwp2)
-                            lwp1.Closed = True
-                            lwp2.Erase()
-                            endline.Erase()
-                            startLine.Erase()
+                        End Using
 
-                        Case Is = "E"
-                            Dim endline As New Polyline
-                            With endline
-                                .AddVertexAt(0, New Point2d(Ept1.X, Ept1.Y), 0, 0, 0)
-                                .AddVertexAt(1, New Point2d(Ept2.X, Ept2.Y), 0, 0, 0)
-                            End With
-                            If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
-                            currSpace.AppendEntity(endline)
-                            tr.AddNewlyCreatedDBObject(endline, True)
-                            lwp1.JoinEntity(endline)
-                            lwp1.JoinEntity(lwp2)
-                            lwp2.Erase()
-                            endline.Erase()
-
-                        Case Is = "S"
-                            Dim Startline As New Polyline
-                            With Startline
-                                .AddVertexAt(0, New Point2d(Spt1.X, Spt1.Y), 0, 0, 0)
-                                .AddVertexAt(1, New Point2d(Spt2.X, Spt2.Y), 0, 0, 0)
-                            End With
+                    Case Is = "S"
+                        Using Startline As New Polyline2d(Poly2dType.SimplePoly, startSeg, 0, False, 0, 0, bulges)
                             If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
                             currSpace.AppendEntity(Startline)
                             tr.AddNewlyCreatedDBObject(Startline, True)
+                            Startline.Layer = sLayerName
                             lwp1.JoinEntity(Startline)
                             lwp1.JoinEntity(lwp2)
-                            lwp2.Erase()
-                            Startline.Erase()
-                        Case Is = "N"
-                    End Select
-                Else
+                        End Using
 
-                End If
-                tr.Commit()
-            End Using
-            '            End If
+                    Case Is = "N"
+                End Select
+            End If
         End Sub
 
         Friend Sub CloseCurves(Ent1 As Entity, Ent2 As Entity, sLayerName As String, Optional closer As String = "")
@@ -2976,8 +3279,8 @@ Retry:
             'If per.Status = PromptStatus.OK Then
 
             Using tr As Transaction = db.TransactionManager.StartTransaction()
-                Dim obj1 As DBObject = tr.GetObject(Ent1.Id, OpenMode.ForRead)
-                Dim obj2 As DBObject = tr.GetObject(Ent2.Id, OpenMode.ForRead)
+                Dim obj1 As DBObject = tr.GetObject(Ent1.ObjectId, OpenMode.ForRead)
+                Dim obj2 As DBObject = tr.GetObject(Ent2.ObjectId, OpenMode.ForRead)
                 Dim lwp1 As Curve = TryCast(obj1, Curve)
                 Dim lwp2 As Curve = TryCast(obj2, Curve)
 
@@ -3043,6 +3346,167 @@ Retry:
             End Using
             '            End If
         End Sub
+
+        Friend Sub CloseLines(Ent1Id As ObjectId, Ent2id As ObjectId, slayername As String, Optional closer As String = "")
+
+            Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = doc.Editor
+            Dim db As Database = doc.Database
+            Dim myString As String = closer
+
+            If myString = "" Then
+
+                Dim pKeyOpts As New PromptKeywordOptions("")
+                With pKeyOpts
+                    .Message = vbLf & "Close the new feature?  Start (S) End (E) Both (B) or none (N)"
+                    .Keywords.Add("S")
+                    .Keywords.Add("E")
+                    .Keywords.Add("B")
+                    .Keywords.Add("N")
+                    .AllowNone = False
+                    .AppendKeywordsToMessage = True
+                End With
+
+                Dim pKeyRes As PromptResult = ed.GetKeywords(pKeyOpts)
+                myString = pKeyRes.StringResult
+            End If
+
+            'If per.Status = PromptStatus.OK Then
+
+            Using tr As Transaction = db.TransactionManager.StartTransaction()
+                Dim obj1 As DBObject = tr.GetObject(Ent1Id, OpenMode.ForRead)
+                Dim obj2 As DBObject = tr.GetObject(Ent2id, OpenMode.ForRead)
+                Dim lwp1 As Polyline = TryCast(obj1, Polyline)
+                Dim lwp2 As Polyline = TryCast(obj2, Polyline)
+                Dim lwp2D As Polyline2d = TryCast(obj1, Polyline2d)
+                Dim lwp1D As Polyline2d = TryCast(obj2, Polyline2d)
+
+                If lwp1 IsNot Nothing AndAlso lwp2 IsNot Nothing Then
+                    lwp1.Elevation = 0
+                    lwp2.Elevation = 0
+                    Dim Spt1 As Point3d = lwp1.StartPoint
+                    Dim Ept1 As Point3d = lwp1.EndPoint
+                    Dim Spt2 As Point3d = lwp2.StartPoint
+                    Dim Ept2 As Point3d = lwp2.EndPoint
+
+                    Dim currSpace As BlockTableRecord = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+
+                    Select Case myString
+                        Case Is = "B"
+                            Dim startLine As New Polyline
+                            With startLine
+                                .AddVertexAt(0, New Point2d(Spt1.X, Spt1.Y), 0, 0, 0)
+                                .AddVertexAt(1, New Point2d(Spt2.X, Spt2.Y), 0, 0, 0)
+                            End With
+                            If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                            currSpace.AppendEntity(startLine)
+                            tr.AddNewlyCreatedDBObject(startLine, True)
+
+                            Dim endline As New Polyline
+                            With endline
+                                .AddVertexAt(0, New Point2d(Ept1.X, Ept1.Y), 0, 0, 0)
+                                .AddVertexAt(1, New Point2d(Ept2.X, Ept2.Y), 0, 0, 0)
+                            End With
+                            If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                            currSpace.AppendEntity(endline)
+                            tr.AddNewlyCreatedDBObject(endline, True)
+                            lwp1.JoinEntity(startLine)
+                            lwp1.JoinEntity(endline)
+                            lwp1.JoinEntity(lwp2)
+                            lwp1.Closed = True
+                            lwp2.Erase()
+                            endline.Erase()
+                            startLine.Erase()
+
+                        Case Is = "E"
+                            Dim endline As New Polyline
+                            With endline
+                                .AddVertexAt(0, New Point2d(Ept1.X, Ept1.Y), 0, 0, 0)
+                                .AddVertexAt(1, New Point2d(Ept2.X, Ept2.Y), 0, 0, 0)
+                            End With
+                            If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                            currSpace.AppendEntity(endline)
+                            tr.AddNewlyCreatedDBObject(endline, True)
+                            lwp1.JoinEntity(endline)
+                            lwp1.JoinEntity(lwp2)
+                            lwp2.Erase()
+                            endline.Erase()
+
+                        Case Is = "S"
+                            Dim Startline As New Polyline
+                            With Startline
+                                .AddVertexAt(0, New Point2d(Spt1.X, Spt1.Y), 0, 0, 0)
+                                .AddVertexAt(1, New Point2d(Spt2.X, Spt2.Y), 0, 0, 0)
+                            End With
+                            If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                            currSpace.AppendEntity(Startline)
+                            tr.AddNewlyCreatedDBObject(Startline, True)
+                            lwp1.JoinEntity(Startline)
+                            lwp1.JoinEntity(lwp2)
+                            lwp2.Erase()
+                            Startline.Erase()
+                        Case Is = "N"
+                    End Select
+
+                ElseIf lwp1D IsNot Nothing AndAlso lwp2D IsNot Nothing Then
+                    lwp1D.Elevation = 0
+                    lwp2D.Elevation = 0
+                    Dim Spt1 As Point3d = lwp1D.StartPoint
+                    Dim Ept1 As Point3d = lwp1D.EndPoint
+                    Dim Spt2 As Point3d = lwp2D.StartPoint
+                    Dim Ept2 As Point3d = lwp2D.EndPoint
+
+                    Dim endseg As New Point3dCollection
+                    Dim startSeg As New Point3dCollection
+                    'Dim bulges As New DoubleCollection
+
+                    endseg.Add(Ept1)
+                    endseg.Add(Ept2)
+                    startSeg.Add(Spt1)
+                    startSeg.Add(Spt2)
+
+                    Dim currSpace As BlockTableRecord = tr.GetObject(db.CurrentSpaceId, OpenMode.ForRead)
+
+                    Select Case myString
+                        Case Is = "B"
+
+                            Using startLine As New Polyline2d(Poly2dType.SimplePoly, startSeg, 0, False, 0, 0, Nothing)
+                                If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                currSpace.AppendEntity(startLine)
+                                tr.AddNewlyCreatedDBObject(startLine, True)
+                                startLine.Layer = slayername
+
+                                Using endline As New Polyline2d(Poly2dType.SimplePoly, endseg, 0, False, 0, 0, Nothing)
+                                    If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                    currSpace.AppendEntity(endline)
+                                    tr.AddNewlyCreatedDBObject(endline, True)
+                                    endline.Layer = slayername
+                                    'lwp1.Closed = True
+                                End Using
+                            End Using
+
+                        Case Is = "E"
+                            Using endline As New Polyline2d(Poly2dType.SimplePoly, endseg, 0, False, 0, 0, Nothing)
+                                If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                currSpace.AppendEntity(endline)
+                                tr.AddNewlyCreatedDBObject(endline, True)
+                                endline.Layer = slayername
+                            End Using
+
+                        Case Is = "S"
+                            Using Startline As New Polyline2d(Poly2dType.SimplePoly, startSeg, 0, False, 0, 0, Nothing)
+                                If currSpace.IsWriteEnabled = False Then currSpace.UpgradeOpen()
+                                currSpace.AppendEntity(Startline)
+                                tr.AddNewlyCreatedDBObject(Startline, True)
+                                Startline.Layer = slayername
+                            End Using
+                    End Select
+                End If
+                tr.Commit()
+            End Using
+            '            End If
+        End Sub
+
 
         Private Function WLisLoaded(ltName As String) As Boolean
 

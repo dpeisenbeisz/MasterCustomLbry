@@ -1,0 +1,419 @@
+﻿<ResourceDictionary
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:src="clr-namespace:Autodesk.Windows;assembly=AdWindows">
+
+  <src:RibbonToolTip x:Key="List_Arc_Data">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Command to list a circular arc's characteristics based upon 3 picked points or a picked arc.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+  
+  <src:RibbonToolTip x:Key="LABLKCUST">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Used to add text labels to block references that are inserted in any grid formation
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="LABLKS">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Used to add text labels to block references that are inserted in a preset grid formation
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CHBLKCOLOR">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Swaps the color of entities in all drawing files from one picked color to another
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="RENBLKS">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Batch changes the names of inserted blocks.  Can add, replace, or remove characters from the block names
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CBTZ">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Changes all entites to layer zero in the definitions of picked block references.  Keeps assigned entity colors the same.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CBBL">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Changes colors and plotstyles of all entities to ByLayer in the definitions of picked blocks
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CPSBL">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Changes all plotstyles in picked block references to ByLayer
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="SetDwgsBase">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Changes the base point of all dwg files in a directory to (0,0,0).
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="BLKDATA">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Opens a custom form with a list of all blocks and their properties in the current drawing.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="INSALL">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Inserts all blocks in a directory into current drawing.  Blocks are inserted in a grid formation that is picked by the user.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="THUMBS">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Generates thumbnail imanges for selected dwg files in a directory.  Can take a while for a directory with many dwgs.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="PATF">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Purges all unused textstyles from all drawings in a directory.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="WBTF">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Writes all user block definitions to a picked folder
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CBU">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Changes insertion units of picked blocks
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CPM">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Changes the linetypes of pavement markings.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CPMW">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Cycles the visibility states of all sub-block references in a pavement marking block created with the custom command for pavemment markings.  Changes visibility state to Existing, Proposed, or Remove
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="SealSig">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Toggles the signature between visible and invisible in the engineer's seal block in one or more picked layouts
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="MKST">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Draws a star shape that can be an outline or that has the interior lines shown.  Can be one of many different possible types of stars.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="MKSTE">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Draws a star inside of an ellipse instead of a circle.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="MKSTAR">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Similar to MKST, but always draws a star as a continuous polyline and does not allow user to pick star type
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="CBYA">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Draws a circle by its area
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="SBYA">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Draws a square by area
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="ETAN">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Draws all exterior tangents for two picked circles.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="ITAN">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Draws all interior tangets for two picked circles
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="TANPT">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Draws all existing tangents to a circle from a picked point
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+
+  <src:RibbonToolTip x:Key="RgnCentroid">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Places a symbol at the centroid of a 2d region
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+
+  <src:RibbonToolTip x:Key="LV">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Lists polyline vertices
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="FRZVPLAY">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Freezes the layer of picked entities in the current paperspace viewport only
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="ExpLayers">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Exports layer definitions as an xml file
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="ImpLayers">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Imports layer definitions from an xml file
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="EML">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Deletes and purges picked layer from drawing.  If entities exist on layer, asks if they should be deleted with the layer.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="MDL">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Merges entities from a source layer to a destination layer and asks if the source layer should be deleted.
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+
+  <src:RibbonToolTip x:Key="LANC">
+    <src:RibbonToolTip.ExpandedContent>
+      <StackPanel>
+        <TextBlock Background="AntiqueWhite" TextAlignment="Left">
+          Lists all available commands in custom assemblies
+        </TextBlock>
+        <Image Source="" Width="Auto" Height="Auto">
+        </Image>
+      </StackPanel>
+    </src:RibbonToolTip.ExpandedContent>
+  </src:RibbonToolTip>
+  
+  
+  
+
+</ResourceDictionary>
