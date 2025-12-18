@@ -1,21 +1,23 @@
-﻿Imports System.Collections.Specialized
+﻿Imports System.CodeDom
 Imports System.IO
 Imports System.Math
 Imports System.Reflection
 Imports System.Text
+Imports System.Windows.Controls
 Imports System.Windows.Forms
-'Imports Autodesk.AutoCAD.PlottingServices
+Imports System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel
 Imports System.Xml
 Imports System.Xml.Schema
 Imports System.Xml.Serialization
 Imports Autodesk.AutoCAD.ApplicationServices
+Imports Autodesk.AutoCAD.ApplicationServices.DatabaseExtension
 Imports Autodesk.AutoCAD.Colors
 Imports Autodesk.AutoCAD.DatabaseServices
 Imports Autodesk.AutoCAD.EditorInput
 Imports Autodesk.AutoCAD.Geometry
+Imports Autodesk.AutoCAD.Internal
 Imports Autodesk.AutoCAD.Runtime
 Imports MasterCustomLibrary.AcCommon
-
 
 'project and file (c) David Eisenbeisz 2023
 
@@ -34,7 +36,7 @@ Namespace AcCommands
             With peo
                 .SetRejectMessage(vbLf & "Selected entity must be a polyline or a line.")
                 .AddAllowedClass(GetType(Line), True)
-                .AddAllowedClass(GetType(Polyline), True)
+                .AddAllowedClass(GetType(Autodesk.AutoCAD.DatabaseServices.Polyline), True)
             End With
 
             Dim objId As ObjectId
@@ -1548,6 +1550,64 @@ SkipIt:
 
         End Sub
 
+        <CommandMethod("AUDITSF")>
+        Public Sub AuditSelectFiles()
+            Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim curDwg As Document = acDwgMgr.MdiActiveDocument
+            Dim dwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            ed.WriteMessage(vbLf & "This command will audit all selected drawing files.")
+            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
+            If Not uR Then Exit Sub
+
+            'Dim blkFldr As String = "//EESServer/datadisk/cad/blocks/road/reg colored/design"
+
+
+            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings to purge layers")
+            Dim pathList As New Dictionary(Of String, String)
+
+            If myFiles IsNot Nothing And myFiles.Length > 0 Then
+                For Each fName As String In myFiles
+                    pathList.Add(Path.GetFileNameWithoutExtension(fName), fName)
+                Next
+            Else
+                Exit Sub
+            End If
+
+            'Dim blkFldr As String = GetMyFolderName()
+            'Dim blkfldr As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design"
+            'If String.IsNullOrEmpty(blkFldr) Then Exit Sub
+            'If Not Directory.Exists(blkFldr) Then Exit Sub
+            'Dim files() As FileInfo = AllDwgFilesInFolder(blkFldr, False)
+
+            Try
+
+                For Each ky As String In pathList.Keys
+                    Dim fi As New FileInfo(pathList(ky))
+                    Dim acDB As New Database(False, True)
+                    Dim thisFile As String = pathList(ky)
+                    ed.WriteMessage(vbLf & ky)
+                    'read dwg file into database
+                    Try
+                        acDB.ReadDwgFile(thisFile, System.IO.FileShare.Read, False, "")
+                        acDB.CloseInput(True)
+                    Catch __unusedException1__ As System.Exception
+                        ed.WriteMessage(vbLf & "Unable to read drawing file.")
+                        Exit Sub
+                    End Try
+
+                    Audit(acDB, True, True)
+                    acDB.SaveAs(thisFile, True, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, acDB.SecurityParameters)
+                Next
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+            End Try
+
+        End Sub
+
+
         <CommandMethod("PATF")>
         Public Sub PurgeAllDwgFilesInFolder()
             Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
@@ -1555,80 +1615,384 @@ SkipIt:
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
 
-            ed.WriteMessage(vbLf & "This command will purge non-standard textstyles from all drawing files In a designated folder.")
+            ed.WriteMessage(vbLf & "This command will purge non-standard textstyles from all selected dwg files.")
+            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
 
-            Dim blkFldr As String = GetMyFolderName()
+            If Not uR Then Exit Sub
+
+            'Dim blkFldr As String = "//EESServer/datadisk/cad/blocks/road/reg colored/design/temptest"
+
+            'Dim blkFldr As String = GetMyFolderName()
             'Dim blkfldr As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design"
-            If String.IsNullOrEmpty(blkFldr) Then Exit Sub
-            If Not Directory.Exists(blkFldr) Then Exit Sub
+            'If String.IsNullOrEmpty(blkFldr) Then Exit Sub
+            'If Not Directory.Exists(blkFldr) Then Exit Sub
 
-            Dim files() As FileInfo = AllDwgFilesInFolder(blkFldr, False)
+            'Dim files() As FileInfo = AllDwgFilesInFolder(blkFldr, False)
+
+            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings to purge layers")
             Dim pathList As New Dictionary(Of String, String)
 
-            For Each fi As FileInfo In files
-                Dim dwgName As String = Path.GetFileNameWithoutExtension(fi.Name)
-                If Not InStr(dwgName.ToUpper, "MASTER") Or Not InStr(dwgName.ToUpper, "DETAIL") Then
-                    pathList.Add(dwgName, fi.FullName)
-                Else
-                    ed.WriteMessage(vbLf & "Dwg " & dwgName & " Not processed.")
-                    Dim cont As Boolean = YesNoQuery(vbLf & "Continue processing?")
-                    If Not cont Then Exit Sub
-                End If
-            Next
+            If myFiles IsNot Nothing And myFiles.Length > 0 Then
+                For Each fName As String In myFiles
+                    pathList.Add(Path.GetFileNameWithoutExtension(fName), fName)
+                Next
+            Else
+                Exit Sub
+            End If
+
+            'For Each fi As FileInfo In files
+            '    Dim dwgName As String = Path.GetFileNameWithoutExtension(fi.Name)
+            '    If Not dwgName.ToUpper.Contains("MASTER") Or Not dwgName.ToUpper.Contains("DETAIL") Then
+            '        pathList.Add(dwgName, fi.FullName)
+            '    Else
+            '        'ed.WriteMessage(vbLf & "Dwg " & dwgName & " Not processed.")
+            '        'Dim cont As Boolean = YesNoQuery(vbLf & "Continue processing?")
+            '        'If Not cont Then Exit Sub
+            '    End If
+            'Next
 
             For Each ky As String In pathList.Keys
                 Try
-
-                    Dim acDB As New Database(False, True)
-
-                    'read dwg file into database
-                    Try
-                        acDB.ReadDwgFile(pathList(ky), System.IO.FileShare.Read, False, "")
-                        acDB.CloseInput(True)
-                    Catch __unusedException1__ As System.Exception
-                        MessageBox.Show(vbLf & "Unable to read drawing file.")
-                        Return
-                    End Try
-
                     'Dim acDoc As Document = acDwgMgr.Open(pathList(ky), False)
-                    Using actrans As Transaction = acDB.TransactionManager.StartTransaction
-                        'Using docLock As DocumentLock = acDoc.LockDocument
-                        'Dim acdb As Database = acDoc.Database
-                        Dim tst As TextStyleTable = actrans.GetObject(acDB.TextStyleTableId, OpenMode.ForWrite)
-                        Dim cStyleID As ObjectId = acDB.Textstyle
-                        Dim cStyle As TextStyleTableRecord = actrans.GetObject(cStyleID, OpenMode.ForRead)
-                        If Not cStyle.Name = "Standard" Then
-                            Dim tempID As ObjectId = tst("Standard")
-                            If Not tempID.IsNull Then acDB.Textstyle = tempID
-                        End If
+                    'Dim acdb As Database = acDoc.Database
+                    ed.WriteMessage(vbLf & "Processing: " & ky)
 
-                        For Each stId As ObjectId In tst
-                            Dim prgList As New ObjectIdCollection
-                            Dim myStyle As TextStyleTableRecord = actrans.GetObject(stId, OpenMode.ForWrite)
-                            If Not myStyle.Name = "Standard" Then
-                                prgList.Add(stId)
-                                acDB.Purge(prgList)
-                                Try
-                                    myStyle.Erase(True)
-                                Catch ex As Exception
-                                    Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
-                                End Try
+                    Using acDB As New Database(False, True)
+
+                        'read dwg file into database
+                        Try
+                            acDB.ReadDwgFile(pathList(ky), System.IO.FileShare.Read, False, "")
+                            acDB.CloseInput(True)
+                        Catch __unusedException1__ As System.Exception
+                            ed.WriteMessage(vbLf & "Unable to read drawing file.")
+                            Exit Sub
+                        End Try
+
+                        'Dim acDoc As Document = acDwgMgr.Open(pathList(ky), False)
+                        Using actrans As Transaction = acDB.TransactionManager.StartTransaction
+                            'Using docLock As DocumentLock = acDoc.LockDocument
+                            'Dim acdb As Database = acDoc.Database
+                            Dim tst As TextStyleTable = actrans.GetObject(acDB.TextStyleTableId, OpenMode.ForWrite)
+
+
+                            'get rid of the Legend table style
+                            Dim tabTab As DBDictionary = actrans.GetObject(acDB.TableStyleDictionaryId, OpenMode.ForWrite)
+                            If tabTab.Contains("Legend") Then
+                                Dim tabObId As ObjectId = tabTab("Legend")
+                                Dim temptabObIds As New ObjectIdCollection
+                                temptabObIds.Add(tabObId)
+                                acDB.Purge(temptabObIds)
                             End If
-                        Next
-                        'End Using
 
-                        actrans.Commit()
+                            'make the current textstyle Standard
+                            Dim cStyleID As ObjectId = acDB.Textstyle
+                            Dim cStyle As TextStyleTableRecord = actrans.GetObject(cStyleID, OpenMode.ForRead)
 
+                            If Not cStyle.Name = "Standard" Then
+                                Dim tempID As ObjectId = tst("Standard")
+                                If Not tempID.IsNull Then acDB.Textstyle = tempID
+                            End If
+
+                            Dim prgList As New ObjectIdCollection
+                            Dim transDic As Dictionary(Of String, String) = RGtranslateDic()
+
+                            'cycle through the textstyletable and get each textstyle
+                            For Each stId As ObjectId In tst
+                                Dim myStyle As TextStyleTableRecord = actrans.GetObject(stId, OpenMode.ForWrite)
+                                Dim stlName As String = myStyle.Name
+
+                                'if it is not Standard, then collect the text objects that use this style
+                                If Not stlName = "Standard" Then
+                                    Dim textObjs As ObjectIdCollection = GetDBTextWithStyle(stlName, acDB, True)
+                                    'if the style has no text referencing it, add it to the purge list
+                                    If textObjs.Count = 0 Then
+                                        prgList.Add(stId)
+                                    Else
+                                        'if there are text objects using this style, check to see if the name is correct.  If not, check to see what font it uses.
+                                        If Not Left(stlName, 6).ToUpper = "SERIES" Then
+                                            'Dim myFnt As String = Path.GetFileNameWithoutExtension(myStyle.FileName)
+                                            Dim myFnt As String = myStyle.FileName
+                                            'if it is a Roadgeek font, then rename the style to the correct series based upon the font name
+                                            If Left(myFnt, 8) = "Roadgeek" Then
+                                                Dim stInt As Integer = myFnt.IndexOf("Series")
+                                                Dim tempName As String = myFnt.Substring(stInt)
+
+                                                If transDic.Keys.Contains(tempName) Then
+                                                    Dim testName As String = transDic(tempName)
+                                                    'if there is no style with the same name, rename it
+                                                    If Not tst.Has(testName) Then
+                                                        Dim cont As Boolean = YesNoQuery(vbLf & "Change style name " & stlName & " to " & testName & " in file " & ky)
+                                                        If cont Then
+                                                            myStyle.Name = testName
+                                                            ed.WriteMessage(vbLf & "Style named " & stlName & " has been renamed to " & testName)
+                                                        End If
+                                                    Else
+                                                        For Each tID As ObjectId In textObjs
+                                                            Dim textObj As DBText = actrans.GetObject(tID, OpenMode.ForWrite)
+                                                            textObj.TextStyleId = tst(testName)
+                                                        Next
+                                                    End If
+                                                End If
+                                            End If
+                                        End If
+                                    End If
+                                End If
+                            Next
+
+                            'if there are styles to purge from this drawing, purge them
+                            Try
+                                If prgList.Count > 0 Then acDB.Purge(prgList)
+                                actrans.Commit()
+                            Catch ex As Exception
+                                Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
+                                actrans.Abort()
+                                Continue For
+                                'acDoc.CloseAndDiscard
+                            End Try
+                            'ed.WriteMessage(vbLf & "style " & stlName & " has been purged from " & ky)
+                            'End Using
+                            'acDoc.CloseAndSave(pathList(ky))
+                            acDB.SaveAs(pathList(ky), True, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, acDB.SecurityParameters)
+                        End Using
                     End Using
 
-                    'acDoc.CloseAndSave(pathList(ky))
-                    acDB.SaveAs(pathList(ky), False, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, acDB.SecurityParameters)
-
                 Catch ex As Exception
+                    ed.WriteMessage(ex.Message)
+                    Continue For
                 End Try
             Next
 
         End Sub
+
+
+        <CommandMethod("URGS")>
+        Public Sub UpdateRoadgeekStyles()
+            Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim curDwg As Document = acDwgMgr.MdiActiveDocument
+            Dim dwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+            ed.WriteMessage(vbLf & "This command will update all Roadgeek 2000 fonts to Roadgeek 2005 fonts for all selected dwgs in a directory.")
+            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
+            If Not uR Then Exit Sub
+
+            'Dim blkFldr As String = "//EESServer/datadisk/cad/blocks/road/reg colored/design/temptest"
+
+            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings to purge layers")
+
+            'Dim blkFldr As String = GetMyFolderName()
+            'Dim blkfldr As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design"
+            'If String.IsNullOrEmpty(blkFldr) Then Exit Sub
+            'If Not Directory.Exists(blkFldr) Then Exit Sub
+
+            'Dim files() As FileInfo = AllDwgFilesInFolder(blkFldr, False)
+
+            Dim pathList As New Dictionary(Of String, String)
+
+            If myFiles IsNot Nothing And myFiles.Length > 0 Then
+                For Each fName As String In myFiles
+                    pathList.Add(Path.GetFileNameWithoutExtension(fName), fName)
+                Next
+            Else
+                Exit Sub
+            End If
+
+            'For Each fi As FileInfo In files
+            '    Dim dwgName As String = Path.GetFileNameWithoutExtension(fi.Name)
+            '    If Not dwgName.ToUpper.Contains("MASTER") Or Not dwgName.ToUpper.Contains("DETAIL") Then
+            '        pathList.Add(dwgName, fi.FullName)
+            '    Else
+            '        'ed.WriteMessage(vbLf & "Dwg " & dwgName & " Not processed.")
+            '        'Dim cont As Boolean = YesNoQuery(vbLf & "Continue processing?")
+            '        'If Not cont Then Exit Sub
+            '    End If
+            'Next
+
+            For Each ky As String In pathList.Keys
+                Try
+                    'Dim acDoc As Document = acDwgMgr.Open(pathList(ky), False)
+                    'Dim acdb As Database = acDoc.Database
+                    ed.WriteMessage(vbLf & "Processing: " & ky)
+
+                    Using acDB As New Database(False, True)
+
+                        'read dwg file into database
+                        Try
+                            acDB.ReadDwgFile(pathList(ky), System.IO.FileShare.Read, False, "")
+                            acDB.CloseInput(True)
+                        Catch __unusedException1__ As System.Exception
+                            ed.WriteMessage(vbLf & "Unable to read drawing file.")
+                            Exit Sub
+                        End Try
+
+                        'Dim acDoc As Document = acDwgMgr.Open(pathList(ky), False)
+                        Using actrans As Transaction = acDB.TransactionManager.StartTransaction
+
+                            Dim tst As TextStyleTable = actrans.GetObject(acDB.TextStyleTableId, OpenMode.ForWrite)
+                            Dim rgFiles As Dictionary(Of String, String) = GetRGFilesDic()
+
+                            For Each stId As ObjectId In tst
+                                Dim myStyle As TextStyleTableRecord = actrans.GetObject(stId, OpenMode.ForWrite)
+                                Dim stlName As String = myStyle.Name
+                                Dim myFnt As String = myStyle.FileName
+
+                                If myFnt.Contains("Roadgeek 2000") Then
+
+                                    Select Case myFnt
+                                        Case Is = rgFiles("RG_2000B")
+                                            myStyle.FileName = rgFiles("RG_2005B")
+                                        Case Is = rgFiles("RG_2000C")
+                                            myStyle.FileName = rgFiles("RG_2005C")
+                                        Case Is = rgFiles("RG_2000D")
+                                            myStyle.FileName = rgFiles("RG_2005D")
+                                        Case Is = rgFiles("RG_2000E")
+                                            myStyle.FileName = rgFiles("RG_2005E")
+                                        Case Is = rgFiles("RG_2000F")
+                                            myStyle.FileName = rgFiles("RG_2005F")
+                                        Case Else
+                                    End Select
+
+                                    ed.WriteMessage(vbLf & "Style named " & stlName & " has been changed to Roadgeek 2005")
+                                End If
+                            Next
+
+                            actrans.Commit()
+                            acDB.SaveAs(pathList(ky), True, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, acDB.SecurityParameters)
+                        End Using
+                    End Using
+
+                Catch ex As Exception
+                    ed.WriteMessage(ex.Message)
+                    Continue For
+                End Try
+
+            Next
+
+        End Sub
+
+        <CommandMethod("PALF")>
+        Public Sub PurgeAllLayersFromFIles()
+            Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim curDwg As Document = acDwgMgr.MdiActiveDocument
+            Dim dwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            ed.WriteMessage(vbLf & "This command will purge unused layers from all selected drawing files in a folder.")
+            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
+            If Not uR Then Exit Sub
+
+            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings to purge layers")
+
+            'Dim blkFldr As String = GetMyFolderName()
+            'Dim blkfldr As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design"
+            'If String.IsNullOrEmpty(blkFldr) Then Exit Sub
+            'If Not Directory.Exists(blkFldr) Then Exit Sub
+
+            'Dim files() As FileInfo = AllDwgFilesInFolder(blkFldr, False)
+
+            Dim pathList As New Dictionary(Of String, String)
+
+            If myFiles IsNot Nothing And myFiles.Length > 0 Then
+                For Each fName As String In myFiles
+                    pathList.Add(Path.GetFileNameWithoutExtension(fName), fName)
+                Next
+            Else
+                Exit Sub
+            End If
+
+            'For Each fi As FileInfo In files
+            '    If fi.Extension = ".dwg" Then
+            '        Dim dwgName As String = Path.GetFileNameWithoutExtension(fi.Name)
+            '        If Not dwgName.ToUpper.Contains("MASTER") Or Not dwgName.ToUpper.Contains("DETAIL") Then
+            '            pathList.Add(dwgName, fi.FullName)
+            '        Else
+            '            ed.WriteMessage(vbLf & "Dwg " & dwgName & " Not processed.")
+            '            Dim cont As Boolean = YesNoQuery(vbLf & "Continue processing?")
+            '            If Not cont Then
+            '                Exit Sub
+            '            Else
+            '                Continue For
+            '            End If
+            '        End If
+            '    End If
+            'Next
+
+            For Each ky As String In pathList.Keys
+                Try
+                    Using acDB As New Database(False, True)
+
+                        'read dwg file into database
+                        Try
+                            acDB.ReadDwgFile(pathList(ky), System.IO.FileShare.Read, False, "")
+                            acDB.CloseInput(True)
+                            Debug.Print(vbLf & ky)
+                        Catch __unusedException1__ As System.Exception
+                            ed.WriteMessage(vbLf & "Unable to read drawing file: " & ky)
+                            Continue For
+                        End Try
+
+                        'Dim acDoc As Document = acDwgMgr.Open(pathList(ky), False)
+                        Using actrans As Transaction = acDB.TransactionManager.StartTransaction
+                            'Using docLock As DocumentLock = acDoc.LockDocument
+                            'DocumentCollectionExtension.Open(acDwgMgr, pathList(ky), False)
+                            'Using acDoc As Document = acDwgMgr.GetDocument(acDB)
+                            Dim lTbl As LayerTable = actrans.GetObject(acDB.LayerTableId, OpenMode.ForRead)
+                            Dim cLayID As ObjectId = acDB.Clayer
+                            If Not cLayID = acDB.LayerZero Then acDB.Clayer = acDB.LayerZero
+                            'Dim cLayr As LayerTableRecord = actrans.GetObject(cLayID, OpenMode.ForRead)
+                            'Dim tempID As ObjectId = acDB.LayerZero
+                            'If Not tempID.IsNull Then acDB.Clayer = tempID
+                            'End If
+
+                            Dim prgList As New ObjectIdCollection
+                            For Each layId As ObjectId In lTbl
+                                If Not layId = dwgDB.LayerZero Then
+                                    Dim myLyr As LayerTableRecord = actrans.GetObject(layId, OpenMode.ForRead)
+                                    Dim lyrObIds As ObjectIdCollection = GetEntitiesOnLayer(myLyr.Name)
+                                    If lyrObIds Is Nothing OrElse lyrObIds.Count = 0 Then
+                                        prgList.Add(layId)
+                                    End If
+                                    'If Not ObjectsExistOnLayer(myLyr.Name, acDB) Then
+                                    '        prgList.Add(layId)
+                                    '    End If
+                                End If
+                            Next
+
+                            If prgList.Count > 0 Then
+                                Try
+                                    acDB.Purge(prgList)
+                                Catch ex As Exception
+                                    Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
+                                End Try
+
+                                'End Using
+                                actrans.Commit()
+                                acDB.SaveAs(pathList(ky), False, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, acDB.SecurityParameters)
+                                ed.WriteMessage(vbLf & pathList(ky) & " purged and saved.")
+
+                                'acDoc.CloseAndSave(pathList(ky))
+                                'Else
+                                '    actrans.Abort()
+                                '    'acDoc.CloseAndDiscard
+                            Else
+                                ed.WriteMessage(vbLf & pathList(ky) & " not purged or saved.")
+                            End If
+
+
+                        End Using
+
+                    End Using
+
+                    'acDoc.CloseAndSave(pathList(ky))
+                Catch ex As Exception
+                    Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
+                    MessageBox.Show(ex.Message)
+                    Continue For
+                End Try
+
+            Next
+
+        End Sub
+
 
 
         <CommandMethod("WBTF")>
@@ -1795,16 +2159,16 @@ SkipIt:
                                         ent.UpgradeOpen()
                                         ent.Linetype = "PMREMOVE"
                                         ent.LinetypeScale = 1
-                                        If TypeOf ent Is Polyline Then
-                                            Dim pL As Polyline = TryCast(ent, Polyline)
+                                        If TypeOf ent Is Autodesk.AutoCAD.DatabaseServices.Polyline Then
+                                            Dim pL As Autodesk.AutoCAD.DatabaseServices.Polyline = TryCast(ent, Autodesk.AutoCAD.DatabaseServices.Polyline)
                                             If pL IsNot Nothing Then pL.Plinegen = True
                                         End If
                                     ElseIf ent.Linetype = "HIDDEN2" Then
                                         ent.UpgradeOpen()
                                         ent.Linetype = "PMREMOVE"
                                         ent.LinetypeScale = 1
-                                        If TypeOf ent Is Polyline Then
-                                            Dim pL As Polyline = TryCast(ent, Polyline)
+                                        If TypeOf ent Is Autodesk.AutoCAD.DatabaseServices.Polyline Then
+                                            Dim pL As Autodesk.AutoCAD.DatabaseServices.Polyline = TryCast(ent, Autodesk.AutoCAD.DatabaseServices.Polyline)
                                             If pL IsNot Nothing Then pL.Plinegen = True
                                         End If
                                     End If
@@ -2339,6 +2703,592 @@ TryAgain:
     Public Module GeometryCommands
 
         Friend m_area As Double
+        Private m_handMaxX As Double
+        Private m_handMinX As Double
+        'Private m_handMinY As Double
+        Private m_handMaxY As Double
+        Private m_polarity As Boolean
+        Private m_xtra As Double
+
+
+        <CommandMethod("HANDLINES", CommandFlags.UsePickSet)>
+        Public Sub HandLines()
+            'by David Eisenbeisz
+
+            Dim acDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgDB As Database = acDwg.Database
+            Dim ed As Editor = acDwg.Editor
+            Dim arcCol As New Collection
+
+            Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+
+            If SelResult.Status = PromptStatus.Error Then
+                Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select objects to hand draw:")}
+                With Seloptions
+                    .AllowDuplicates = False
+                    .RejectObjectsFromNonCurrentSpace = True
+                    .MessageForRemoval = "Invalid object.  Object not selected."
+                    .RejectObjectsOnLockedLayers = True
+
+                End With
+                SelResult = ed.GetSelection(Seloptions)
+            Else
+                ed.SetImpliedSelection(New ObjectId(-1) {})
+            End If
+
+            Dim hDistMin As Double
+            Dim hDistMax As Double
+            'Dim hAmpMin As Double
+            Dim hAmpMax As Double
+
+            If m_handMinX <> 0 And m_handMaxX <> 0 And m_handMaxY <> 0 Then
+                Dim upDateParams As Boolean = YesNoQuery(vbLf & "Update current roughness parameters?")
+                If upDateParams = False Then
+                    hDistMin = m_handMinX
+                    hDistMax = m_handMaxX
+                    'hAmpMin = m_handMinY
+                    hAmpMax = m_handMaxY
+                    GoTo ROUGHLINE
+                End If
+            End If
+
+            Dim pdMinX As New PromptDoubleOptions(vbLf & "Enter minimum frequency of roughness in model space units")
+            With pdMinX
+                .AllowNegative = False
+                .AllowZero = False
+                If m_handMinX > 0 Then .DefaultValue = m_handMinX
+            End With
+
+            Dim pdrMinX As PromptDoubleResult = ed.GetDouble(pdMinX)
+            If pdrMinX.Status = PromptStatus.OK Then
+                hDistMin = pdrMinX.Value
+                m_handMinX = hDistMin
+            Else
+                Exit Sub
+            End If
+
+            m_handMaxX = m_handMinX * 3
+            hDistMax = m_handMaxX
+
+            Dim pdoMaxY As New PromptDoubleOptions(vbLf & "Enter the distance in current space units for wobble deviation from the original line.")
+            'Dim pdoMaxY As New PromptDoubleOptions(vbLf & "Enter the maximum amplitude of roughness in model space units")
+            With pdoMaxY
+                .AllowNegative = False
+                .AllowZero = False
+                If m_handMaxY > 0 Then .DefaultValue = m_handMaxY
+            End With
+
+            Dim pdrMaxY As PromptDoubleResult = ed.GetDouble(pdoMaxY)
+            If pdrMaxY.Status = PromptStatus.OK Then
+                hAmpMax = pdrMaxY.Value
+                m_handMaxY = hAmpMax
+            Else
+                Exit Sub
+            End If
+
+ROUGHLINE:
+            'Dim hdist As Double = (hDistMin + hDistMax) / 2
+            'Dim hamp As Double = (hAmpMin + hAmpMax) / 2
+
+            Dim acSSet As SelectionSet
+            Dim myObjIds() As ObjectId
+
+            If SelResult.Status = PromptStatus.OK Then
+                acSSet = SelResult.Value
+                myObjIds = acSSet.GetObjectIds
+            Else
+                Exit Sub
+            End If
+
+            Dim isCircle As Boolean = False
+
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+
+                For Each obID As ObjectId In myObjIds
+                    Dim acEnt As Entity = TryCast(acTrans.GetObject(obID, OpenMode.ForRead), Entity)
+                    'If acEnt Is Nothing Then Continue For
+
+                    Dim myPts As New Point3dCollection
+
+                    If TypeOf acEnt Is Autodesk.AutoCAD.DatabaseServices.Polyline Then
+                        Dim myPoly As Autodesk.AutoCAD.DatabaseServices.Polyline = CType(acEnt, Autodesk.AutoCAD.DatabaseServices.Polyline)
+
+                        If myPoly.Closed Then isCircle = True
+
+                        myPts.Add(myPoly.StartPoint)
+                        m_polarity = True
+                        m_xtra = 0
+
+                        For i As Integer = 0 To myPoly.NumberOfVertices - 2
+                            Dim blg As Double = myPoly.GetBulgeAt(i)
+                            If blg = 0 Then
+                                Dim lineSeg As LineSegment2d = myPoly.GetLineSegment2dAt(i)
+                                'If lineSeg.Length < hDistMin Then Continue For
+
+                                If lineSeg.Length > hDistMax * 40000 Then
+                                    MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                                    Exit Sub
+                                End If
+                                Dim ls As Boolean
+                                If i = myPoly.NumberOfVertices - 2 Then ls = True
+
+                                Dim subPts As Point3dCollection = GetLineSegWobble(lineSeg, ls)
+                                If subPts Is Nothing Then Exit Sub
+
+                                For Each pt As Point3d In subPts
+                                    myPts.Add(pt)
+                                Next
+                            Else
+                                Dim arcSeg As CircularArc2d = myPoly.GetArcSegment2dAt(i)
+                                Dim tSPt As Point3d = myPoly.GetPointAtParameter(i)
+                                Dim arcReversed As Boolean
+                                If New Point2d(tSPt.X, tSPt.Y) = arcSeg.StartPoint Then
+                                    arcReversed = False
+                                Else
+                                    arcReversed = True
+                                End If
+
+                                Dim arcLen As Double = (arcSeg.EndAngle - arcSeg.StartAngle) * arcSeg.Radius
+                                '(myPoly.GetParameterAtPoint(CPoint3d(arcSeg.StartPoint)), myPoly.GetParameterAtPoint(CPoint3d(arcSeg.EndPoint)))
+                                If arcLen < hDistMin Then Continue For
+                                If arcLen > hDistMax * 40000 Then
+                                    MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                                    Exit Sub
+                                End If
+
+                                Dim ls As Boolean
+                                If i = myPoly.NumberOfVertices - 2 Then ls = True
+
+                                Dim subpts As Point3dCollection = GetCircArcWobble(arcSeg, ls, arcReversed)
+
+                                If subpts Is Nothing Then Exit Sub
+
+                                For Each pt As Point3d In subpts
+                                    myPts.Add(pt)
+                                Next
+
+                            End If
+                        Next
+
+                    ElseIf TypeOf acEnt Is Arc Then
+                        Dim acArc As Arc = CType(acEnt, Arc)
+                        Dim aPolyID As ObjectId = Arc2poly(acArc.ObjectId)
+                        If aPolyID = ObjectId.Null Then Exit Sub
+
+                        Dim myPoly As Autodesk.AutoCAD.DatabaseServices.Polyline = acTrans.GetObject(aPolyID, OpenMode.ForRead)
+                        Dim arcSeg As CircularArc2d = myPoly.GetArcSegment2dAt(0)
+                        Dim arcLen As Double = (arcSeg.EndAngle - arcSeg.StartAngle) * arcSeg.Radius
+
+                        Dim arcReversed As Boolean
+                        If arcSeg.IsClockWise Then
+                            arcReversed = True
+                        Else
+                            arcReversed = False
+                        End If
+
+                        '(myPoly.GetParameterAtPoint(CPoint3d(arcSeg.StartPoint)), myPoly.GetParameterAtPoint(CPoint3d(arcSeg.EndPoint)))
+                        If arcLen < hDistMin Then Continue For
+                        If arcLen > hDistMax * 40000 Then
+                            MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                            Exit Sub
+                        End If
+
+                        Dim subpts As Point3dCollection = GetCircArcWobble(arcSeg, True, arcReversed)
+
+                        For Each pt As Point3d In subpts
+                            myPts.Add(pt)
+                        Next
+
+                    ElseIf TypeOf acEnt Is Line Then
+                        Using myLine As Autodesk.AutoCAD.DatabaseServices.Line = CType(acEnt, Line)
+                            Using mypoly As New Autodesk.AutoCAD.DatabaseServices.Polyline
+                                mypoly.AddVertexAt(0, New Point2d(myLine.StartPoint.X, myLine.StartPoint.Y), 0, 0, 0)
+                                mypoly.AddVertexAt(1, New Point2d(myLine.EndPoint.X, myLine.EndPoint.Y), 0, 0, 0)
+
+                                Dim lineSeg As LineSegment2d = mypoly.GetLineSegment2dAt(0)
+                                If lineSeg.Length < hDistMin Then Continue For
+
+                                If lineSeg.Length > hDistMax * 40000 Then
+                                    MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                                    Exit Sub
+                                End If
+
+                                Dim subPts As Point3dCollection = GetLineSegWobble(lineSeg, True)
+
+                                For Each pt As Point3d In subPts
+                                    myPts.Add(pt)
+                                Next
+                            End Using
+                        End Using
+
+                    ElseIf TypeOf acEnt Is Circle Then
+                        isCircle = True
+                        Dim mycirc As Circle = CType(acEnt, Circle)
+                        Dim rad As Double = mycirc.Radius
+                        Dim xDist As Double = 0
+
+                        Dim ctr As Point3d = mycirc.Center
+                        Dim failsafe As Integer = 0
+                        Dim lastone As Boolean = False
+                        Try
+                            Dim newAmp As Single = m_handMaxY
+                            Dim rad1 As Double = rad + newAmp
+                            Dim radneg1 As Double = rad - newAmp
+                            Dim circumf As Double = 2 * PI * rad
+                            'Dim totalDist As Double = 0
+
+                            Do
+                                Dim tempXmin = m_handMinX * 100
+                                Dim tempXmax = m_handMaxX * 100
+                                Dim tempVal As Integer = CInt(Int((tempXmax * Rnd()) + tempXmin))
+                                Dim randTerm = tempVal / 100
+                                xDist += randTerm
+                                'Dim rotang As Double = xDist / rad
+
+                                'Randomize()
+                                'Dim tempymin = m_handMinY * 100
+                                'Dim tempymax = m_handMaxY * 100
+                                'Dim tempY As Integer = CInt(Int((tempymax * Rnd()) + tempymin))
+                                'newAmp = tempY / 100
+
+                                'Dim tmpLn As Line = l2d.Clone
+                                Dim curAng As Double = xDist / rad
+
+                                If xDist > circumf Then
+                                    'If curAng > 2 * PI Then
+                                    'rotAng = rotAng + (curAng - (2 * PI))
+                                    curAng = 2 * PI
+                                    lastone = True
+                                    rad1 = rad
+                                    radneg1 = rad
+                                    'm_polarity = Not m_polarity
+                                End If
+
+                                If m_polarity Then
+                                    Dim newX As Double = ctr.X + (rad1 * Cos(curAng))
+                                    Dim newY As Double = ctr.Y + (rad1 * Sin(curAng))
+                                    myPts.Add(New Point3d(newX, newY, 0))
+                                Else
+                                    Dim newX As Double = ctr.X + (radneg1 * Cos(curAng))
+                                    Dim newY As Double = ctr.Y + (radneg1 * Sin(curAng))
+                                    myPts.Add(New Point3d(newX, newY, 0))
+                                End If
+
+                                m_polarity = Not m_polarity
+                                failsafe += 1
+
+                                If lastone Then Exit Do
+
+                                If failsafe = 40000 Then
+                                    MessageBox.Show("Object too long or roughness period to short.  Break apart object or make roughness period longer.")
+                                    Exit Sub
+                                End If
+                            Loop While failsafe < 40000
+
+                        Catch ex As Exception
+                            MessageBox.Show(ex.Message)
+                            Exit Sub
+                        End Try
+
+                    Else
+                        MessageBox.Show("Entity cannot be used to create handline.  Try converting entity to polyline.")
+                        acTrans.Abort()
+                        Exit Sub
+                    End If
+
+                    Dim bt As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim mdlSpc As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
+
+                    Dim mkSpline As Boolean = YesNoQuery("Do you want to create a spline? (No creates a standard polyline with line segments only)")
+
+                    If mkSpline Then
+                        Using newSpline As New Autodesk.AutoCAD.DatabaseServices.Spline(myPts, KnotParameterizationEnum.SqrtChord, 3, 0.05)
+                            mdlSpc.AppendEntity(newSpline)
+                            acTrans.AddNewlyCreatedDBObject(newSpline, True)
+                        End Using
+                    Else
+                        Using newPline As New Polyline
+                            Dim pts2d As Point2dCollection = ConvertPoints2d(myPts)
+                            For i = 0 To pts2d.Count - 1
+                                Dim pt As Point2d = pts2d(i)
+                                newPline.AddVertexAt(i, pt, 0, 0, 0)
+                            Next
+                            If isCircle Then newPline.Closed = True
+                            mdlSpc.AppendEntity(newPline)
+                            acTrans.AddNewlyCreatedDBObject(newPline, True)
+                        End Using
+                    End If
+
+                Next
+
+                acTrans.Commit()
+
+            End Using
+
+        End Sub
+
+
+        Public Function GetLineSegWobble(lineseg As LineSegment2d, lastSeg As Boolean) As Point3dCollection
+
+            Dim myPts As New Point3dCollection
+
+            'create a temporary line entity from linesegment2d
+            Dim ln As New Line(CPoint3d(lineseg.StartPoint), CPoint3d(lineseg.EndPoint))
+            Dim ang As Double = ln.Angle
+            Dim segLen As Double = ln.Length
+
+            Dim failSafe As Integer = 0
+
+            'add first point at start of line
+            myPts.Add(ln.StartPoint)
+            Dim newAmp As Double = m_handMaxY
+            Dim lnType As Integer = 0
+
+            'determine direction of the line using start and end points
+            If ln.StartPoint.X >= ln.EndPoint.X Then
+                If ln.StartPoint.Y >= ln.EndPoint.Y Then
+                    lnType = 1
+                Else
+                    lnType = 2
+                End If
+            ElseIf ln.StartPoint.X < ln.EndPoint.X Then
+                If ln.StartPoint.Y <= ln.EndPoint.Y Then
+                    lnType = 1
+                Else
+                    lnType = 2
+                End If
+            End If
+
+            'get a random distance that is between min and max x distances
+            Randomize()
+            Dim tempXmin = m_handMinX * 100
+            Dim tempXmax = m_handMaxX * 100
+            Dim tempVal As Integer = CInt(Int((tempXmax * Rnd()) + tempXmin))
+            Dim randTerm = tempVal / 100
+
+            Dim xDist As Double = randTerm
+
+            Try
+                'if there is any distance left over from previous segment, use that distance for first point
+                If m_xtra > 0 Then
+                    xDist = m_xtra
+                    m_xtra = 0
+                End If
+
+                Do
+                    'if the current distance is longer than the segment, save extra distance and exit or create point at end of the line
+                    If xDist > segLen Then
+                        If lastSeg Then
+                            myPts.Add(ln.EndPoint)
+                        Else
+                            m_xtra = xDist - segLen
+                            'xDist = segLen
+                            'myPts.Add(CPoint3d(lineseg.EndPoint))
+                            m_polarity = Not m_polarity
+                        End If
+                        Exit Do
+                    End If
+
+                    Dim newPt As Point3d = ln.GetPointAtDist(xDist)
+
+                    'add points to collection according to the direction of the line
+                    If lnType = 1 Then
+                        If m_polarity Then
+                            Dim newX As Double = newPt.X + newAmp * Sin(ang)
+                            Dim newY As Double = newPt.Y - newAmp * Cos(ang)
+                            myPts.Add(New Point3d(newX, newY, 0))
+                        Else
+                            Dim newX As Double = newPt.X - newAmp * Sin(ang)
+                            Dim newY As Double = newPt.Y + newAmp * Cos(ang)
+                            myPts.Add(New Point3d(newX, newY, 0))
+                        End If
+                    ElseIf lnType = 2 Then
+                        If m_polarity Then
+                            Dim newX As Double = newPt.X - newAmp * Sin(ang)
+                            Dim newY As Double = newPt.Y - newAmp * Cos(ang)
+                            myPts.Add(New Point3d(newX, newY, 0))
+                        Else
+                            Dim newX As Double = newPt.X + newAmp * Sin(ang)
+                            Dim newY As Double = newPt.Y + newAmp * Cos(ang)
+                            myPts.Add(New Point3d(newX, newY, 0))
+                        End If
+                    End If
+
+                    'get next distance and adjust by random parameter
+                    Randomize()
+                    tempVal = CInt(Int((tempXmax * Rnd()) + tempXmin))
+                    randTerm = tempVal / 100
+                    xDist += randTerm
+
+                    m_polarity = Not m_polarity
+
+                    failSafe += 1
+
+                    If failSafe = 40000 Then
+                        MessageBox.Show("Object too long or roughness period to short.  Break apart object or make roughness period longer.")
+                        Return Nothing
+                        ln.Dispose()
+                        Exit Function
+                    End If
+
+                Loop While failSafe < 40000
+
+                Return myPts
+                ln.Dispose()
+                Exit Function
+
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+                Return Nothing
+                ln.Dispose()
+                Exit Function
+            End Try
+
+        End Function
+
+
+        Public Function GetCircArcWobble(arcSeg As CircularArc2d, lastseg As Boolean, isReversed As Boolean) As Point3dCollection
+
+            Dim acDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgDB As Database = acDwg.Database
+
+            Dim ctr As Point2d = arcSeg.Center
+            Dim rad As Double = arcSeg.Radius
+            'Dim arcLen As Double = (arcSeg.EndAngle - arcSeg.StartAngle) * rad
+            Dim arcLen As Double = arcSeg.GetLength(arcSeg.GetParameterOf(arcSeg.StartPoint), arcSeg.GetParameterOf(arcSeg.EndPoint))
+
+            Dim endVect As Vector2d = arcSeg.EndPoint.GetVectorTo(ctr)
+            Dim endAng As Double = arcSeg.ReferenceVector.Angle + arcSeg.EndAngle
+            Dim startVect As Vector2d = arcSeg.StartPoint.GetVectorTo(ctr)
+            Dim stAng As Double = arcSeg.StartAngle + arcSeg.ReferenceVector.Angle
+
+            Dim failsafe As Integer = 0
+            Dim rad1 As Double = rad + m_handMaxY
+            Dim radNeg1 As Double = rad - m_handMaxY
+
+            Dim xDist As Double
+            Dim mypts As New Point3dCollection
+
+            'Debug.Print(arcSeg.IsClockWise.ToString)
+            'Debug.Print("ReferenceAngle: " & Round(arcSeg.ReferenceVector.Angle * 180 / PI, 2) & "degrees")
+            'Debug.Print("StartAngle: " & Round(stAng * 180 / PI, 2) & " degrees")
+            'Debug.Print("EndAngle: " & Round(endAng * 180 / PI, 2) & " degrees")
+            'Debug.Print("")
+
+            'use function parameter to establish start and end angles
+            If isReversed Then
+                Dim tngl As Double = stAng
+                stAng = endAng
+                endAng = tngl
+            End If
+
+            'begin wobble algorithm
+            Try
+                Dim curAng As Double
+                Dim rotAng As Double
+
+                'first see if there is any distance left over from the previous segment by checking m_xtra
+                If m_xtra > 0 Then
+                    xDist = m_xtra
+                    m_xtra = 0
+                    'rotAng = xDist / rad
+                Else
+                    xDist = 0
+                End If
+
+                'use the xdist to calculate change in angle if there is any distance left over
+                rotAng = xDist / rad
+
+                'check arc direction and add or subtract angle from start of arc
+                If arcSeg.IsClockWise Then
+                    curAng = stAng - rotAng
+                Else
+                    curAng = stAng + rotAng
+                End If
+
+                'use polarity to determine wobble direction (radius distance)
+                'add first point to the collection
+                If m_polarity Then
+                    Dim newX As Double = ctr.X + (rad1 * Cos(curAng))
+                    Dim newY As Double = ctr.Y + (rad1 * Sin(curAng))
+                    mypts.Add(New Point3d(newX, newY, 0))
+                    m_polarity = Not m_polarity
+                Else
+                    Dim newX As Double = ctr.X + (radNeg1 * Cos(curAng))
+                    Dim newY As Double = ctr.Y + (radNeg1 * Sin(curAng))
+                    mypts.Add(New Point3d(newX, newY, 0))
+                    m_polarity = Not m_polarity
+                End If
+
+                'main wobble loop
+                Do
+                    'initialize random number gneerator
+                    'multiply min and max x by 100 before applying random number between 0 and 1
+                    Randomize()
+                    Dim tempXmin = m_handMinX * 100
+                    Dim tempXmax = m_handMaxX * 100
+                    Dim tempVal As Integer = CInt(Int((tempXmax * Rnd()) + tempXmin))
+                    'divide by 100 to get final distance
+                    Dim randTerm = tempVal / 100
+                    xDist += randTerm
+                    'convert distance to an angle
+                    rotAng = xDist / rad
+
+                    'if new distance is longer than the total arc length, exit the loop but save the extra distance for the next segment
+                    If xDist > arcLen Then
+                        'if last segment, use end point of arc
+                        If lastseg Then
+                            mypts.Add(CPoint3d(arcSeg.EndPoint))
+                        Else
+                            m_xtra = xDist - arcLen
+                        End If
+                        Exit Do
+                    End If
+
+                    'if xdist is within arc, check arc direction and add or subtract angle from start of arc
+                    If arcSeg.IsClockWise Then
+                        curAng = stAng - rotAng
+                    Else
+                        curAng = stAng + rotAng
+                    End If
+
+                    'use polarity to determine wobble direction (radius distance)
+                    'add next point to the collection
+                    If m_polarity Then
+                        Dim newX As Double = ctr.X + (rad1 * Cos(curAng))
+                        Dim newY As Double = ctr.Y + (rad1 * Sin(curAng))
+                        mypts.Add(New Point3d(newX, newY, 0))
+                    Else
+                        Dim newX As Double = ctr.X + (radNeg1 * Cos(curAng))
+                        Dim newY As Double = ctr.Y + (radNeg1 * Sin(curAng))
+                        mypts.Add(New Point3d(newX, newY, 0))
+                    End If
+
+                    'reverse polarity
+                    m_polarity = Not m_polarity
+
+                    failsafe += 1
+
+                    If failsafe = 40000 Then
+                        MessageBox.Show("Object too long or roughness period to short.  Break apart object or make roughness period longer.")
+                        Return Nothing
+                        Exit Function
+                    End If
+
+                Loop While failsafe < 40000
+
+                Return mypts
+                Exit Function
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+                Return Nothing
+                Exit Function
+            End Try
+
+        End Function
+
 
         <CommandMethod("MKST")>
         Public Sub MkSt()
@@ -2411,7 +3361,7 @@ TryAgain:
                 'figure out the type of star to make
                 Dim sType As Integer = 1
                 Dim starPts As New Point2dCollection
-                Dim pl As New Polyline
+                Dim pl As New Autodesk.AutoCAD.DatabaseServices.Polyline
                 Dim transVect As Vector3d = New Point3d(0, 0, 0).GetVectorTo(cPt)
 
                 Dim openShape As Boolean = YesNoQuery(vbLf & "Plot star as open shape?")
@@ -2428,13 +3378,13 @@ TryAgain:
 
                     Dim msg As String
                     If pts < 9 Then
-                        msg = vbLf & "Type 1 or type 2 star?"
+                        msg = vbLf & "Create Type 1 or type 2 star?"
                         pio2.UpperLimit = 2
                     ElseIf pts > 8 And pts < 11 Then
-                        msg = vbLf & "Type 1, 2, or 3 star?"
+                        msg = vbLf & "Create Type 1, 2, or 3 star?"
                         pio2.UpperLimit = 3
                     Else
-                        msg = vbLf & "Type 1, 2, 3, or up to type " & typeMax.ToString & "?"
+                        msg = vbLf & "Create Type 1, 2, 3, or up to type " & typeMax.ToString & " star?"
                     End If
 
                     With pio2
@@ -2696,7 +3646,7 @@ TryAgain:
                 'figure out the type of star to make
                 Dim sType As Integer = 1
                 Dim starPts As New Point2dCollection
-                Dim pl As New Polyline
+                Dim pl As New Autodesk.AutoCAD.DatabaseServices.Polyline
                 Dim transVect As Vector3d = New Point3d(0, 0, 0).GetVectorTo(cPt)
 
 
@@ -4052,7 +5002,7 @@ NextPoint:
                                 ElseIf String.IsNullOrEmpty(aLayer.MergeWith) Then
                                     DeleteMyLayer(aLayer.Name)
                                 End If
-                            ElseIf Not aLayer.remove Then
+                            ElseIf Not aLayer.Remove Then
 
                                 If Not String.IsNullOrEmpty(aLayer.MergeWith) Then
                                     If lTbl.Has(aLayer.MergeWith) Then MergeThenDeleteLayer(aLayer.Name, aLayer.MergeWith, False)
@@ -5210,6 +6160,32 @@ Skip:
 
     Public Module MiscCommands
 
+        Public Sub AuditDwg(curDwgName As String)
+            Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim curDwg As Document = acDwgMgr.Open(curDwgName, False)
+
+            Using docLock As DocumentLock = curDwg.LockDocument
+                Dim dwgdb As Database = curDwg.Database
+                Dim auditVar As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("AUDITCTL")
+                Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("AUDITCTL", 1)
+
+                Try
+                    Using actrans As Transaction = dwgdb.TransactionManager.StartTransaction
+                        DatabaseExtension.Audit(dwgdb, True, True)
+                        actrans.Commit()
+                        'curDwg.CloseAndSave(curDwg.Name)
+                    End Using
+
+                Catch ex As Exception
+                    MessageBox.Show(ex.Message)
+                Finally
+                    Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("AUDITCTL", auditVar)
+                    curDwg.CloseAndSave(curDwg.Name)
+                End Try
+            End Using
+
+        End Sub
+
         Friend myClr As Autodesk.AutoCAD.Colors.Color
 
         <CommandMethod("LLTS")>
@@ -5429,6 +6405,7 @@ Skip:
                                         If ltype.ShapeY <> 0 Then sb2.Append("," & ltype.ShapeY.ToString)
                                         sb2.Append("],")
                                         shp.Erase()
+                                        shp.Dispose()
 
                                     ElseIf ltype.HasText Then
                                         Dim textStr As String = ltype.TextString
@@ -5437,7 +6414,7 @@ Skip:
                                         sb2.Append("[" & Chr(34) & textStr & Chr(34) & "," & textStyleName & ",S=" & ltype.ShapeScale.ToString)
 
                                         If ltype.HasUCSOrient Then
-                                            sb2.Append("," & "U=" & ltype.ShapeRotation.ToString)
+                                            sb2.Append("," & "A=" & ltype.ShapeRotation.ToString)
                                         Else
                                             sb2.Append("," & "R=" & ltype.ShapeRotation.ToString)
                                         End If
@@ -6295,6 +7272,79 @@ Skipit:
             If File.Exists(menuPath) Then Help.ShowHelp(Nothing, menuPath, 0)
 
         End Sub
+
+        Public Function GetRGFilesDic() As Dictionary(Of String, String)
+
+            Dim myDic As New Dictionary(Of String, String)
+
+            myDic("RG_2000B") = "Roadgeek 2000 Series B.TTF"
+            myDic("RG_2000C") = "Roadgeek 2000 Series C.TTF"
+            myDic("RG_2000D") = "Roadgeek 2000 Series D.TTF"
+            myDic("RG_2000E") = "Roadgeek 2000 Series E.TTF"
+            myDic("RG_2000F") = "Roadgeek 2000 Series F.TTF"
+            myDic("RG_20051BW") = "Roadgeek2005BlendB1W.ttf"
+            myDic("RG_20051B") = "Roadgeek_2005_Series_5.ttf"
+            myDic("RG_20052B") = "Roadgeek_2005_Series_6.ttf"
+            myDic("RG_20053B") = "Roadgeek_2005_Series.ttf"
+            myDic("RG_2005B") = "Roadgeek_2005_Series_0.ttf"
+            myDic("RG_2005C") = "Roadgeek_2005_Series_1.ttf"
+            myDic("RG_2005D") = "Roadgeek_2005_Series_2.ttf"
+            myDic("RG_2005E") = "Roadgeek_2005_Series_3.ttf"
+            myDic("RG_2005EM") = "Roadgeek_2005_Series_EM.ttf"
+            myDic("RG_2005F") = "Roadgeek_2005_Series_4.ttf"
+
+            Return myDic
+
+
+        End Function
+
+        Public Function GetRGFontsDic() As Dictionary(Of String, String)
+
+            Dim myDic As New Dictionary(Of String, String)
+
+            myDic("RG_2000B") = "Roadgeek 2000 Series B"
+            myDic("RG_2000C") = "Roadgeek 2000 Series C"
+            myDic("RG_2000D") = "Roadgeek 2000 Series D"
+            myDic("RG_2000E") = "Roadgeek 2000 Series E"
+            myDic("RG_2000F") = "Roadgeek 2000 Series F"
+            myDic("RG_20051BW") = "Roadgeek 2005 Blend B1W"
+            myDic("RG_20051B") = "Roadgeek 2005 Series 1B"
+            myDic("RG_20052B") = "Roadgeek 2005 Series 2B"
+            myDic("RG_20053B") = "Roadgeek 2005 Series 3B"
+            myDic("RG_2005B") = "Roadgeek 2005 Series B"
+            myDic("RG_2005C") = "Roadgeek 2005 Series C"
+            myDic("RG_2005D") = "Roadgeek 2005 Series D"
+            myDic("RG_2005E") = "Roadgeek 2005 Series E"
+            myDic("RG_2005F") = "Roadgeek 2005 Series F"
+            myDic("RG_2005EM") = "Roadgeek 2005 Series EM"
+
+            Return myDic
+
+        End Function
+
+        Public Function RGtranslateDic() As Dictionary(Of String, String)
+            Dim myDic As New Dictionary(Of String, String)
+
+            myDic("Series B.ttf") = "Series B"
+            myDic("Series C.ttf") = "Series C"
+            myDic("Series D.ttf") = "Series D"
+            myDic("Series E.ttf") = "Series E"
+            myDic("Series F.ttf") = "Series F"
+
+            myDic("Series_0.ttf") = "Series B"
+            myDic("Series_1.ttf") = "Series C"
+            myDic("Series_2.ttf") = "Series D"
+            myDic("Series_3.ttf") = "Series E"
+            myDic("Series_4.ttf") = "Series F"
+            myDic("Series_5.ttf") = "Series 1B"
+            myDic("Series_6.ttf") = "Series 2B"
+            myDic("Series.ttf") = "Series 3B"
+            myDic("Series_EM.ttf") = "Series EM"
+
+            Return myDic
+
+        End Function
+
 
 
         Public Enum EHelp_MasterCustomLIbraryHelp

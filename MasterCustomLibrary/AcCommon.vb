@@ -16,6 +16,8 @@ Imports System.Collections.Specialized
 Imports Autodesk.AutoCAD.PlottingServices
 Imports System.Xml.Schema
 Imports System.Reflection
+Imports Microsoft.Build.Tasks.Xaml
+Imports System.Runtime.InteropServices.ComTypes
 
 
 Namespace AcCommon
@@ -139,24 +141,30 @@ Namespace AcCommon
             End If
 
         End Function
-        Public Function GetObjectsOnLayer(ByVal layerName As String) As ObjectIdCollection
+        Public Function ObjectsExistOnLayer(ByVal layerName As String, acDB As Database) As Boolean
 
-            Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
-            Dim ed As Editor = doc.Editor
-            Dim tvs As TypedValue() = New TypedValue(0) {New TypedValue(CInt(DxfCode.LayerName), layerName)}
-            Dim sf As New SelectionFilter(tvs)
-            Dim psr As PromptSelectionResult = ed.SelectAll(sf)
+            'Dim doc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
 
-            If psr.Status = PromptStatus.OK Then
-                Dim objIdset As New ObjectIdCollection(psr.Value.GetObjectIds())
-                If objIdset.Count > 0 Then
-                    Return objIdset
-                Else
-                    Return Nothing
-                End If
-            Else
-                Return Nothing
-            End If
+            Dim objIdset As New ObjectIdCollection
+
+            Using acTrans As Transaction = acDB.TransactionManager.StartTransaction
+                Dim blkTbl As BlockTable = acTrans.GetObject(acDB.BlockTableId, OpenMode.ForRead)
+                For Each btrID As ObjectId In blkTbl
+                    Dim brt As BlockTableRecord = acTrans.GetObject(btrID, OpenMode.ForRead)
+                    If brt IsNot Nothing Then
+                        For Each entID As ObjectId In brt
+                            Dim ent As Entity = TryCast(acTrans.GetObject(entID, OpenMode.ForRead), Entity)
+                            If ent IsNot Nothing Then
+                                If ent.Layer = layerName Then
+                                    Return True
+                                    Exit Function
+                                End If
+                            End If
+                        Next
+                    End If
+                Next
+            End Using
+            Return False
 
         End Function
 
@@ -1160,6 +1168,7 @@ Namespace AcCommon
 
         Private m_fldr As String
 
+
         Public Function GetSchemaSet(SchemaResourceName As String, Optional xmlNameSpace As String = "") As XmlSchemaSet
             'extracts xml schema from this assembly
 
@@ -1304,7 +1313,7 @@ skipit:
 
         End Function
 
-        Public Function GetMyFileName(filtrString As String, diaTitle As String) As String
+        Public Function GetMyFileName(filtrString As String, diaTitle As String, Optional multi As Boolean = False) As String
             'function for getting filename of a particular file type.
 
             Try
@@ -1320,6 +1329,7 @@ skipit:
                     '.InitialDirectory = "\\EESSERVER\datadisk\LITIGATION\Active Cases"
                     .Title = diaTitle
                     .CheckFileExists = True
+                    .Multiselect = multi
                 End With
 
                 'get the dialog result or return nothing
@@ -1349,6 +1359,54 @@ skipit:
             End Try
 
         End Function
+
+        Public Function GetMyFileNames(filtrString As String, diaTitle As String) As String()
+            'function for getting filename of a particular file type.
+
+            Try
+                Dim fNames() As String
+
+                'declare a new open file dialog
+                Dim fDialog As New OpenFileDialog()
+                With fDialog
+                    .Reset()
+                    .Filter = filtrString _
+                & "All Files (*.*)|*.*"
+                    .FilterIndex = 1
+                    '.InitialDirectory = "\\EESSERVER\datadisk\LITIGATION\Active Cases"
+                    .Title = diaTitle
+                    .CheckFileExists = True
+                    .Multiselect = True
+                End With
+
+                'get the dialog result or return nothing
+                Dim xmlResult As DialogResult = fDialog.ShowDialog()
+
+                If xmlResult = DialogResult.Cancel Then
+                    Return Nothing
+                    Exit Function
+
+                ElseIf xmlResult = DialogResult.OK Then
+                    fNames = fDialog.FileNames
+                Else
+                    Return Nothing
+                    Exit Function
+                End If
+
+skipit:
+                'return the name and path of the file
+                Return fNames
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message & vbLf & "Error selecting Files.")
+                Return Nothing
+                Exit Function
+            End Try
+
+        End Function
+
+
+
 
         Public Function GetFileNameSameAsDWG(Optional filetype As String = "") As String
 
@@ -1809,6 +1867,46 @@ tryAgain:
 
         End Function
 
+        Public Function GetDBTextWithStyle(stName As String, acdb As Database, Optional changeMtext As Boolean = False) As ObjectIdCollection
+
+            Dim objIdset As New ObjectIdCollection
+
+            Using acTrans As Transaction = acdb.TransactionManager.StartTransaction
+                Dim blkTbl As BlockTable = acTrans.GetObject(acdb.BlockTableId, OpenMode.ForRead)
+                Dim tsTbl As TextStyleTable = acTrans.GetObject(acdb.TextStyleTableId, OpenMode.ForRead)
+                For Each btrID As ObjectId In blkTbl
+                    Dim brt As BlockTableRecord = acTrans.GetObject(btrID, OpenMode.ForRead)
+                    If brt IsNot Nothing Then
+                        For Each entID As ObjectId In brt
+                            Dim dbObj As Object = acTrans.GetObject(entID, OpenMode.ForRead)
+                            If TypeOf dbObj Is DBText Then
+                                Dim textObj As DBText = TryCast(dbObj, DBText)
+                                If textObj IsNot Nothing Then
+                                    If textObj.TextStyleId = tsTbl(stName) Then
+                                        objIdset.Add(entID)
+                                    End If
+                                End If
+                            ElseIf TypeOf dbObj Is MText Then
+                                If changeMtext Then
+                                    Dim textObj As MText = TryCast(dbObj, MText)
+                                    If textObj IsNot Nothing Then
+                                        If textObj.TextStyleId = tsTbl(stName) Then
+                                            objIdset.Add(entID)
+                                        End If
+                                    End If
+                                End If
+                            End If
+                        Next
+                    End If
+                Next
+
+                acTrans.Commit()
+                Return objIdset
+
+            End Using
+
+        End Function
+
         Public Function PickSysFnt() As String
             'lets user pick a system font
 
@@ -1944,7 +2042,7 @@ tryAgain:
                     dsId = dSTbl.Add(cDimRec)
                     acTrans.AddNewlyCreatedDBObject(cDimRec, True)
                 Else
-                    cDimRec = acTrans.GetObject(dSTbl(dsName), OpenMode.ForWrite)
+                    'cDimRec = acTrans.GetObject(dSTbl(dsName), OpenMode.ForWrite)
                     dsId = dSTbl(dsName)
                 End If
 
@@ -2419,6 +2517,14 @@ Skipit:
             End If
 
         End Function
+
+        Public Function CPoint3d(pt2d As Point2d, Optional elev As Double = 0) As Point3d
+            'by David Eisenbeisz (c)2024
+            'converts a point2d to a point3d
+            Dim pt3d As New Point3d(pt2d.X, pt2d.Y, elev)
+            Return pt3d
+        End Function
+
 
         Public Function GetTangentPoints(ptP As Point3d, c1 As Circle, Optional verbose As Boolean = False) As Point2dCollection
 
@@ -3129,7 +3235,9 @@ Skipit:
                         Dim btr As BlockTableRecord = CType(acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite), BlockTableRecord)
 
                         With poly
-                            .AddVertexAt(0, New Point2d(cArc.StartPoint.X, cArc.StartPoint.Y), GetArcBulge(cArc), 0, 0)
+                            Dim aBulge As Double = GetArcBulge(cArc)
+
+                            .AddVertexAt(0, New Point2d(cArc.StartPoint.X, cArc.StartPoint.Y), aBulge, 0, 0)
                             .AddVertexAt(1, New Point2d(cArc.EndPoint.X, cArc.EndPoint.Y), 0, 0, 0)
                             .LayerId = cArc.LayerId
                         End With
@@ -3155,12 +3263,42 @@ Skipit:
             Return poly.ObjectId
         End Function
 
-        Public Function GetArcBulge(ByVal arc As Arc) As Double
+        Public Function GetArcBulge(ByVal cArc As Arc) As Double
             'gets the bulge value of an arc
 
-            Dim deltaAng As Double = arc.EndAngle - arc.StartAngle
+            Dim stPt As Point3d = cArc.StartPoint
+            Dim ePt As Point3d = cArc.EndPoint
+            Dim mPt As Point3d = cArc.GetPointAtDist(cArc.Length / 2)
+
+            Dim v1 As Vector3d = stPt.GetVectorTo(mPt)
+            Dim v2 As Vector3d = mPt.GetVectorTo(ePt)
+
+            Dim prod As Vector3d = v1.CrossProduct(v2)
+            Dim bulgeFact As Integer
+
+            If prod.Z < 0 Then
+                bulgeFact = -1
+            Else
+                bulgeFact = 1
+            End If
+
+            Dim v3 As Vector3d = cArc.Center.GetVectorTo(stPt)
+            Dim v4 As Vector3d = cArc.Center.GetVectorTo(ePt)
+            Dim stAng As Double = Vector3d.XAxis.GetAngleTo(v3)
+            Dim endAng As Double = Vector3d.XAxis.GetAngleTo(v4)
+            Dim deltaAng As Double = endAng - stAng
+
+            'If deltaAng > 2 * PI Then
+            '    deltaAng -= 2 * PI
+            'ElseIf deltaAng < -2 * PI Then
+            '    deltaAng += 2 * PI
+            'End If
+
+            'Dim deltaAng As Double = cArc.EndAngle - cArc.StartAngle
             'If deltaAng < 0 Then deltaAng += 2 * Math.PI
-            Return Tan(deltaAng * 0.25)
+
+            Return Tan(deltaAng * bulgeFact * 0.25)
+
         End Function
 
         Public Function GetTangentBulge(v1 As Vector2d, v2 As Vector2d) As Double

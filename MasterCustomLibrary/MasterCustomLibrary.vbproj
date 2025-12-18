@@ -82,6 +82,7 @@
     </Reference>
     <Reference Include="AcCui">
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2017\Backup\AcCui.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="acdbmgd">
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2017\acdbmgd.dll</HintPath>
@@ -93,6 +94,7 @@
     </Reference>
     <Reference Include="AcWindows">
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2017\Backup\AcWindows.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
@@ -223,6 +225,9 @@
     <EmbeddedResource Include="BlkInfoSchema.xsd">
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <None Include="Linetype Master Workbook V2.xltm">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="My Project\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>

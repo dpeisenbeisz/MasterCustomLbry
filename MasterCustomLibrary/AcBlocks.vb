@@ -8,7 +8,7 @@ Public Class AcBlocks
     Implements ICollection
 
     Public c_BlockSetName As String
-    Private m_Blocks() As BlockInfo
+    Private m_Blocks() As AcCommon.BlockInfo
     Public Sub New()
         MyBase.New
         ReDim m_Blocks(-1)
@@ -19,7 +19,7 @@ Public Class AcBlocks
         ReDim m_Blocks(-1)
     End Sub
 
-    Public Sub Add(Blk As BlockInfo, i As Integer)
+    Public Sub Add(Blk As AcCommon.BlockInfo, i As Integer)
         If i < m_Blocks.Count - 1 Then
             m_Blocks(i) = Blk
         Else
@@ -28,19 +28,19 @@ Public Class AcBlocks
         End If
     End Sub
 
-    Public Sub Add(blk As BlockInfo)
+    Public Sub Add(blk As AcCommon.BlockInfo)
         ReDim Preserve m_Blocks(m_Blocks.Count)
         m_Blocks(m_Blocks.Count - 1) = blk
     End Sub
 
-    Default Public ReadOnly Property Item(ByVal index As Integer) As BlockInfo
+    Default Public ReadOnly Property Item(ByVal index As Integer) As AcCommon.BlockInfo
         Get
             Return m_Blocks(index)
         End Get
     End Property
 
     <XmlElement("BlockInfo")>
-    Public ReadOnly Property BlockInfo(ByVal index As Integer) As BlockInfo
+    Public ReadOnly Property BlockInfo(ByVal index As Integer) As AcCommon.BlockInfo
         Get
             Return m_Blocks(index)
         End Get
@@ -70,12 +70,12 @@ Public Class AcBlocks
     Public Function GetEnumerator() As IEnumerator Implements IEnumerable.GetEnumerator
         Return m_Blocks.GetEnumerator
     End Function
-    Private Function Compare(x As BlockInfo, y As BlockInfo) As Integer
+    Private Function Compare(x As AcCommon.BlockInfo, y As AcCommon.BlockInfo) As Integer
         Return x.RefName.CompareTo(y.RefName)
     End Function
     Public Sub Sort()
-        Dim tBlks() As BlockInfo = m_Blocks
-        Array.Sort(Of BlockInfo)(tBlks, New Comparison(Of BlockInfo)(AddressOf Compare))
+        Dim tBlks() As AcCommon.BlockInfo = m_Blocks
+        Array.Sort(Of AcCommon.BlockInfo)(tBlks, New Comparison(Of AcCommon.BlockInfo)(AddressOf Compare))
         m_Blocks = tBlks
     End Sub
 End Class
