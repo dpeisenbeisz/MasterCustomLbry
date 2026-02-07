@@ -1,11 +1,17 @@
 ﻿Imports System.CodeDom
+Imports System.ComponentModel.Design
 Imports System.IO
 Imports System.Math
 Imports System.Reflection
+Imports System.Security.RightsManagement
 Imports System.Text
 Imports System.Windows.Controls
+Imports System.Windows.Documents
 Imports System.Windows.Forms
 Imports System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel
+Imports System.Windows.Media.Animation
+Imports System.Windows.Media.Effects
+'Imports System.Windows.Shapes
 Imports System.Xml
 Imports System.Xml.Schema
 Imports System.Xml.Serialization
@@ -15,9 +21,11 @@ Imports Autodesk.AutoCAD.Colors
 Imports Autodesk.AutoCAD.DatabaseServices
 Imports Autodesk.AutoCAD.EditorInput
 Imports Autodesk.AutoCAD.Geometry
+Imports Autodesk.AutoCAD.GraphicsSystem
 Imports Autodesk.AutoCAD.Internal
 Imports Autodesk.AutoCAD.Runtime
 Imports MasterCustomLibrary.AcCommon
+Imports Microsoft.VisualBasic.FileIO
 
 'project and file (c) David Eisenbeisz 2023
 
@@ -1427,7 +1435,12 @@ SkipIt:
             Dim docMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
             Dim curDwg As Document = docMgr.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
             'Dim ed As Editor = curDwg.Editor
+
+            ed.WriteMessage(vbLf & "This command will create thumbnail images for selected drawing files in a picked folder.")
+            Dim uR As Boolean = YesNoQuery(vbLf & "Do you want to proceed?")
+            If Not uR Then Exit Sub
 
             Dim blkFldr As String = GetMyFolderName()
             If String.IsNullOrEmpty(blkFldr) Then Exit Sub
@@ -1464,6 +1477,8 @@ SkipIt:
                 pckr.Dispose()
                 Exit Sub
             End If
+
+            Dim fileCount As Integer = 0
 
             For Each ky As String In fileList
                 'Dim lspName As String = pathList(ky).Replace("\", "/")
@@ -1543,10 +1558,13 @@ SkipIt:
                     'tempDoc.SendStringToExecute("(command ""_.SAVEAS"" """" """ & lspName & """)" & "(princ) ", False, False, True)
                     'tempDoc.SendStringToExecute("(command ""_.SAVE "" & "")" & "(princ) ", False, False, True)
                     'tempDoc.SendStringToExecute("(SETVAR \" & ChrW(34) & "CMDECHO\" & ChrW(34) & "0) ") & "(command \" & chrw(34) & "_.SAVEAS\" & chrw(34) & " \" & chrw(34) & "\ " & chrw(34) 
-
                 End Using
+
+                fileCount += 1
                 tempDoc.CloseAndDiscard
             Next
+
+            ed.WriteMessage(vbLf & fileCount & " files processed.")
 
         End Sub
 
@@ -1558,16 +1576,15 @@ SkipIt:
             Dim ed As Editor = curDwg.Editor
 
             ed.WriteMessage(vbLf & "This command will audit all selected drawing files.")
-            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
+            Dim uR As Boolean = YesNoQuery(vbLf & "Do you want to proceed?")
             If Not uR Then Exit Sub
 
             'Dim blkFldr As String = "//EESServer/datadisk/cad/blocks/road/reg colored/design"
 
-
             Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings to purge layers")
             Dim pathList As New Dictionary(Of String, String)
 
-            If myFiles IsNot Nothing And myFiles.Length > 0 Then
+            If myFiles IsNot Nothing AndAlso myFiles.Length > 0 Then
                 For Each fName As String In myFiles
                     pathList.Add(Path.GetFileNameWithoutExtension(fName), fName)
                 Next
@@ -1607,16 +1624,230 @@ SkipIt:
 
         End Sub
 
-
-        <CommandMethod("PATF")>
-        Public Sub PurgeAllDwgFilesInFolder()
+        <CommandMethod("FNESTBKJ")>
+        Public Sub FindNestedRef()
             Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
             Dim curDwg As Document = acDwgMgr.MdiActiveDocument
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
 
-            ed.WriteMessage(vbLf & "This command will purge non-standard textstyles from all selected dwg files.")
-            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
+            Dim findName As String
+            Dim pso As New PromptStringOptions(vbLf & "Enter the block name for search")
+
+            With pso
+                .AllowSpaces = True
+            End With
+
+            Dim psr As PromptResult = ed.GetString(pso)
+            If psr.Status = PromptStatus.OK Then
+                Debug.Print(psr.Status)
+                findName = psr.StringResult
+            Else
+                Exit Sub
+            End If
+
+            If String.IsNullOrEmpty(findName) Then Exit Sub
+            Dim blkDic As New Dictionary(Of String, Integer)
+            Dim j As Integer
+
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                'Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForRead)
+                For Each obID As ObjectId In blkTbl
+                    'Dim dbObj As DBObject = acTrans.GetObject(obID, OpenMode.ForRead)
+                    Dim curBTR As BlockTableRecord = acTrans.GetObject(obID, OpenMode.ForRead)
+                    j = 0
+                    For Each obid2 As ObjectId In curBTR
+                        Dim dbobj As DBObject = acTrans.GetObject(obid2, OpenMode.ForRead)
+                        If TypeOf dbobj Is BlockReference Then
+                            Dim Bref As BlockReference = CType(dbobj, BlockReference)
+                            Dim testName As String = Bref.BlockName
+                            If findName = testName Then
+                                j += 1
+                            End If
+                        End If
+                    Next
+                    If j > 0 Then
+                        blkDic(curBTR.Name) = j
+                    End If
+                Next
+            End Using
+
+            If blkDic.Keys.Count > 0 Then
+                For Each ky As String In blkDic.Keys
+                    ed.WriteMessage(vbLf & "Block: " & ky & "  Count: " & blkDic(ky).ToString)
+                Next
+            Else
+                ed.WriteMessage(vbLf & "No nested references found.")
+            End If
+
+
+        End Sub
+
+        <CommandMethod("FBLKTXT")>
+        Public Sub FindBlocksWithStyle()
+            Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim curDwg As Document = acDwgMgr.MdiActiveDocument
+            Dim dwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            'Dim pso As New PromptStringOptions(vbLf & "Enter the style for the search")
+
+            'With pso
+            '    .AllowSpaces = True
+            'End With
+
+            Dim stName As String
+
+            Using sp As New FontPicker(True)
+                sp.ShowDialog()
+                If sp.DialogResult = DialogResult.OK Then
+                    stName = sp.StyleName
+                Else
+                    stName = ""
+                End If
+
+            End Using
+
+            'Dim psr As PromptResult = ed.GetString(pso)
+            'If psr.Status = PromptStatus.OK Then
+            '    Debug.Print(psr.Status)
+            '    stName = psr.StringResult
+            'Else
+            '    Exit Sub
+            'End If
+
+            'Debug.Print(stName)
+
+            If String.IsNullOrEmpty(stName) Then Exit Sub
+            Dim hits As New Dictionary(Of String, Integer)
+
+            Dim entCount As Integer
+            Dim bName As String
+
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                Dim tst As TextStyleTable = acTrans.GetObject(dwgDB.TextStyleTableId, OpenMode.ForRead)
+                Dim oldTStyleId As ObjectId = tst(stName)
+                'Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blkTbl(BlockTableRecord.ModelSpace), OpenMode.ForRead)
+                For Each obID As ObjectId In blkTbl
+                    'Dim dbObj As DBObject = acTrans.GetObject(obID, OpenMode.ForRead)
+                    Dim curBTR As BlockTableRecord = acTrans.GetObject(obID, OpenMode.ForRead)
+                    bName = curBTR.Name
+                    entCount = 0
+                    For Each entID As ObjectId In curBTR
+                        Dim myEnt As DBObject = acTrans.GetObject(entID, OpenMode.ForRead)
+                        If TypeOf myEnt Is DBText Then
+                            Using myText As DBText = TryCast(myEnt, DBText)
+                                If myText IsNot Nothing Then
+                                    If myText.TextStyleId = oldTStyleId Then
+                                        entCount += 1
+                                    End If
+                                End If
+                            End Using
+                        ElseIf TypeOf myEnt Is MText Then
+                            Using myMtext As MText = TryCast(myEnt, MText)
+                                If myMtext IsNot Nothing Then
+                                    If myMtext.TextStyleId = oldTStyleId Then
+                                        entCount += 1
+                                    End If
+                                End If
+                            End Using
+                        ElseIf TypeOf myEnt Is AttributeReference Then
+                            Using myAtt As AttributeReference = TryCast(myEnt, AttributeReference)
+                                If myAtt IsNot Nothing Then
+                                    If myAtt.TextStyleId = oldTStyleId Then
+                                        entCount += 1
+                                    End If
+                                End If
+                            End Using
+                        ElseIf TypeOf myEnt Is Dimension Then
+                            Using myDim As Dimension = TryCast(myEnt, Dimension)
+                                If myDim IsNot Nothing Then
+                                    If myDim.TextStyleId = oldTStyleId Then
+                                        entCount += 1
+                                    End If
+                                End If
+                            End Using
+                        ElseIf TypeOf myEnt Is MLeader Then
+                            Using myDim As MLeader = TryCast(myEnt, MLeader)
+                                If myDim IsNot Nothing Then
+                                    If myDim.TextStyleId = oldTStyleId Then
+                                        entCount += 1
+                                    End If
+                                End If
+                            End Using
+                        End If
+                    Next
+                    Dim dsT As DimStyleTable = acTrans.GetObject(dwgDB.DimStyleTableId, OpenMode.ForRead)
+                    For Each objId As ObjectId In dsT
+                        Using dRec As DimStyleTableRecord = TryCast(acTrans.GetObject(objId, OpenMode.ForRead), DimStyleTableRecord)
+                            If dRec IsNot Nothing Then
+                                If dRec.Dimtxsty = oldTStyleId Then
+                                    entCount += 1
+                                End If
+                            End If
+                        End Using
+                    Next
+                    hits(bName) = entCount
+
+                Next
+
+                'Dim myEnt As DBObject = acTrans.GetObject(entID, OpenMode.ForRead)
+                '        Dim myStyleName As String
+                '        If TypeOf myEnt Is DBText Then
+                '            Dim myText As DBText = CType(myEnt, DBText)
+                '            myStyleName = myText.TextStyleName
+                '            If myStyleName = stName Then
+                '                entCount += 1
+                '            End If
+                '        ElseIf TypeOf myEnt Is MText Then
+                '            Dim myMtext As MText = CType(myEnt, MText)
+                '            If myMtext.TextStyleName = stName Then
+                '                entCount += 1
+                '            End If
+                '        ElseIf TypeOf myEnt Is AttributeReference Then
+                '            Dim myMtext As AttributeReference = CType(myEnt, AttributeReference)
+                '            If myMtext.TextStyleName = stName Then
+                '                entCount += 1
+                '            End If
+                '        ElseIf TypeOf myEnt Is MLeader Then
+                '            Dim myLead As MLeader = CType(myEnt, MLeader)
+                '            If myLead.TextStyleId = tst(stName) Then
+                '                entCount += 1
+                '            End If
+                '        End If
+                '    Next
+                '    hits(bName) = entCount
+                'Next
+                acTrans.Commit()
+            End Using
+
+            Dim newHits As Boolean = False
+
+            If hits.Count > 0 Then
+                For Each ky As String In hits.Keys
+                    If hits(ky) > 0 Then
+                        ed.WriteMessage(vbLf & "block: " & ky & ", hits: " & hits(ky).ToString)
+                        newHits = True
+                    End If
+                Next
+            End If
+
+            If Not newHits Then ed.WriteMessage(vbLf & "No entities with textstyle " & stName & " found.")
+
+        End Sub
+
+
+        <CommandMethod("PATF")>
+        Public Sub PurgeAllTexstylesInFolder()
+            Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim curDwg As Document = acDwgMgr.MdiActiveDocument
+            Dim dwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            ed.WriteMessage(vbLf & "This command will purge all unused non-standard textstyles from all selected dwg files.")
+            Dim uR As Boolean = YesNoQuery(vbLf & "Do you want to proceed?")
 
             If Not uR Then Exit Sub
 
@@ -1674,16 +1905,6 @@ SkipIt:
                             'Dim acdb As Database = acDoc.Database
                             Dim tst As TextStyleTable = actrans.GetObject(acDB.TextStyleTableId, OpenMode.ForWrite)
 
-
-                            'get rid of the Legend table style
-                            Dim tabTab As DBDictionary = actrans.GetObject(acDB.TableStyleDictionaryId, OpenMode.ForWrite)
-                            If tabTab.Contains("Legend") Then
-                                Dim tabObId As ObjectId = tabTab("Legend")
-                                Dim temptabObIds As New ObjectIdCollection
-                                temptabObIds.Add(tabObId)
-                                acDB.Purge(temptabObIds)
-                            End If
-
                             'make the current textstyle Standard
                             Dim cStyleID As ObjectId = acDB.Textstyle
                             Dim cStyle As TextStyleTableRecord = actrans.GetObject(cStyleID, OpenMode.ForRead)
@@ -1703,38 +1924,15 @@ SkipIt:
 
                                 'if it is not Standard, then collect the text objects that use this style
                                 If Not stlName = "Standard" Then
-                                    Dim textObjs As ObjectIdCollection = GetDBTextWithStyle(stlName, acDB, True)
-                                    'if the style has no text referencing it, add it to the purge list
-                                    If textObjs.Count = 0 Then
-                                        prgList.Add(stId)
-                                    Else
-                                        'if there are text objects using this style, check to see if the name is correct.  If not, check to see what font it uses.
-                                        If Not Left(stlName, 6).ToUpper = "SERIES" Then
-                                            'Dim myFnt As String = Path.GetFileNameWithoutExtension(myStyle.FileName)
-                                            Dim myFnt As String = myStyle.FileName
-                                            'if it is a Roadgeek font, then rename the style to the correct series based upon the font name
-                                            If Left(myFnt, 8) = "Roadgeek" Then
-                                                Dim stInt As Integer = myFnt.IndexOf("Series")
-                                                Dim tempName As String = myFnt.Substring(stInt)
+                                    Dim textObjs As ObjectIdCollection = GetDBTextWithStyle(stlName, acDB)
 
-                                                If transDic.Keys.Contains(tempName) Then
-                                                    Dim testName As String = transDic(tempName)
-                                                    'if there is no style with the same name, rename it
-                                                    If Not tst.Has(testName) Then
-                                                        Dim cont As Boolean = YesNoQuery(vbLf & "Change style name " & stlName & " to " & testName & " in file " & ky)
-                                                        If cont Then
-                                                            myStyle.Name = testName
-                                                            ed.WriteMessage(vbLf & "Style named " & stlName & " has been renamed to " & testName)
-                                                        End If
-                                                    Else
-                                                        For Each tID As ObjectId In textObjs
-                                                            Dim textObj As DBText = actrans.GetObject(tID, OpenMode.ForWrite)
-                                                            textObj.TextStyleId = tst(testName)
-                                                        Next
-                                                    End If
-                                                End If
-                                            End If
+                                    'if the style has no text referencing it, add it to the purge list
+                                    If textObjs IsNot Nothing Then
+                                        If textObjs.Count = 0 Then
+                                            prgList.Add(stId)
                                         End If
+                                    Else
+                                        Continue For
                                     End If
                                 End If
                             Next
@@ -1742,7 +1940,6 @@ SkipIt:
                             'if there are styles to purge from this drawing, purge them
                             Try
                                 If prgList.Count > 0 Then acDB.Purge(prgList)
-                                actrans.Commit()
                             Catch ex As Exception
                                 Autodesk.AutoCAD.ApplicationServices.Application.ShowAlertDialog("Error:" & vbLf & ex.Message)
                                 actrans.Abort()
@@ -1752,6 +1949,7 @@ SkipIt:
                             'ed.WriteMessage(vbLf & "style " & stlName & " has been purged from " & ky)
                             'End Using
                             'acDoc.CloseAndSave(pathList(ky))
+                            actrans.Commit()
                             acDB.SaveAs(pathList(ky), True, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027, acDB.SecurityParameters)
                         End Using
                     End Using
@@ -1764,6 +1962,152 @@ SkipIt:
 
         End Sub
 
+        <CommandMethod("CHTEXTST")>
+        Public Sub ChTextStyles()
+            Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
+            Dim curDwg As Document = acDwgMgr.MdiActiveDocument
+            Dim dwgDB As Database = curDwg.Database
+            Dim ed As Editor = curDwg.Editor
+
+            ed.WriteMessage(vbLf & "This command will change the textstyle for all blocks and entities in current drawing.")
+            Dim uR As Boolean = YesNoQuery(vbLf & "Do you want to proceed?")
+            If Not uR Then Exit Sub
+
+            ed.WriteMessage(vbLf & "Pick textstyle to be changed: ")
+            Dim oldStName As String
+
+            Using fp As New FontPicker(True)
+                fp.Text = "Textstyles"
+                fp.LabPickerType.Text = "Pick a textstyle to change:"
+                fp.ShowDialog()
+
+                If fp.DialogResult = DialogResult.OK Then
+                    oldStName = fp.StyleName
+                Else
+                    Exit Sub
+                End If
+            End Using
+
+            ed.WriteMessage(vbLf & "Pick a new textstyle: ")
+            Dim newStName As String
+
+            Using fp2 As New FontPicker(True)
+                fp2.Text = "Textstyles"
+                fp2.LabPickerType.Text = "Pick a new textstyle:"
+                fp2.ShowDialog()
+
+                If fp2.DialogResult = DialogResult.OK Then
+                    newStName = fp2.StyleName
+                Else
+                    Exit Sub
+                End If
+            End Using
+
+            If oldStName = "" Or newStName = "" Then Exit Sub
+
+            Dim dtCount As Integer
+            Dim mtCount As Integer
+            Dim attCount As Integer
+            Dim dimCount As Integer
+            Dim leadCount As Integer
+            Dim dimStyCount As Integer
+
+            Try
+                Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                    Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim tst As TextStyleTable = acTrans.GetObject(dwgDB.TextStyleTableId, OpenMode.ForRead)
+                    Dim oldtStyleId As ObjectId = tst(oldStName)
+                    Dim newtStyleId As ObjectId = tst(newStName)
+                    For Each bTRid As ObjectId In blkTbl
+                        Dim bTR As BlockTableRecord = acTrans.GetObject(bTRid, OpenMode.ForRead)
+                        'If Not bTR.IsLayout Then
+                        For Each entID As ObjectId In bTR
+                            Dim myEnt As DBObject = acTrans.GetObject(entID, OpenMode.ForRead)
+                            If TypeOf myEnt Is DBText Then
+                                Using myText As DBText = TryCast(myEnt, DBText)
+                                    If myText IsNot Nothing Then
+                                        If myText.TextStyleId = oldtStyleId Then
+                                            If Not myText.IsWriteEnabled Then myText.UpgradeOpen()
+                                            myText.TextStyleId = newtStyleId
+                                            dtCount += 1
+                                        End If
+                                    End If
+                                End Using
+                            ElseIf TypeOf myEnt Is MText Then
+                                Using myMtext As MText = TryCast(myEnt, MText)
+                                    If myMtext IsNot Nothing Then
+                                        If myMtext.TextStyleId = oldtStyleId Then
+                                            If Not myMtext.IsWriteEnabled Then myMtext.UpgradeOpen()
+                                            myMtext.TextStyleId = newtStyleId
+                                            mtCount += 1
+                                        End If
+                                    End If
+                                End Using
+                            ElseIf TypeOf myEnt Is AttributeReference Then
+                                Using myAtt As AttributeReference = TryCast(myEnt, AttributeReference)
+                                    If myAtt IsNot Nothing Then
+                                        If myAtt.TextStyleId = oldtStyleId Then
+                                            If Not myAtt.IsWriteEnabled Then myAtt.UpgradeOpen()
+                                            myAtt.TextStyleId = newtStyleId
+                                            attCount += 1
+                                        End If
+                                    End If
+                                End Using
+                            ElseIf TypeOf myEnt Is Dimension Then
+                                Using myDim As Dimension = TryCast(myEnt, Dimension)
+                                    If myDim IsNot Nothing Then
+                                        If myDim.TextStyleId = oldtStyleId Then
+                                            If Not myDim.IsWriteEnabled Then myDim.UpgradeOpen()
+                                            myDim.TextStyleId = newtStyleId
+                                            dimCount += 1
+                                        End If
+                                    End If
+                                End Using
+                            ElseIf TypeOf myEnt Is MLeader Then
+                                Using myDim As MLeader = TryCast(myEnt, MLeader)
+                                    If myDim IsNot Nothing Then
+                                        If myDim.TextStyleId = oldtStyleId Then
+                                            If Not myDim.IsWriteEnabled Then myDim.UpgradeOpen()
+                                            myDim.TextStyleId = newtStyleId
+                                            leadCount += 1
+                                        End If
+                                    End If
+                                End Using
+                            End If
+                        Next
+                        'End If
+                    Next
+
+                    Dim dsT As DimStyleTable = acTrans.GetObject(dwgDB.DimStyleTableId, OpenMode.ForRead)
+                    For Each obId As ObjectId In dsT
+                        Using dRec As DimStyleTableRecord = TryCast(acTrans.GetObject(obId, OpenMode.ForRead), DimStyleTableRecord)
+                            If dRec IsNot Nothing Then
+                                If dRec.Dimtxsty = oldtStyleId Then
+                                    If Not dRec.IsWriteEnabled Then dRec.UpgradeOpen()
+                                    dRec.Dimtxsty = newtStyleId
+                                    dimStyCount += 1
+                                End If
+                            End If
+                        End Using
+                    Next
+
+                    ed.WriteMessage(vbLf & "Changed Objects: ")
+                    ed.WriteMessage(vbLf & "Text entities: " & dtCount)
+                    ed.WriteMessage(vbLf & "MText entities: " & mtCount)
+                    ed.WriteMessage(vbLf & "Attribute References: " & attCount)
+                    ed.WriteMessage(vbLf & "Dimension entities: " & dimCount)
+                    ed.WriteMessage(vbLf & "MLeader entities: " & leadCount)
+                    ed.WriteMessage(vbLf & "Dimension Styles: " & dimStyCount)
+
+                    acTrans.Commit()
+                End Using
+
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+            End Try
+
+        End Sub
+
 
         <CommandMethod("URGS")>
         Public Sub UpdateRoadgeekStyles()
@@ -1772,12 +2116,12 @@ SkipIt:
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
             ed.WriteMessage(vbLf & "This command will update all Roadgeek 2000 fonts to Roadgeek 2005 fonts for all selected dwgs in a directory.")
-            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
+            Dim uR As Boolean = YesNoQuery(vbLf & "Do you want to proceed?")
             If Not uR Then Exit Sub
 
             'Dim blkFldr As String = "//EESServer/datadisk/cad/blocks/road/reg colored/design/temptest"
 
-            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings to purge layers")
+            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", vbLf & "Select Drawings to purge layers")
 
             'Dim blkFldr As String = GetMyFolderName()
             'Dim blkfldr As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design"
@@ -1829,29 +2173,65 @@ SkipIt:
 
                             Dim tst As TextStyleTable = actrans.GetObject(acDB.TextStyleTableId, OpenMode.ForWrite)
                             Dim rgFiles As Dictionary(Of String, String) = GetRGFilesDic()
+                            Dim rgTrans As Dictionary(Of String, String) = RGtranslateDic()
 
                             For Each stId As ObjectId In tst
                                 Dim myStyle As TextStyleTableRecord = actrans.GetObject(stId, OpenMode.ForWrite)
                                 Dim stlName As String = myStyle.Name
                                 Dim myFnt As String = myStyle.FileName
+                                Dim renamePending As Boolean = False
+                                Dim nameExists As Boolean = False
+                                Dim fontcode As String = ""
 
-                                If myFnt.Contains("Roadgeek 2000") Then
+                                If myFnt.ToUpper.Contains("ROADGEEK") Then
+                                    If Not Left(stlName, 6).ToUpper = "SERIES" Then
+                                        Dim charPos As Integer = myFnt.IndexOf("Series")
+                                        fontcode = myFnt.Substring(charPos)
+                                        If rgTrans.Keys.Contains(fontcode) Then
+                                            If Not tst.Has(rgTrans(fontcode)) Then
+                                                Dim renStyle As Boolean = YesNoQuery(vbLf & "Do you want to rename style " & stlName & " to " & rgTrans(fontcode) & "?")
+                                                If renStyle Then renamePending = True
+                                            Else
+                                                nameExists = True
+                                            End If
+                                        End If
+                                    End If
+
+                                    Dim fontUpdated As Boolean = False
 
                                     Select Case myFnt
                                         Case Is = rgFiles("RG_2000B")
                                             myStyle.FileName = rgFiles("RG_2005B")
+                                            fontUpdated = True
                                         Case Is = rgFiles("RG_2000C")
                                             myStyle.FileName = rgFiles("RG_2005C")
+                                            fontUpdated = True
                                         Case Is = rgFiles("RG_2000D")
                                             myStyle.FileName = rgFiles("RG_2005D")
+                                            fontUpdated = True
                                         Case Is = rgFiles("RG_2000E")
                                             myStyle.FileName = rgFiles("RG_2005E")
+                                            fontUpdated = True
                                         Case Is = rgFiles("RG_2000F")
                                             myStyle.FileName = rgFiles("RG_2005F")
+                                            fontUpdated = True
                                         Case Else
+                                            fontUpdated = False
                                     End Select
 
-                                    ed.WriteMessage(vbLf & "Style named " & stlName & " has been changed to Roadgeek 2005")
+                                    If renamePending Then
+                                        myStyle.Name = rgTrans(fontcode)
+                                        If fontUpdated Then
+                                            ed.WriteMessage(vbLf & "Style named " & stlName & " in drawing " & ky & " has been renamed to " & rgTrans(fontcode) & " and the font file updated to Roadgeek 2005")
+                                        Else
+                                            ed.WriteMessage(vbLf & "Style named " & stlName & " in drawing " & ky & " has been renamed to " & rgTrans(fontcode) & ".")
+                                        End If
+                                    Else
+                                        If nameExists Then ed.WriteMessage(vbLf & stlName & " in drawing " & ky & " could not be renamed to " & rgTrans(fontcode) & " because style exists.")
+                                        If fontUpdated Then
+                                            ed.WriteMessage(vbLf & "Font file for style named " & stlName & " in drawing " & ky & " has been updated To Roadgeek 2005")
+                                        End If
+                                    End If
                                 End If
                             Next
 
@@ -1876,11 +2256,11 @@ SkipIt:
             Dim dwgDB As Database = curDwg.Database
             Dim ed As Editor = curDwg.Editor
 
-            ed.WriteMessage(vbLf & "This command will purge unused layers from all selected drawing files in a folder.")
-            Dim uR As Boolean = YesNoQuery("Do you want to proceed?")
+            ed.WriteMessage(vbLf & "This command will purge unused layers from all selected drawing files In a folder.")
+            Dim uR As Boolean = YesNoQuery(vbLf & "Do you want To proceed?")
             If Not uR Then Exit Sub
 
-            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings to purge layers")
+            Dim myFiles() As String = GetMyFileNames("Dwg FIles (*.dwg)|*.DWG|", "Select Drawings To purge layers")
 
             'Dim blkFldr As String = GetMyFolderName()
             'Dim blkfldr As String = "\\EESServer\datadisk\CAD\BLOCKS\ROAD\PVMT\Design"
@@ -1926,7 +2306,7 @@ SkipIt:
                             acDB.CloseInput(True)
                             Debug.Print(vbLf & ky)
                         Catch __unusedException1__ As System.Exception
-                            ed.WriteMessage(vbLf & "Unable to read drawing file: " & ky)
+                            ed.WriteMessage(vbLf & "Unable To read drawing file: " & ky)
                             Continue For
                         End Try
 
@@ -2016,25 +2396,38 @@ SkipIt:
             End If
 
             Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-                Dim blktbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
-                For Each bID As ObjectId In blktbl
-                    Dim btr As BlockTableRecord = acTrans.GetObject(bID, OpenMode.ForRead)
-                    'Dim fname1 As String = Path
-                    Dim fName As String
-                    If Not btr.IsLayout Then
-                        If Not String.IsNullOrEmpty(btr.Name) And Left(btr.Name, 1) <> "*" And Left(btr.Name, 1) <> "_" And Left(btr.Name, 2) <> "A$" Then
-                            fName = saveFldr & "\" & btr.Name & ".dwg"
-                            'Dim tdb As new Database(False, True)
-                            Dim tdb As Database
-                            tdb = dwgDB.Wblock(btr.ObjectId)
-                            tdb.SaveAs(fName, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027)
-                            ed.WriteMessage(vbLf & btr.Name & " written to output folder")
-                        End If
-                    End If
-                Next
+                Try
+                    Dim blktbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                    For Each bID As ObjectId In blktbl
+                        Dim btr As BlockTableRecord = acTrans.GetObject(bID, OpenMode.ForRead)
+                        'Dim fname1 As String = Path
+                        Dim fName As String
+                        Try
+                            If Not btr.IsLayout Then
+                                If Not String.IsNullOrEmpty(btr.Name) And Left(btr.Name, 1) <> "*" And Left(btr.Name, 1) <> "_" And Left(btr.Name, 2) <> "A$" Then
+                                    fName = saveFldr & "\" & btr.Name & ".dwg"
+                                    'Dim tdb As new Database(False, True)
+                                    Dim tdb As Database
+                                    tdb = dwgDB.Wblock(btr.ObjectId)
+                                    tdb.SaveAs(fName, Autodesk.AutoCAD.DatabaseServices.DwgVersion.AC1027)
+                                    ed.WriteMessage(vbLf & btr.Name & " written to output folder")
+                                End If
+                            End If
+                        Catch ex As Exception
+                            MessageBox.Show(ex.Message)
+                            Continue For
+                        End Try
+                    Next
+
+                Catch ex As Exception
+                    MessageBox.Show(ex.Message)
+                End Try
+
                 acTrans.Commit()
             End Using
+
             ed.WriteMessage(vbLf & "All blocks saved to designated folder")
+
         End Sub
 
         <CommandMethod("CBU")>
@@ -2083,56 +2476,76 @@ SkipIt:
                     uv = UnitsValue.Undefined
             End Select
 
+            Try
 
-            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-                Dim blktbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
-                Dim bList As New SortedDictionary(Of String, ObjectId)
+                Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                    Dim blktbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                    Dim bList As New SortedDictionary(Of String, ObjectId)
 
-                For Each bID As ObjectId In blktbl
-                    Dim btr As BlockTableRecord = acTrans.GetObject(bID, OpenMode.ForRead)
-                    If Not btr.IsLayout Then
-                        Dim bName As String = btr.Name
-                        Dim btrID As ObjectId = blktbl(bName)
-                        bList.Add(bName, btrID)
-                    End If
-                Next
-
-                Dim bPicker As New Picker
-                With bPicker
-                    .BxList.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended
-                    .TopLabel.Text = "Select blocks to update"
-                    .Text = "BLock Picker"
-                    For Each blkNm As String In bList.Keys
-                        .BxList.Items.Add(blkNm)
+                    For Each bID As ObjectId In blktbl
+                        Dim btr As BlockTableRecord = TryCast(acTrans.GetObject(bID, OpenMode.ForRead), BlockTableRecord)
+                        If btr IsNot Nothing Then
+                            Try
+                                If Not btr.IsLayout Then
+                                    Dim bName As String = btr.Name
+                                    Dim btrID As ObjectId = blktbl(bName)
+                                    bList.Add(bName, btrID)
+                                End If
+                            Catch ex As Exception
+                                ed.WriteMessage(vbLf & "Error in block " & btr.Name)
+                                Continue For
+                            End Try
+                        End If
                     Next
-                End With
 
-                bPicker.ShowDialog()
+                    Dim bPicker As New Picker
+                    With bPicker
+                        .BxList.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended
+                        .TopLabel.Text = "Select blocks to update"
+                        .Text = "BLock Picker"
+                        For Each blkNm As String In bList.Keys
+                            .BxList.Items.Add(blkNm)
+                        Next
+                    End With
 
-                Dim blkColl As Collection
+                    bPicker.ShowDialog()
 
-                If bPicker.DialogResult = DialogResult.Cancel Then
-                    Exit Sub
-                Else
-                    blkColl = bPicker.PickCol
-                End If
+                    Dim blkColl As Collection
 
-                Dim selBlks As New SortedDictionary(Of String, ObjectId)
-                For Each blk As String In blkColl
-                    selBlks.Add(blk, bList(blk))
-                Next
+                    If bPicker.DialogResult = DialogResult.Cancel Then
+                        Exit Sub
+                    Else
+                        blkColl = bPicker.PickCol
+                    End If
 
-                'dim dv As DwgVersion
-                'dv = DwgVersion(curDwg.Name)
+                    Dim selBlks As New SortedDictionary(Of String, ObjectId)
+                    For Each blk As String In blkColl
+                        selBlks.Add(blk, bList(blk))
+                    Next
 
-                For Each blkStr As String In selBlks.Keys
-                    Using btr As BlockTableRecord = acTrans.GetObject(selBlks(blkStr), OpenMode.ForWrite)
-                        btr.Units = uv
-                    End Using
-                Next
-                acTrans.Commit()
-            End Using
+                    'dim dv As DwgVersion
+                    'dv = DwgVersion(curDwg.Name)
+
+                    For Each blkStr As String In selBlks.Keys
+                        Try
+                            Using btr As BlockTableRecord = acTrans.GetObject(selBlks(blkStr), OpenMode.ForWrite)
+                                btr.Units = uv
+                            End Using
+                        Catch ex As Exception
+                            ed.WriteMessage(vbLf & "Error setting units for block " & blkStr)
+                            Continue For
+                        End Try
+                    Next
+                    acTrans.Commit()
+                End Using
+
+            Catch ex As Exception
+                ed.WriteMessage(vbLf & "Error. " & ex.Message)
+                Exit Sub
+            End Try
+
             ed.WriteMessage(vbLf & "All blocks updated")
+
         End Sub
 
         <CommandMethod("CPMLT", CommandFlags.UsePickSet)>
@@ -2720,6 +3133,7 @@ TryAgain:
             Dim ed As Editor = acDwg.Editor
             Dim arcCol As New Collection
 
+            'check to see if objects are already selected
             Dim SelResult As PromptSelectionResult = ed.SelectImplied()
 
             If SelResult.Status = PromptStatus.Error Then
@@ -2741,8 +3155,9 @@ TryAgain:
             'Dim hAmpMin As Double
             Dim hAmpMax As Double
 
+            'if saved parameters are present, ask if those should be used
             If m_handMinX <> 0 And m_handMaxX <> 0 And m_handMaxY <> 0 Then
-                Dim upDateParams As Boolean = YesNoQuery(vbLf & "Update current roughness parameters?")
+                Dim upDateParams As Boolean = YesNoQuery(vbLf & "Update current wobble parameters?")
                 If upDateParams = False Then
                     hDistMin = m_handMinX
                     hDistMax = m_handMaxX
@@ -2752,7 +3167,8 @@ TryAgain:
                 End If
             End If
 
-            Dim pdMinX As New PromptDoubleOptions(vbLf & "Enter minimum frequency of roughness in model space units")
+            'get the minimum frequency of the wobble
+            Dim pdMinX As New PromptDoubleOptions(vbLf & "Enter minimum frequency of wobble in model space units")
             With pdMinX
                 .AllowNegative = False
                 .AllowZero = False
@@ -2770,6 +3186,7 @@ TryAgain:
             m_handMaxX = m_handMinX * 3
             hDistMax = m_handMaxX
 
+            'enter wobble distance
             Dim pdoMaxY As New PromptDoubleOptions(vbLf & "Enter the distance in current space units for wobble deviation from the original line.")
             'Dim pdoMaxY As New PromptDoubleOptions(vbLf & "Enter the maximum amplitude of roughness in model space units")
             With pdoMaxY
@@ -2790,6 +3207,7 @@ ROUGHLINE:
             'Dim hdist As Double = (hDistMin + hDistMax) / 2
             'Dim hamp As Double = (hAmpMin + hAmpMax) / 2
 
+            'if no objects are selected, then select objects
             Dim acSSet As SelectionSet
             Dim myObjIds() As ObjectId
 
@@ -2809,24 +3227,29 @@ ROUGHLINE:
                     'If acEnt Is Nothing Then Continue For
 
                     Dim myPts As New Point3dCollection
+                    Dim myLTId As ObjectId = acEnt.LinetypeId
 
+                    'if object is a polyline
                     If TypeOf acEnt Is Autodesk.AutoCAD.DatabaseServices.Polyline Then
                         Dim myPoly As Autodesk.AutoCAD.DatabaseServices.Polyline = CType(acEnt, Autodesk.AutoCAD.DatabaseServices.Polyline)
 
+                        'if polyline is closed, treat it like a circle
                         If myPoly.Closed Then isCircle = True
 
                         myPts.Add(myPoly.StartPoint)
                         m_polarity = True
                         m_xtra = 0
 
+                        'vertices - 2 = max index of segments
                         For i As Integer = 0 To myPoly.NumberOfVertices - 2
                             Dim blg As Double = myPoly.GetBulgeAt(i)
+                            'if segment is a curve
                             If blg = 0 Then
                                 Dim lineSeg As LineSegment2d = myPoly.GetLineSegment2dAt(i)
                                 'If lineSeg.Length < hDistMin Then Continue For
 
                                 If lineSeg.Length > hDistMax * 40000 Then
-                                    MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                                    MessageBox.Show("Wobble frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
                                     Exit Sub
                                 End If
                                 Dim ls As Boolean
@@ -2839,6 +3262,7 @@ ROUGHLINE:
                                     myPts.Add(pt)
                                 Next
                             Else
+                                'segment not a curve
                                 Dim arcSeg As CircularArc2d = myPoly.GetArcSegment2dAt(i)
                                 Dim tSPt As Point3d = myPoly.GetPointAtParameter(i)
                                 Dim arcReversed As Boolean
@@ -2852,13 +3276,13 @@ ROUGHLINE:
                                 '(myPoly.GetParameterAtPoint(CPoint3d(arcSeg.StartPoint)), myPoly.GetParameterAtPoint(CPoint3d(arcSeg.EndPoint)))
                                 If arcLen < hDistMin Then Continue For
                                 If arcLen > hDistMax * 40000 Then
-                                    MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                                    MessageBox.Show("Wobble frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
                                     Exit Sub
                                 End If
 
                                 Dim ls As Boolean
-                                If i = myPoly.NumberOfVertices - 2 Then ls = True
 
+                                If i = myPoly.NumberOfVertices - 2 Then ls = True
                                 Dim subpts As Point3dCollection = GetCircArcWobble(arcSeg, ls, arcReversed)
 
                                 If subpts Is Nothing Then Exit Sub
@@ -2870,15 +3294,18 @@ ROUGHLINE:
                             End If
                         Next
 
+                        'if type of object is an arc
                     ElseIf TypeOf acEnt Is Arc Then
                         Dim acArc As Arc = CType(acEnt, Arc)
                         Dim aPolyID As ObjectId = Arc2poly(acArc.ObjectId)
                         If aPolyID = ObjectId.Null Then Exit Sub
 
+                        'convert to polyline and extract CircularArc2d
                         Dim myPoly As Autodesk.AutoCAD.DatabaseServices.Polyline = acTrans.GetObject(aPolyID, OpenMode.ForRead)
                         Dim arcSeg As CircularArc2d = myPoly.GetArcSegment2dAt(0)
                         Dim arcLen As Double = (arcSeg.EndAngle - arcSeg.StartAngle) * arcSeg.Radius
 
+                        'get arc direction
                         Dim arcReversed As Boolean
                         If arcSeg.IsClockWise Then
                             arcReversed = True
@@ -2889,7 +3316,7 @@ ROUGHLINE:
                         '(myPoly.GetParameterAtPoint(CPoint3d(arcSeg.StartPoint)), myPoly.GetParameterAtPoint(CPoint3d(arcSeg.EndPoint)))
                         If arcLen < hDistMin Then Continue For
                         If arcLen > hDistMax * 40000 Then
-                            MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                            MessageBox.Show("Wobble frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
                             Exit Sub
                         End If
 
@@ -2899,6 +3326,7 @@ ROUGHLINE:
                             myPts.Add(pt)
                         Next
 
+                        'if type of object is a line
                     ElseIf TypeOf acEnt Is Line Then
                         Using myLine As Autodesk.AutoCAD.DatabaseServices.Line = CType(acEnt, Line)
                             Using mypoly As New Autodesk.AutoCAD.DatabaseServices.Polyline
@@ -2909,7 +3337,7 @@ ROUGHLINE:
                                 If lineSeg.Length < hDistMin Then Continue For
 
                                 If lineSeg.Length > hDistMax * 40000 Then
-                                    MessageBox.Show("Roughness frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
+                                    MessageBox.Show("Wobble frequency is too short for this object.  Use a higher frequency or break object into smaller pieces.")
                                     Exit Sub
                                 End If
 
@@ -2921,6 +3349,7 @@ ROUGHLINE:
                             End Using
                         End Using
 
+                        'if type of object is a Circle
                     ElseIf TypeOf acEnt Is Circle Then
                         isCircle = True
                         Dim mycirc As Circle = CType(acEnt, Circle)
@@ -2980,7 +3409,7 @@ ROUGHLINE:
                                 If lastone Then Exit Do
 
                                 If failsafe = 40000 Then
-                                    MessageBox.Show("Object too long or roughness period to short.  Break apart object or make roughness period longer.")
+                                    MessageBox.Show("Object too long or wobble period to short.  Break apart object or make wobble period longer.")
                                     Exit Sub
                                 End If
                             Loop While failsafe < 40000
@@ -2996,15 +3425,17 @@ ROUGHLINE:
                         Exit Sub
                     End If
 
+                    'if all points are created successfully...
                     Dim bt As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
                     Dim mdlSpc As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
 
-                    Dim mkSpline As Boolean = YesNoQuery("Do you want to create a spline? (No creates a standard polyline with line segments only)")
+                    Dim mkSpline As Boolean = YesNoQuery("Do you want to create a spline? (No creates a standard polyline using line segments only)")
 
                     If mkSpline Then
                         Using newSpline As New Autodesk.AutoCAD.DatabaseServices.Spline(myPts, KnotParameterizationEnum.SqrtChord, 3, 0.05)
                             mdlSpc.AppendEntity(newSpline)
                             acTrans.AddNewlyCreatedDBObject(newSpline, True)
+                            newSpline.LinetypeId = myLTId
                         End Using
                     Else
                         Using newPline As New Polyline
@@ -3016,9 +3447,9 @@ ROUGHLINE:
                             If isCircle Then newPline.Closed = True
                             mdlSpc.AppendEntity(newPline)
                             acTrans.AddNewlyCreatedDBObject(newPline, True)
+                            newPline.LinetypeId = myLTId
                         End Using
                     End If
-
                 Next
 
                 acTrans.Commit()
@@ -3082,8 +3513,6 @@ ROUGHLINE:
                             myPts.Add(ln.EndPoint)
                         Else
                             m_xtra = xDist - segLen
-                            'xDist = segLen
-                            'myPts.Add(CPoint3d(lineseg.EndPoint))
                             m_polarity = Not m_polarity
                         End If
                         Exit Do
@@ -3125,7 +3554,7 @@ ROUGHLINE:
                     failSafe += 1
 
                     If failSafe = 40000 Then
-                        MessageBox.Show("Object too long or roughness period to short.  Break apart object or make roughness period longer.")
+                        MessageBox.Show("Object too long or wobble period to short.  Break apart object or make wobble period longer.")
                         Return Nothing
                         ln.Dispose()
                         Exit Function
@@ -3271,7 +3700,7 @@ ROUGHLINE:
                     failsafe += 1
 
                     If failsafe = 40000 Then
-                        MessageBox.Show("Object too long or roughness period to short.  Break apart object or make roughness period longer.")
+                        MessageBox.Show("Object too long or wobble period to short.  Break apart object or make roughness period longer.")
                         Return Nothing
                         Exit Function
                     End If
@@ -3373,7 +3802,6 @@ ROUGHLINE:
                 If pts > 6 Then
 
                     'get the type of star to draw  The more points there are the more types of stars are possible
-
                     Dim pio2 As New PromptIntegerOptions("")
 
                     Dim msg As String
@@ -3454,7 +3882,7 @@ ROUGHLINE:
                 ElseIf sType = 3 Then
 
                     For z As Integer = 0 To pts - 1
-                        Debug.Print(tips(z).ToString)
+                        'Debug.Print(tips(z).ToString)
                         Dim r As Integer = (z + 4) Mod pts
                         linLst.Add(New Line2d(tips(z), tips(r)))
                         acLinLst.Add(New Line(New Point3d(tips(z).X, tips(z).Y, 0), New Point3d(tips(r).X, tips(r).Y, 0)))
@@ -3476,7 +3904,7 @@ ROUGHLINE:
                 Else
 
                     For z As Integer = 0 To pts - 1
-                        Debug.Print(tips(z).ToString)
+                        'Debug.Print(tips(z).ToString)
                         Dim r As Integer = (z + (sType + 1)) Mod pts
                         linLst.Add(New Line2d(tips(z), tips(r)))
                         acLinLst.Add(New Line(New Point3d(tips(z).X, tips(z).Y, 0), New Point3d(tips(r).X, tips(r).Y, 0)))
@@ -3524,21 +3952,19 @@ ROUGHLINE:
                         For p As Integer = 0 To acLinLst.Count - 1
                             Dim blktbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
                             Dim mdlSpace As BlockTableRecord = acTrans.GetObject(blktbl(BlockTableRecord.ModelSpace), OpenMode.ForWrite)
-                            Dim myLine As Line = acLinLst(p)
-                            'Dim acLine As New Line(New Point3d(myLine.StartPoint.X, myLine.StartPoint.Y, 0), New Point3d(myLine.EndPoint.X, myLine.EndPoint.Y, 0))
-                            myLine.TransformBy(Matrix3d.Displacement(transVect))
-
-                            If pts Mod 2 = 1 Then
-                                Dim rotAng As Double = centAngle / 4
-                                myLine.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
-                            End If
-
-                            mdlSpace.AppendEntity(myLine)
-                            acTrans.AddNewlyCreatedDBObject(myLine, True)
+                            Using myLine As Line = acLinLst(p)
+                                'Dim acLine As New Line(New Point3d(myLine.StartPoint.X, myLine.StartPoint.Y, 0), New Point3d(myLine.EndPoint.X, myLine.EndPoint.Y, 0))
+                                myLine.TransformBy(Matrix3d.Displacement(transVect))
+                                If pts Mod 2 = 1 Then
+                                    Dim rotAng As Double = centAngle / 4
+                                    myLine.TransformBy(Matrix3d.Rotation(rotAng, Vector3d.ZAxis, cPt))
+                                End If
+                                mdlSpace.AppendEntity(myLine)
+                                acTrans.AddNewlyCreatedDBObject(myLine, True)
+                            End Using
                         Next
                         acTrans.Commit()
                     End Using
-
                 End If
 
             Catch ex As Exception
@@ -4666,12 +5092,94 @@ NextPoint:
                 End Using
             End If
         End Sub
+
+        <CommandMethod("ND")>
+        Public Sub NewDistance()
+            Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            'Dim DwgDB As Database = CurDwg.Database
+            Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
+
+            Dim ppo As New PromptPointOptions(vbLf & "First point:")
+            With ppo
+                .AllowNone = False
+                .AllowArbitraryInput = True
+            End With
+            Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+
+            Dim p1 As Point3d
+            If ppr.Status = PromptStatus.OK Then
+                p1 = ppr.Value
+            Else
+                Exit Sub
+            End If
+
+            With ppo
+                .Message = vbLf & "Second point"
+                .AllowNone = False
+                .AllowArbitraryInput = True
+                .UseBasePoint = True
+                .BasePoint = p1
+            End With
+
+            Dim ppr2 = ed.GetPoint(ppo)
+
+            Dim p2 As Point3d
+            If ppr2.Status = PromptStatus.OK Then
+                p2 = ppr2.Value
+            Else
+                Exit Sub
+            End If
+
+            Dim refzPlane As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
+            Dim refyPlane As New Plane(New Point3d(0, 0, 0), Vector3d.YAxis)
+            Dim refxPlane As New Plane(New Point3d(0, 0, 0), Vector3d.XAxis)
+
+            If Not p1 = p2 Then
+                Dim v3d As Vector3d = p1.GetVectorTo(p2)
+                Dim dist3d As Double = v3d.Length
+
+                Dim deltaX As Double = v3d.X
+                Dim deltaY As Double = v3d.Y
+                Dim deltaZ As Double = v3d.Z
+
+                Dim vxy2d As Vector2d = v3d.Convert2d(refzPlane)
+                Dim vxz2d As Vector2d = v3d.Convert2d(refyPlane)
+                Dim vyz2d As Vector2d = v3d.Convert2d(refxPlane)
+                Dim xyAng As Double = vxy2d.Angle
+                Dim xyAngDegs As Double = CDegs(xyAng)
+                Dim dist2D As Double = vxy2d.Length
+                Dim xZang As Double = Vector2d.YAxis.GetAngleTo(vyz2d)
+                Dim xZangDegs As Double = CDegs(xZang)
+                Dim yZang As Double = Vector2d.XAxis.GetAngleTo(vxz2d)
+                Dim yZangDegs As Double = CDegs(xZang)
+                Dim slp As Double = deltaZ / dist2D
+
+                Dim prec As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LUPREC")
+                Dim angPrec As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("AUPREC")
+
+                Dim sb As New StringBuilder()
+                sb.AppendLine()
+                sb.AppendLine("3D Distance: " & Round(dist3d, prec).ToString & "  2D Distance: " & Round(dist2D, prec).ToString & "  Slope: " & Round(slp, prec).ToString)
+                sb.AppendLine("Delta X: " & Round(deltaX, prec).ToString & "  Delta Y: " & Round(deltaY, prec).ToString & "  Delta Z: " & Round(deltaZ, prec).ToString)
+                sb.AppendLine("Angle in XY Plane: " & Round(xyAngDegs, angPrec).ToString & " degrees")
+                sb.AppendLine("Angle in XZ Plane: " & Round(xZangDegs, angPrec).ToString & " degrees")
+                sb.AppendLine("Angle in YZ Plane: " & Round(yZangDegs, angPrec).ToString & " degrees")
+
+                ed.WriteMessage(sb.ToString)
+            Else
+                Exit Sub
+            End If
+
+        End Sub
+
     End Module
+
 
     Public Module LayerCommands
 
         Private ReadOnly m_layIDList As ObjectIdCollection
-        Private m_layList As List(Of String)
+        Private m_layIdDic As Dictionary(Of ObjectId, List(Of ObjectId))
+        'Private m_layList As List(Of ObjectId)
 
         <CommandMethod("FRZVPLAY", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
         Public Sub FreezeVPLayers()
@@ -4825,7 +5333,7 @@ NextPoint:
         <CommandMethod("LAOFF", CommandFlags.UsePickSet Or CommandFlags.Redraw Or CommandFlags.Modal)>
         Public Sub TurnOffLayers()
             'by David Eisenbeisz (c)2024
-            'temporarily turns off layers and stores them in a list to turn back on
+            'temporarily turns off layers and stores them by space ID to turn on again.
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
@@ -4848,42 +5356,48 @@ NextPoint:
             Dim selSet As SelectionSet = SelResult.Value
             Dim obIds() As ObjectId = selSet.GetObjectIds
 
+            Dim cSpaceID As ObjectId = DwgDB.CurrentSpaceId
+
             Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
-                Dim offLayers As New List(Of String)
+                Dim offLayers As New List(Of ObjectId)
                 For i = 0 To obIds.Count - 1
                     Dim ent As Entity = TryCast(actrans.GetObject(obIds(i), OpenMode.ForRead), Entity)
                     If ent IsNot Nothing Then
-                        Dim entLay As String = ent.Layer
-                        offLayers.Add(entLay)
+                        Dim entLayID As ObjectId = ent.LayerId
+                        offLayers.Add(entLayID)
                     End If
                 Next
 
-                Dim tempList As New List(Of String)
-
-                If m_layList IsNot Nothing AndAlso m_layList.Count > 0 Then
-                    If Not YesNoQuery(vbLf & "Do you want to clear the current list of turned off layers?  If Yes, only currently selected layers will be queued for turn on command.") Then
-                        tempList = m_layList
-                    End If
-                End If
+                'If offLayers IsNot Nothing AndAlso offLayers.Count > 0 Then
+                'If Not YesNoQuery(vbLf & "Do you want to clear the current list of turned off layers?  If Yes, only currently selected layers will be queued for turn on command.") Then
+                'm_layIdDic(cSpaceID) = offLayers
+                'tempList = m_layList
+                'End If
+                'End If
 
                 Dim lrTbl As LayerTable = actrans.GetObject(DwgDB.LayerTableId, OpenMode.ForRead)
 
-                For Each lyrName As String In offLayers
-                    If lrTbl.Has(lyrName) Then
-                        Dim ltr As LayerTableRecord = TryCast(actrans.GetObject(lrTbl(lyrName), OpenMode.ForRead), LayerTableRecord)
-                        If ltr IsNot Nothing Then
-                            Debug.Print(lyrName)
-                            tempList.Add(lyrName)
-                        End If
-                    End If
+                Dim tempList As New List(Of ObjectId)
+
+                For Each lyrId As ObjectId In offLayers
+                    If lrTbl.Has(lyrId) Then tempList.Add(lyrId)
                 Next
 
-                m_layList = tempList.Distinct.ToList
+                Dim sortList As List(Of ObjectId) = tempList.Distinct.ToList
 
-                For Each s As String In m_layList
-                    Dim ltr As LayerTableRecord = TryCast(actrans.GetObject(lrTbl(s), OpenMode.ForWrite), LayerTableRecord)
-                    ltr.IsOff = True
+                For Each lID As ObjectId In sortList
+                    Try
+                        Dim ltr As LayerTableRecord = TryCast(actrans.GetObject(lID, OpenMode.ForWrite), LayerTableRecord)
+                        ltr.IsOff = True
+                    Catch ex As Exception
+                        sortList.Remove(lID)
+                        Continue For
+                    End Try
                 Next
+
+                If m_layIdDic Is Nothing Then m_layIdDic = New Dictionary(Of ObjectId, List(Of ObjectId))
+                m_layIdDic(cSpaceID) = sortList
+
                 actrans.Commit()
             End Using
 
@@ -4893,30 +5407,48 @@ NextPoint:
         Public Sub TurnOnLayers()
             'by David Eisenbeisz (c)2024
             'turns on layers that were temporarily turned off
+            'used with LAOFF command above
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = curDwg.Database
             Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
 
+            Dim curSpcID As ObjectId = DwgDB.CurrentSpaceId
+            Dim layIDList As List(Of ObjectId)
 
-            If m_layList Is Nothing OrElse m_layList.Count <= 0 Then
-                ed.WriteMessage(vbLf & "No layers stored in list.  Use LAOFF command to turn off layers and add to list.")
+            If m_layIdDic IsNot Nothing AndAlso m_layIdDic.Keys.Contains(curSpcID) Then
+                layIDList = m_layIdDic(curSpcID)
+            Else
+                ed.WriteMessage(vbLf & "No layers for current space stored in list.  Use LAOFF command or run LAON again from space where layers were turned off.")
                 Exit Sub
             End If
 
-            Dim templist As List(Of String) = m_layList
+            If layIDList.Count <= 0 Then
+                ed.WriteMessage(vbLf & "No layers to turn on stored in list.  Use LAOFF command to turn off layers and add to list.")
+                Exit Sub
+            End If
+
+            'Dim templist As List(Of String) = m_layList
 
             Using actrans As Transaction = DwgDB.TransactionManager.StartTransaction
                 Dim lyrTbl As LayerTable = actrans.GetObject(DwgDB.LayerTableId, OpenMode.ForRead)
-                For Each layName As String In templist
-                    If lyrTbl.Has(layName) Then
-                        Dim ltr As LayerTableRecord = TryCast(actrans.GetObject(lyrTbl(layName), OpenMode.ForWrite), LayerTableRecord)
-                        If ltr IsNot Nothing Then ltr.IsOff = False
-                    End If
+                For Each layId As ObjectId In layIDList
+                    Try
+                        If lyrTbl.Has(layId) Then
+                            Dim ltr As LayerTableRecord = TryCast(actrans.GetObject(layId, OpenMode.ForWrite), LayerTableRecord)
+                            If ltr IsNot Nothing Then
+                                ltr.IsOff = False
+                                'layIDList.Remove(layId)
+                            End If
+                        End If
+                    Catch ex As Exception
+                        Continue For
+                    End Try
                 Next
-                m_layList.Clear()
+                m_layIdDic.Remove(curSpcID)
                 actrans.Commit()
             End Using
+
         End Sub
 
         <CommandMethod("ExpLayers")>
@@ -5088,7 +5620,7 @@ NextPoint:
                         End If
 
                     Catch ex As Exception
-                        If ex.ErrorStatus = ErrorStatus.AmbiguousInput Then
+                        If ex.ErrorStatus = Autodesk.AutoCAD.Runtime.ErrorStatus.AmbiguousInput Then
                             Err.Clear()
                         End If
                     End Try
@@ -5131,7 +5663,7 @@ Skip:
                 End If
 
                 If hasBadLinetypes Then
-                    erMsg = erMsg & "One or more linetypes could not be assigned to the imported layers.  The linetypes for these layers has been changed to Continuous " _
+                    erMsg = erMsg & "One or more linetypes could not be assigned to the imported layers.  The linetypes for these layers have been changed to Continuous " _
                                & "A text file has been created In the drawing folder that has the names Of the failed layers And the linetypes that could Not be assigned."
                 End If
 
@@ -5235,7 +5767,7 @@ Skip:
                         End If
 
                     Catch ex As Exception
-                        If ex.ErrorStatus = ErrorStatus.AmbiguousInput Then
+                        If ex.ErrorStatus = Autodesk.AutoCAD.Runtime.ErrorStatus.AmbiguousInput Then
                             Err.Clear()
                         End If
                     End Try
@@ -5418,6 +5950,85 @@ Skip:
     End Module
 
     Public Module PlotLayoutCommands
+        Private m_pixScale As Double
+
+        <CommandMethod("LLTOF")>
+        Public Sub LayoutNamesToFile()
+
+            ' Get the current document and database, and start a transaction
+
+            Dim acDoc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgdb As Database = acDoc.Database
+
+            Dim layoDic As SortedDictionary(Of Integer, String) = LayoutTabList()
+            'Dim tFile As String = getasavefilename("CSV File (*.csv)|*.csv|Text File (*.txt)|*.txt|", "Select or Create Text File")
+
+            Dim tFile As String = GetASaveFileName("csv", "txt")
+            If Not tFile = "" Then
+                Try
+                    Using wr As TextWriter = New StreamWriter(tFile, False)
+                        Dim i As Integer
+                        For i = 0 To layoDic.Keys.Count
+                            If layoDic.Keys.Contains(i) Then
+                                Dim lineStr As String = i & "," & layoDic(i)
+                                wr.WriteLine(lineStr)
+                            End If
+                        Next
+                        wr.Close()
+                    End Using
+                Catch ex As Exception
+                    MessageBox.Show(ex.Message)
+                    Exit Sub
+                End Try
+            End If
+        End Sub
+
+        <CommandMethod("VNTOF")>
+        Public Sub ViewNamesToFile()
+
+            ' Get the current document and database, and start a transaction
+
+            Dim acDoc As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgdb As Database = acDoc.Database
+
+            Using acTrans As Transaction = dwgdb.TransactionManager.StartTransaction
+
+                Dim vtb As ViewTable = acTrans.GetObject(dwgdb.ViewTableId, OpenMode.ForRead)
+                'Dim tFile As String = getasavefilename("CSV File (*.csv)|*.csv|Text File (*.txt)|*.txt|", "Select or Create Text File")
+
+                Dim tFile As String = GetASaveFileName("csv", "txt")
+                If Not tFile = "" Then
+                    Try
+                        Using wr As TextWriter = New StreamWriter(tFile, False)
+                            For Each objID As ObjectId In vtb
+                                Dim vtr As ViewTableRecord = acTrans.GetObject(objID, OpenMode.ForRead)
+                                Dim cp As Point2d = vtr.CenterPoint
+                                Dim tlPoint As New Point2d(cp.X - vtr.Width / 2, cp.Y + vtr.Height / 2)
+                                Dim trPoint As New Point2d(cp.X + vtr.Width / 2, cp.Y + vtr.Height / 2)
+                                Dim brPoint As New Point2d(cp.X + vtr.Width / 2, cp.Y - vtr.Height / 2)
+                                Dim lineArray(7) As String
+                                lineArray(0) = vtr.Name
+                                lineArray(1) = Round(tlPoint.X, 3).ToString
+                                lineArray(2) = Round(tlPoint.Y, 3).ToString
+                                lineArray(3) = Round(brPoint.X, 3).ToString
+                                lineArray(4) = Round(brPoint.Y, 3).ToString
+                                lineArray(5) = Round(trPoint.X, 3).ToString
+                                lineArray(6) = Round(trPoint.Y, 3).ToString
+                                Dim lineStr As String = Join(lineArray, ",")
+                                wr.WriteLine(lineStr)
+                            Next
+                            wr.Close()
+                        End Using
+                    Catch ex As Exception
+                        MessageBox.Show(ex.Message)
+                        Exit Sub
+                    End Try
+                End If
+                acTrans.Commit()
+            End Using
+
+        End Sub
+
 
         <CommandMethod("ListStyleTables")>
         Public Sub PstylesFiles()
@@ -5526,72 +6137,80 @@ Skip:
             Dim dwgDB As Database = curDwg.Database
             Dim i As Integer = 0
 
-            Dim ppo As New PromptPointOptions(vbLf & "Pick upper left corner of first cell")
-            With ppo
-                .AllowNone = False
-                .AllowArbitraryInput = True
-            End With
+            Dim pca As PickCellsArgs = PickCells()
+            If pca Is Nothing Then Exit Sub
 
-            Dim p1 As Point3d
-            Dim p2 As Point3d
-            Dim userPick As Boolean = True
+            Dim horiz As Double = pca.Horizontal
+            Dim vert As Double = pca.Vertical
+            Dim p1 As Point3d = pca.Point1
+            Dim p2 As Point3d = pca.Point2
 
-            Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+            'Dim ppo As New PromptPointOptions(vbLf & "Pick upper left corner of first cell")
+            'With ppo
+            '    .AllowNone = False
+            '    .AllowArbitraryInput = True
+            'End With
 
-            If ppr.Status = PromptStatus.OK Then
-                p1 = ppr.Value
+            'Dim p1 As Point3d
+            'Dim p2 As Point3d
+            'Dim userPick As Boolean = True
 
-                Dim pco As New PromptCornerOptions(vbLf & "Pick the lower right corner of first cell.", p1)
-                With pco
-                    .UseDashedLine = True
-                    .AllowArbitraryInput = True
-                End With
+            'Dim ppr As PromptPointResult = ed.GetPoint(ppo)
 
-                Dim pcr As PromptPointResult = ed.GetCorner(pco)
+            'If ppr.Status = PromptStatus.OK Then
+            '    p1 = ppr.Value
 
-                If pcr.Status = PromptStatus.OK Then
-                    p2 = pcr.Value
-                Else
-                    userPick = False
-                End If
-            Else
-                userPick = False
-            End If
+            '    Dim pco As New PromptCornerOptions(vbLf & "Pick the lower right corner of first cell.", p1)
+            '    With pco
+            '        .UseDashedLine = True
+            '        .AllowArbitraryInput = True
+            '    End With
 
-            Dim vert As Double
-            Dim horiz As Double
+            '    Dim pcr As PromptPointResult = ed.GetCorner(pco)
+
+            '    If pcr.Status = PromptStatus.OK Then
+            '        p2 = pcr.Value
+            '    Else
+            '        userPick = False
+            '    End If
+            'Else
+            '    userPick = False
+            'End If
+
+            'Dim vert As Double
+            'Dim horiz As Double
+
+            'If userPick Then
+            '    horiz = p2.X - p1.X
+            '    vert = p2.Y - p1.Y
+            'Else
+            '    Dim pdo As New PromptDistanceOptions(vbLf & "Input or pick the horizontal distance for each cell")
+            '    With pdo
+            '        .AllowNegative = True
+            '        .Only2d = True
+            '        .AllowNone = False
+            '    End With
+
+            '    Dim pdr As PromptDoubleResult = ed.GetDistance(pdo)
+
+            '    If pdr.Status = PromptStatus.OK Then
+            '        horiz = pdr.Value
+            '    Else
+            '        Exit Sub
+            '    End If
+
+            '    Dim pdo2 As New PromptDistanceOptions(vbLf & "Input or pick the vertical distance for each cell")
+            '    Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
+
+            '    If pdr2.Status = PromptStatus.OK Then
+            '        vert = pdr2.Value
+            '    Else
+            '        Exit Sub
+            '    End If
+            'End If
+
             Dim cCols As Integer
             Dim cRows As Integer
-
-            If userPick Then
-                horiz = p2.X - p1.X
-                vert = p2.Y - p1.Y
-            Else
-                Dim pdo As New PromptDistanceOptions(vbLf & "Input or pick the horizontal distance for each cell")
-                With pdo
-                    .AllowNegative = True
-                    .Only2d = True
-                    .AllowNone = False
-                End With
-
-                Dim pdr As PromptDoubleResult = ed.GetDistance(pdo)
-
-                If pdr.Status = PromptStatus.OK Then
-                    horiz = pdr.Value
-                Else
-                    Exit Sub
-                End If
-
-                Dim pdo2 As New PromptDistanceOptions(vbLf & "Input or pick the vertical distance for each cell")
-                Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
-
-                If pdr2.Status = PromptStatus.OK Then
-                    vert = pdr2.Value
-                Else
-                    Exit Sub
-                End If
-            End If
-
 
             Dim pdo3 As New PromptIntegerOptions(vbLf & "Input the number of cells per row")
             Dim pdr3 As PromptIntegerResult = ed.GetInteger(pdo3)
@@ -5678,17 +6297,17 @@ Skip:
 
             Dim vpLayer As String
 
-            If LayerExists("vports") Then
-                vpLayer = "vports"
+            If LayerExists("Vports") Then
+                vpLayer = "Vports"
             Else
-                vpLayer = AddNewLayer("vports", 203)
+                vpLayer = AddNewLayer("Vports", 3)
             End If
 
             'Dim showForm As Int16 = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORM")
             Dim cVp As Int16 = DirectCast(Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("LAYOUTCREATEVIEWPORT"), Int16)
-            Dim showForm As Integer = DirectCast(Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS"), Integer)
+            Dim showForm As Integer = Autodesk.AutoCAD.ApplicationServices.Application.GetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS")
             Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("SHOWPAGESETUPFORNEWLAYOUTS", 0)
-            Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", 1)
+            Autodesk.AutoCAD.ApplicationServices.Application.SetSystemVariable("LAYOUTCREATEVIEWPORT", 0)
 
             Try
 
@@ -5697,7 +6316,7 @@ Skip:
                     Dim shtNm As String = ""
 
                     Dim pSet As PlotSettings = Nothing
-                    Dim psetVal As PlotSettingsValidator
+                    Dim psetVal As PlotSettingsValidator = PlotSettingsValidator.Current
                     If makeLayouts Then
 
                         Dim mySetup As String = GetPlotSetup()
@@ -5720,12 +6339,14 @@ Skip:
                                 pSet.AddToPlotSettingsDictionary(dwgDB)
                                 acTrans.AddNewlyCreatedDBObject(pSet, True)
                             End If
-                            psetVal = PlotSettingsValidator.Current
+                            'psetVal = PlotSettingsValidator.Current
                             psetVal.RefreshLists(pSet)
                             myPltr = GetPrinter(psetVal)
                             psetVal.SetPlotConfigurationName(pSet, myPltr, Nothing)
+
+                            'psetVal.SetPlotPaperUnits(pSet, PlotPaperUnit.Inches)
                         Else
-                            psetVal = PlotSettingsValidator.Current
+                            'psetVal = PlotSettingsValidator.Current
                             pSet = plsets.GetAt(mySetup).GetObject(OpenMode.ForWrite)
                             psetVal.RefreshLists(pSet)
                             myPltr = pSet.PlotConfigurationName
@@ -5733,40 +6354,94 @@ Skip:
                         shtNm = GetSheetName(psetVal, pSet)
                     End If
 
-                    Dim vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForWrite)
-                    Dim viewList As New List(Of Integer)
+                    Dim usePixels As Boolean = YesNoQuery(vbLf & "Will the layouts be plotted as raster images?")
 
-                    Dim lastNo As Integer = 0
-                    Dim startNo As Integer
-
-                    For Each vID As ObjectId In vtb
-                        Dim tempV As ViewTableRecord = acTrans.GetObject(vID, OpenMode.ForRead)
-
-                        If IsNumeric(tempV.Name) Then
-                            Dim tInt As Integer = CInt(tempV.Name)
-                            If tInt > lastNo Then lastNo = tInt
-                        End If
-                    Next
-
-                    Dim pdo7 As New PromptIntegerOptions(vbLf & "Last numbered vew is " & lastNo.ToString & ". Input the starting view number")
-                    With pdo7
-                        .DefaultValue = lastNo + 1
-                    End With
-                    Dim pdr7 As PromptIntegerResult = ed.GetInteger(pdo7)
-
-                    If pdr7.Status = PromptStatus.OK Then
-                        startNo = pdr7.Value
+                    If usePixels Then
+                        Dim pixScale As Integer = GetIntegerValue(vbLf & "Input the number of pixels per paperspace inch: ")
+                        Dim cs As New CustomScale(pixScale, 1)
+                        psetVal.SetCustomPrintScale(pSet, cs)
                     Else
-                        Exit Sub
+                        psetVal.SetStdScale(pSet, True)
+                        psetVal.SetStdScaleType(pSet, StdScaleType.StdScale1To1)
+                        psetVal.SetPlotOrigin(pSet, New Point2d(0, 0))
+                        psetVal.SetPlotType(pSet, PlotType.Layout)
                     End If
 
-                    i = startNo - 1
+                    Dim vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForWrite)
+
+                    Dim useNumbViews As Boolean = YesNoQuery("Use numbered views?")
+                    Dim viewNames As New List(Of String)
+                    Dim viewList As New List(Of Integer)
+                    Dim transDic As New Dictionary(Of String, String)
+
+                    If useNumbViews Then
+
+                        Dim lastNo As Integer = 0
+                        Dim startNo As Integer
+
+                        For Each vID As ObjectId In vtb
+                            Dim tempV As ViewTableRecord = acTrans.GetObject(vID, OpenMode.ForRead)
+                            If IsNumeric(tempV.Name) Then
+                                Dim tInt As Integer = CInt(tempV.Name)
+                                If tInt > lastNo Then lastNo = tInt
+                            End If
+                        Next
+
+                        Dim pdo7 As New PromptIntegerOptions(vbLf & "Last numbered vew is " & lastNo.ToString & ". Input the starting view number")
+                        With pdo7
+                            .DefaultValue = lastNo + 1
+                        End With
+                        Dim pdr7 As PromptIntegerResult = ed.GetInteger(pdo7)
+
+                        If pdr7.Status = PromptStatus.OK Then
+                            startNo = pdr7.Value
+                        Else
+                            Exit Sub
+                        End If
+
+                        i = startNo
+
+                    Else
+                        Dim fName As String = GetMyCSVFileName()
+                        If String.IsNullOrEmpty(fName) Then Exit Sub
+                        Dim translist As New List(Of String())
+
+                        Using sr As New TextFieldParser(fName)
+                            sr.TextFieldType = FileIO.FieldType.Delimited
+                            sr.SetDelimiters(",")
+                            Dim curRow() As String = sr.ReadFields
+                            translist.Add(curRow)
+                            While Not sr.EndOfData
+                                Try
+                                    curRow = sr.ReadFields
+                                    translist.Add(curRow)
+                                Catch ex As FileIO.MalformedLineException
+                                    MsgBox("Line " & curRow.ToString & "is not valid and will be skipped.")
+                                End Try
+                            End While
+                            sr.Close()
+                        End Using
+
+                        For j As Integer = 0 To translist.Count - 1
+                            Try
+                                Dim curLine() As String = translist(j)
+                                Dim vN As String = curLine(1)
+                                Dim loN As String = curLine(0)
+                                If vtb.Has(vN) Then Continue For
+                                transDic(loN) = vN
+                            Catch ex As Exception
+                                MessageBox.Show(ex.Message)
+                                Continue For
+                            End Try
+                        Next
+                    End If
 
                     Dim starthoriz As Double = p1.X + (horiz / 2)
                     Dim startvert As Double = p1.Y + (vert / 2)
 
                     Dim endHoriz As Double = p1.X + (horiz * cCols) - (horiz / 2)
                     Dim endVert As Double = p1.Y + (vert * cRows) - (vert / 2)
+                    Dim c As Integer = 0
 
                     For y = 0 To cRows - 1
                         Dim yCtr As Double = startvert + (vert * y)
@@ -5774,30 +6449,66 @@ Skip:
                             Dim xCtr As Double = starthoriz + (horiz * x)
                             'For y As Integer = startvert To endVert Step vert
                             '    For x As Integer = starthoriz To endHoriz Step horiz
-                            i += 1
                             Dim vtr As ViewTableRecord
-                            If vtb.Has(i.ToString) Then
-                                vtr = acTrans.GetObject(vtb(i.ToString), OpenMode.ForWrite)
-                                With vtr
-                                    .Width = Abs(horiz)
-                                    .Height = Abs(vert)
-                                    .CenterPoint = New Point2d(xCtr, yCtr)
-                                End With
+
+                            If useNumbViews Then
+                                If vtb.Has(i.ToString) Then
+                                    vtr = acTrans.GetObject(vtb(i.ToString), OpenMode.ForWrite)
+                                    With vtr
+                                        .Width = Abs(horiz)
+                                        .Height = Abs(vert)
+                                        .CenterPoint = New Point2d(xCtr, yCtr)
+                                    End With
+                                Else
+                                    vtr = New ViewTableRecord
+                                    With vtr
+                                        .Name = i.ToString
+                                        .Width = Abs(horiz)
+                                        .Height = Abs(vert)
+                                        .CenterPoint = New Point2d(xCtr, yCtr)
+                                    End With
+                                    Dim vtrid As ObjectId = vtb.Add(vtr)
+                                    acTrans.AddNewlyCreatedDBObject(vtr, True)
+                                End If
                             Else
-                                vtr = New ViewTableRecord
-                                With vtr
-                                    .Name = i.ToString
-                                    .Width = Abs(horiz)
-                                    .Height = Abs(vert)
-                                    .CenterPoint = New Point2d(xCtr, yCtr)
-                                End With
-                                Dim vtrid As ObjectId = vtb.Add(vtr)
-                                acTrans.AddNewlyCreatedDBObject(vtr, True)
+                                Dim myVName As String = transDic(transDic.Keys(c))
+                                If vtb.Has(myVName) Then
+                                    vtr = acTrans.GetObject(vtb(myVName.ToString), OpenMode.ForWrite)
+                                    With vtr
+                                        .Width = Abs(horiz)
+                                        .Height = Abs(vert)
+                                        .CenterPoint = New Point2d(xCtr, yCtr)
+                                    End With
+                                Else
+                                    vtr = New ViewTableRecord
+                                    With vtr
+                                        .Name = myVName
+                                        .Width = Abs(horiz)
+                                        .Height = Abs(vert)
+                                        .CenterPoint = New Point2d(xCtr, yCtr)
+                                    End With
+                                    Dim vtrid As ObjectId = vtb.Add(vtr)
+                                    acTrans.AddNewlyCreatedDBObject(vtr, True)
+                                End If
                             End If
 
+                            i += 1
+
                             If makeLayouts AndAlso pSet IsNot Nothing AndAlso shtNm IsNot Nothing Then
-                                Dim ptrName As String = pSet.PlotConfigurationName
-                                Dim layoutID As ObjectId = CreateVP(vtr, vpLayer, hSize, vSize, acTrans, pSet, shtNm)
+                                'Dim ptrName As String = pSet.PlotConfigurationName
+                                Dim layoutID As ObjectId
+                                If useNumbViews Then
+                                    layoutID = CreateVP(vtr, vpLayer, hSize, vSize, acTrans, pSet, shtNm)
+                                Else
+                                    layoutID = CreateVP(vtr, vpLayer, hSize, vSize, acTrans, pSet, shtNm, transDic.Keys(c))
+                                End If
+
+                                c += 1
+
+                                If layoutID = ObjectId.Null Then
+                                    MessageBox.Show(vbLf & "Error creating layout for " & vtr.Name & ".")
+                                    Continue For
+                                End If
                             End If
                         Next
                     Next
@@ -5816,8 +6527,63 @@ Skip:
 
         End Sub
 
-        <CommandMethod("RLO")>
-        Public Sub RenameLayouts()
+        <CommandMethod("RENVIEWS")>
+        Public Sub RenameViews()
+
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim dwgDB As Database = curDwg.Database
+
+            ed.WriteMessage(vbLf & "This command uses a csv file (in the form NewName, OldName) to translate existing view names to new view names.")
+
+            Dim fName As String = GetMyCSVFileName()
+            If String.IsNullOrEmpty(fName) Then Exit Sub
+            Dim transList As New List(Of String())
+
+            Using sr As New TextFieldParser(fName)
+                sr.TextFieldType = FileIO.FieldType.Delimited
+                sr.SetDelimiters(",")
+                Dim curRow() As String = sr.ReadFields
+                transList.Add(curRow)
+                While Not sr.EndOfData
+                    Try
+                        curRow = sr.ReadFields
+                        transList.Add(curRow)
+                    Catch ex As FileIO.MalformedLineException
+                        MsgBox("Line " & ex.Message & "is not valid and will be skipped.")
+                    End Try
+                End While
+                sr.Close()
+            End Using
+
+            Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                Dim vtb As ViewTable = actrans.GetObject(dwgDB.ViewTableId, OpenMode.ForRead)
+
+                For i As Integer = 0 To transList.Count - 1
+                    Try
+                        Dim curLine() As String = transList(i)
+                        Dim oldVn As String = curLine(1)
+                        Dim newVn As String = curLine(0)
+                        If oldVn = newVn Then Continue For
+                        Dim vtr As ViewTableRecord = TryCast(actrans.GetObject(vtb(oldVn), OpenMode.ForWrite), ViewTableRecord)
+                        If vtr IsNot Nothing Then
+                            vtr.Name = newVn
+                        End If
+                    Catch ex As Exception
+                        MessageBox.Show(ex.Message)
+                        Continue For
+                    End Try
+                Next
+
+                actrans.Commit()
+            End Using
+
+        End Sub
+
+
+
+        <CommandMethod("RLOLD")>
+        Public Sub RenameLayoutsOld()
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
@@ -5842,12 +6608,25 @@ Skip:
 
             Dim lPicker As New LayoutPicker
             Dim loList As SortedDictionary(Of Integer, String) = LayoutTabList()
+            Dim revList As New Dictionary(Of String, Integer)
+            For Each k As Integer In loList.Keys
+                revList(loList(k)) = k
+            Next
 
-            For Each lN As String In loList.Values
-                Dim lName As String = lN
-                If Not lName = "Model" Then
-                    lPicker.ListBox1.Items.Add(lName)
-                End If
+
+            For Each z As Integer In loList.Keys
+                Try
+                    If loList.Keys.Contains(z) Then
+                        Dim lName As String = loList(z)
+                        If Not lName = "Model" Then
+                            lPicker.ListBox1.Items.Add(lName)
+                        End If
+                    End If
+
+                Catch ex As Exception
+                    Continue For
+                End Try
+
             Next
 
             lPicker.PickerLabel.Text = "Select layouts to update:"
@@ -5901,11 +6680,74 @@ Skip:
                 Dim lm As LayoutManager = LayoutManager.Current
                 Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
 
+                    Dim ppo As New PromptPointOptions(vbLf & "Pick upper left corner of first cell")
+                    With ppo
+                        .AllowNone = False
+                        .AllowArbitraryInput = True
+                    End With
+
+                    Dim p1 As Point3d
+                    Dim p2 As Point3d
+                    Dim userPick As Boolean = True
+
+                    Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+
+                    If ppr.Status = PromptStatus.OK Then
+                        p1 = ppr.Value
+
+                        Dim pco As New PromptCornerOptions(vbLf & "Pick the lower right corner of first cell.", p1)
+                        With pco
+                            .UseDashedLine = True
+                            .AllowArbitraryInput = True
+                        End With
+
+                        Dim pcr As PromptPointResult = ed.GetCorner(pco)
+
+                        If pcr.Status = PromptStatus.OK Then
+                            p2 = pcr.Value
+                        Else
+                            userPick = False
+                        End If
+                    Else
+                        userPick = False
+                    End If
+
+                    Dim vert As Double
+                    Dim horiz As Double
+
+                    If userPick Then
+                        horiz = p2.X - p1.X
+                        vert = p2.Y - p1.Y
+                    Else
+                        Dim pdo As New PromptDistanceOptions(vbLf & "Input or pick the horizontal distance for each cell")
+                        With pdo
+                            .AllowNegative = True
+                            .Only2d = True
+                            .AllowNone = False
+                        End With
+
+                        Dim pdr As PromptDoubleResult = ed.GetDistance(pdo)
+
+                        If pdr.Status = PromptStatus.OK Then
+                            horiz = pdr.Value
+                        Else
+                            Exit Sub
+                        End If
+
+                        Dim pdo2 As New PromptDistanceOptions(vbLf & "Input or pick the vertical distance for each cell")
+                        Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
+
+                        If pdr2.Status = PromptStatus.OK Then
+                            vert = pdr2.Value
+                        Else
+                            Exit Sub
+                        End If
+                    End If
+
                     Dim hSize As Double
                     Dim vSize As Double
 
-                    'get layout sizes from user
-                    Dim pdo5 As New PromptDoubleOptions(vbLf & "Input the new width of each Layout Viewport (inches)")
+                    Dim pdo5 As New PromptDoubleOptions(vbLf & "Input the width of each Layout (inches)")
                     Dim pdr5 As PromptDoubleResult = ed.GetDouble(pdo5)
 
                     If pdr5.Status = PromptStatus.OK Then
@@ -5914,7 +6756,7 @@ Skip:
                         Exit Sub
                     End If
 
-                    Dim pdo6 As New PromptDoubleOptions(vbLf & "Input the new height of each Layout Viewport (inches)")
+                    Dim pdo6 As New PromptDoubleOptions(vbLf & "Input the height of each Layout (inches)")
                     Dim pdr6 As PromptDoubleResult = ed.GetDouble(pdo6)
 
                     If pdr6.Status = PromptStatus.OK Then
@@ -5923,151 +6765,349 @@ Skip:
                         Exit Sub
                     End If
 
-                    'get first view to be adjusted (must be numbered views)
-                    Dim pdo7 As New PromptIntegerOptions(vbLf & "Input starting view number")
-                    Dim pdr7 As PromptIntegerResult = ed.GetInteger(pdo7)
+                    Dim viewsForChange As New List(Of String)
+                    Dim i As Integer
 
-                    Dim startView As Integer
+                    Dim useNumbViews As Boolean = YesNoQuery("Use numbered views?")
 
-                    If pdr7.Status = PromptStatus.OK Then
-                        startView = pdr7.Value
-                    Else
-                        Exit Sub
-                    End If
+                    Using vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForRead)
+                        Dim tempViewDic As New Dictionary(Of Integer, String)
+                        Dim viewDic As New Dictionary(Of String, String)
 
-                    Dim i As Integer = startView - 1
+                        If useNumbViews Then
+                            'get first view to be adjusted (must be numbered views)
+                            Dim pdo7 As New PromptIntegerOptions(vbLf & "Input starting view number")
+                            Dim pdr7 As PromptIntegerResult = ed.GetInteger(pdo7)
 
-                    'get the view table record
-                    Dim vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForRead)
+                            Dim startView As Integer
 
-                    'pick the layouts to be adjusted
-                    Dim lPicker As New LayoutPicker
-                    Dim loList As SortedDictionary(Of Integer, String) = LayoutTabList()
-
-                    'add layout names to the picker form
-                    For Each lN As String In loList.Values
-                        Dim lName As String = lN
-                        If Not lName = "Model" Then
-                            lPicker.ListBox1.Items.Add(lName)
-                        End If
-                    Next
-
-                    lPicker.PickerLabel.Text = "Select layouts to update:"
-
-                    'create a list variable and show the form
-                    Dim layoutLst As List(Of String)
-                    lPicker.ShowDialog()
-
-                    If lPicker.DialogResult = DialogResult.Cancel Then
-                        Exit Sub
-                    Else
-                        layoutLst = lPicker.PickedList
-                    End If
-
-                    Dim layDict As DBDictionary = dwgDB.LayoutDictionaryId.GetObject(OpenMode.ForRead)
-                    Dim layID As ObjectId = layDict(layoutLst(0))
-                    Dim lo As Layout = acTrans.GetObject(layID, OpenMode.ForWrite)
-
-                    'create a plot settings validator to setup layouts
-                    Dim pset As PlotSettings
-                    Dim psetval As PlotSettingsValidator
-                    Dim mySetup As String = GetPlotSetup()
-                    Dim myPltr As String
-                    Dim plsets As DBDictionary = acTrans.GetObject(dwgDB.PlotSettingsDictionaryId, OpenMode.ForRead)
-
-                    'if there is no existing setup, then create one
-                    If mySetup = "" Then
-                        Dim setName As String
-                        Dim psoPl As New PromptStringOptions(vbLf & "Enter name for new plot settings.")
-                        Dim psrPl As PromptResult = ed.GetString(psoPl)
-                        If psrPl.Status = PromptStatus.OK Then
-                            setName = psrPl.StringResult
-                        Else
-                            Exit Sub
-                        End If
-                        If plsets.Contains(setName) Then
-                            pset = plsets.GetAt(setName).GetObject(OpenMode.ForWrite)
-                        Else
-                            pset = New PlotSettings(False) With {.PlotSettingsName = setName}
-                            pset.AddToPlotSettingsDictionary(dwgDB)
-                            acTrans.AddNewlyCreatedDBObject(pset, True)
-                        End If
-                        pset.CopyFrom(lo)
-                        psetval = PlotSettingsValidator.Current
-                        psetval.RefreshLists(pset)
-                        myPltr = GetPrinter(psetval)
-                        psetval.SetPlotConfigurationName(pset, myPltr, Nothing)
-                    Else
-                        'if there is a current plot settings validator, use it
-                        psetval = PlotSettingsValidator.Current
-                        pset = plsets.GetAt(mySetup).GetObject(OpenMode.ForWrite)
-                        psetval.RefreshLists(pset)
-                        myPltr = pset.PlotConfigurationName
-                    End If
-
-                    'create the viewport on the viewports layer
-                    Dim vpLayer As String
-
-                    If LayerExists("vports") Then
-                        vpLayer = "vports"
-                    Else
-                        vpLayer = AddNewLayer("vports", 203)
-                    End If
-
-                    'Get the sheet name to apply to the layout
-                    Dim mySheet As String = GetSheetName(psetval, pset)
-                    If mySheet = "" Then Exit Sub
-                    'add the plot settings, printer, and sheet name to the plot settings validator
-                    psetval.SetPlotConfigurationName(pset, myPltr, mySheet)
-
-                    'run through the layout list
-                    If layoutLst.Count > 0 Then
-                        For Each loName As String In layoutLst
-                            lm.CurrentLayout = loName
-                            Dim loID As ObjectId = layDict(loName)
-                            lo = acTrans.GetObject(loID, OpenMode.ForWrite)
-
-                            'get the second viewport on the layout (first viewport is paperspace)
-                            Dim vpIDs As ObjectIdCollection = lo.GetViewports
-                            Dim vp As Autodesk.AutoCAD.DatabaseServices.Viewport = acTrans.GetObject(vpIDs(1), OpenMode.ForWrite)
-                            Dim curSpace As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
-
-                            'change the viewport dimensions to fill the sheet
-                            'Dim vp As New Viewport
-                            vp.SetDatabaseDefaults()
-                            vp.CenterPoint = New Point3d(hSize / 2, vSize / 2, 0)
-                            vp.Height = vSize
-                            vp.Width = hSize
-                            vp.Layer = vpLayer
-
-                            lo.CopyFrom(pset)
-                            'Dim pSetVal As PlotSettingsValidator = PlotSettingsValidator.Current
-                            Dim check As String = pset.PlotConfigurationName
-                            'Debug.Print(check)
-                            psetval.SetPlotConfigurationName(pset, myPltr, mySheet)
-                            psetval.SetPlotType(pset, Autodesk.AutoCAD.DatabaseServices.PlotType.Layout)
-                            psetval.SetPlotRotation(pset, PlotRotation.Degrees000)
-                            psetval.SetZoomToPaperOnUpdate(pset, True)
-                            i += 1
-
-                            'if there is a numbered view corresponding to the layout view, use it
-                            If vtb.Has(i.ToString) Then
-                                Dim vtr As ViewTableRecord = acTrans.GetObject(vtb(i.ToString), OpenMode.ForRead)
-                                ed.SwitchToModelSpace()
-                                ed.SetCurrentView(vtr)
-                                ed.SwitchToPaperSpace()
+                            If pdr7.Status = PromptStatus.OK Then
+                                startView = pdr7.Value
+                            Else
+                                Exit Sub
                             End If
 
-                        Next
-                    End If
+                            i = startView - 1
+                            'get the view table record
+
+                        Else
+                            'Dim vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForRead)
+                            Dim viewList As New List(Of String)
+                            For Each viewID As ObjectId In vtb
+                                Dim myVtr As ViewTableRecord = TryCast(acTrans.GetObject(viewID, OpenMode.ForRead), ViewTableRecord)
+                                If myVtr IsNot Nothing Then viewList.Add(myVtr.Name)
+                            Next
+
+                            Using vPicker As New LayoutPicker(viewList, False)
+                                vPicker.ShowDialog()
+
+                                If Not vPicker.DialogResult = DialogResult.OK Then
+                                    acTrans.Abort()
+                                    Exit Sub
+                                End If
+
+
+                                If vPicker.PickedList IsNot Nothing AndAlso vPicker.PickedList.Count > 0 Then
+                                    viewsForChange = vPicker.PickedList
+                                Else
+                                    acTrans.Abort()
+                                    Exit Sub
+                                End If
+
+                            End Using
+
+                        End If
+
+                        'pick the layouts to be adjusted
+                        Dim loList As SortedDictionary(Of Integer, String) = LayoutTabList()
+                        Dim layoutLst As List(Of String)
+
+                        Using lPicker As New LayoutPicker
+                            'add layout names to the picker form
+                            For Each lN As String In loList.Values
+                                Dim lName As String = lN
+                                If Not lName = "Model" Then
+                                    lPicker.ListBox1.Items.Add(lName)
+                                End If
+                            Next
+
+                            lPicker.PickerLabel.Text = "Select layouts to update:"
+
+                            'create a list variable and show the form
+                            lPicker.ShowDialog()
+
+                            If lPicker.DialogResult = DialogResult.Cancel Then
+                                Exit Sub
+                            Else
+                                layoutLst = lPicker.PickedList
+                            End If
+                        End Using
+
+                        If layoutLst.Count > viewsForChange.Count Then
+                            ed.WriteMessage(vbLf & "Error.  Number of views must be equal or greater than the number of layouts to change.")
+                            acTrans.Dispose()
+                            Exit Sub
+                        End If
+
+                        Dim n As Integer = i
+                        Dim numberedDic As New Dictionary(Of String, Integer)
+
+                        If useNumbViews Then
+                            For x As Integer = 0 To layoutLst.Count - 1
+                                viewDic.Add(layoutLst(x), n)
+                                n += 1
+                            Next
+                        Else
+                            For x As Integer = 0 To layoutLst.Count - 1
+                                viewDic.Add(layoutLst(x), viewsForChange(x))
+                            Next
+                        End If
+
+                        Dim layDict As DBDictionary = dwgDB.LayoutDictionaryId.GetObject(OpenMode.ForRead)
+                        Dim layID As ObjectId = layDict(layoutLst(0))
+                        Dim lo As Layout = acTrans.GetObject(layID, OpenMode.ForWrite)
+
+                        'create a plot settings validator to setup layouts
+                        Dim pset As PlotSettings
+                        Dim psetval As PlotSettingsValidator
+                        Dim mySetup As String = GetPlotSetup()
+                        Dim myPltr As String
+                        Dim plsets As DBDictionary = acTrans.GetObject(dwgDB.PlotSettingsDictionaryId, OpenMode.ForRead)
+
+                        'if there is no existing setup, then create one
+                        If mySetup = "" Then
+                            Dim setName As String
+                            Dim psoPl As New PromptStringOptions(vbLf & "Enter name for new plot settings.")
+                            Dim psrPl As PromptResult = ed.GetString(psoPl)
+                            If psrPl.Status = PromptStatus.OK Then
+                                setName = psrPl.StringResult
+                            Else
+                                Exit Sub
+                            End If
+                            If plsets.Contains(setName) Then
+                                pset = plsets.GetAt(setName).GetObject(OpenMode.ForWrite)
+                            Else
+                                pset = New PlotSettings(False) With {.PlotSettingsName = setName}
+                                pset.AddToPlotSettingsDictionary(dwgDB)
+                                acTrans.AddNewlyCreatedDBObject(pset, True)
+                            End If
+                            pset.CopyFrom(lo)
+                            psetval = PlotSettingsValidator.Current
+                            psetval.RefreshLists(pset)
+                            myPltr = GetPrinter(psetval)
+                            psetval.SetPlotConfigurationName(pset, myPltr, Nothing)
+                        Else
+                            For x As Integer = 0 To layoutLst.Count - 1
+                                viewDic(x) = viewsForChange(x)
+                            Next
+
+                            'if there is a current plot settings validator, use it
+                            psetval = PlotSettingsValidator.Current
+                            pset = plsets.GetAt(mySetup).GetObject(OpenMode.ForWrite)
+                            psetval.RefreshLists(pset)
+                            myPltr = pset.PlotConfigurationName
+                        End If
+
+
+                        'Dim stdScale As StandardScaleType = pset.StdScaleType
+                        'Dim custScale As CustomScale = pset.CustomPrintScale
+                        'Dim tempScaleStr() As String
+
+                        'If stdScale = StandardScaleType.CustomScale Then
+                        '    ReDim tempScaleStr(1)
+                        '    tempScaleStr(0) = custScale.Numerator & ":" & custScale.Denominator
+                        'Else
+                        '    tempScaleStr = [Enum].GetNames(stdScale.GetType)
+                        'End If
+
+                        'Dim msg As String = vbLf & "Layout scale = " & tempScaleStr(0) & ".  Do you want to change it?"
+                        'Dim yn As Boolean = YesNoQuery(msg)
+                        'Dim numerat As Integer
+                        'Dim denom As Integer
+                        'Dim bailout As Boolean
+                        'Dim scl As CustomScale
+
+                        'If yn = True Then
+
+                        '    Dim sp As New FontPicker(PickerType.PlotScale)
+                        '    sp.ShowDialog()
+
+                        '    If sp.DialogResult = DialogResult.OK Then
+
+                        '        If sp.StandardSclStr = "" Then
+                        '            Dim pio As New PromptIntegerOptions(vbLf & "Enter the number of modelspace units:")
+
+                        '            Dim pir As PromptIntegerResult = ed.GetInteger(pio)
+                        '            If pir.Status = PromptStatus.OK Then
+                        '                numerat = pir.Value
+                        '                bailout = False
+                        '            Else
+                        '                bailout = True
+                        '            End If
+
+                        '            If Not bailout Then
+                        '                Dim newMsg As String = vbLf & "Enter the number of paperspace units:"
+                        '                pio.Message = newMsg
+                        '                pir = ed.GetInteger(pio)
+
+                        '                If pir.Status = PromptStatus.OK Then
+                        '                    denom = pir.Value
+                        '                    bailout = False
+                        '                Else
+                        '                    bailout = True
+                        '                End If
+                        '            End If
+                        '        End If
+                        '    End If
+                        'Else
+                        '    bailout = True
+                        'End If
+
+                        'If Not bailout Then
+                        '    scl = New CustomScale(numerat, denom)
+                        'End If
+
+                        'create the viewport on the viewports layer
+                        Dim vpLayer As String
+
+                        If LayerExists("Vports") Or LayerExists("vports") Or LayerExists("VPORTS") Then
+                            vpLayer = "Vports"
+                        Else
+                            vpLayer = AddNewLayer("Vports", 3)
+                        End If
+
+                        'Get the sheet name to apply to the layout
+                        Dim mySheet As String = GetSheetName(psetval, pset)
+                        If mySheet = "" Then Exit Sub
+                        'add the plot settings, printer, and sheet name to the plot settings validator
+                        psetval.SetPlotConfigurationName(pset, myPltr, mySheet)
+
+                        'run through the layout list
+                        If layoutLst.Count > 0 Then
+                            For q As Integer = 0 To layoutLst.Count - 1
+                                'For Each loName As String In layoutLst
+                                Dim loName As String = layoutLst(q)
+                                lm.CurrentLayout = loName
+                                Dim loID As ObjectId = layDict(loName)
+                                lo = acTrans.GetObject(loID, OpenMode.ForWrite)
+
+                                'get the second viewport on the layout (first viewport is paperspace)
+                                Dim vpIDs As ObjectIdCollection = lo.GetViewports
+                                Dim vp As Autodesk.AutoCAD.DatabaseServices.Viewport = acTrans.GetObject(vpIDs(1), OpenMode.ForWrite)
+                                Dim curSpace As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
+
+                                'change the viewport dimensions to fill the sheet
+                                'Dim vp As New Viewport
+                                vp.SetDatabaseDefaults()
+                                vp.CenterPoint = New Point3d(hSize / 2, vSize / 2, 0)
+                                vp.Height = vSize
+                                vp.Width = hSize
+                                vp.Layer = vpLayer
+
+                                lo.CopyFrom(pset)
+                                'Dim pSetVal As PlotSettingsValidator = PlotSettingsValidator.Current
+                                Dim check As String = pset.PlotConfigurationName
+                                'Debug.Print(check)
+                                psetval.SetPlotConfigurationName(pset, myPltr, mySheet)
+                                psetval.SetPlotType(pset, Autodesk.AutoCAD.DatabaseServices.PlotType.Layout)
+                                psetval.SetPlotRotation(pset, PlotRotation.Degrees000)
+                                psetval.SetZoomToPaperOnUpdate(pset, True)
+                                'If Not bailout Then psetval.SetCustomPrintScale(pset, scl)
+
+                                'i += 1
+                                'if there is a numbered view corresponding to the layout view, use it
+                                If useNumbViews Then
+                                    If vtb.Has(i.ToString) Then
+                                        Using vtr As ViewTableRecord = TryCast(acTrans.GetObject(vtb(i.ToString), OpenMode.ForWrite), ViewTableRecord)
+                                            If vtb.Has(loName) Then
+                                                Dim tempname As String = GetValidViewName(loName)
+                                                Using tempVTR As ViewTableRecord = acTrans.GetObject(vtb(loName), OpenMode.ForWrite)
+                                                    tempVTR.Name = tempname
+                                                    vtr.Name = loName
+                                                    For Each ky As String In viewDic.Keys
+                                                        Dim tname As String = viewDic(ky)
+                                                        If tname = loName Then
+                                                            viewDic(ky) = tempname
+                                                            Exit For
+                                                        End If
+                                                    Next
+                                                End Using
+                                            Else
+                                                vtr.Name = loName
+                                            End If
+                                            ed.SwitchToModelSpace()
+                                            ed.SetCurrentView(vtr)
+                                            ed.SwitchToPaperSpace()
+                                        End Using
+                                    End If
+                                    i += 1
+                                Else
+                                    If vtb.Has(viewDic(loName)) Then
+                                        Using vtr As ViewTableRecord = acTrans.GetObject(vtb(viewDic(loName)), OpenMode.ForWrite)
+                                            If vtb.Has(loName) Then
+                                                Dim tempname As String = GetValidViewName(loName)
+                                                Using tempVTR As ViewTableRecord = acTrans.GetObject(vtb(loName), OpenMode.ForWrite)
+                                                    tempVTR.Name = tempname
+                                                    vtr.Name = loName
+                                                    For Each ky As String In viewDic.Keys
+                                                        Dim tname As String = viewDic(ky)
+                                                        If tname = loName Then
+                                                            viewDic(ky) = tempname
+                                                            Exit For
+                                                        End If
+                                                    Next
+                                                End Using
+                                            Else
+                                                vtr.Name = loName
+                                            End If
+                                            ed.SwitchToModelSpace()
+                                            ed.SetCurrentView(vtr)
+                                            ed.SwitchToPaperSpace()
+                                        End Using
+                                    End If
+                                End If
+                            Next
+                        End If
+                    End Using
                     acTrans.Commit()
                 End Using
-
             Catch ex As Exception
                 MessageBox.Show(ex.Message)
             End Try
 
         End Sub
+
+        Public Function GetValidViewName(tempName As String)
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim dwgDB As Database = curDwg.Database
+
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                Dim vtb As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForRead)
+                Dim newName As String = tempName
+                If vtb.Has(newName) Then
+                    Do
+                        If Left(newName, 4) = "temp" Then
+                            Dim numb As Integer = CInt(Right(newName, Len(newName) - 4))
+                            newName = "temp" & (numb + 1).ToString
+                        Else
+                            newName = "temp0"
+                        End If
+                    Loop Until vtb.Has(newName) = False
+                End If
+
+                If Not newName = "" Then
+                    Return newName
+                Else
+                    Return ""
+                End If
+
+                acTrans.Commit()
+
+            End Using
+
+        End Function
+
 
         <CommandMethod("MSPT")>
         Public Sub ModelSpacePlot()
@@ -6160,6 +7200,10 @@ Skip:
 
     Public Module MiscCommands
 
+        Friend m_myClr As Autodesk.AutoCAD.Colors.Color
+
+
+
         Public Sub AuditDwg(curDwgName As String)
             Dim acDwgMgr As DocumentCollection = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager
             Dim curDwg As Document = acDwgMgr.Open(curDwgName, False)
@@ -6186,7 +7230,6 @@ Skip:
 
         End Sub
 
-        Friend myClr As Autodesk.AutoCAD.Colors.Color
 
         <CommandMethod("LLTS")>
         Public Sub ListLinetypes()
@@ -6935,13 +7978,13 @@ Skip:
                 End If
 
                 Dim bgClr As Autodesk.AutoCAD.Colors.Color
-                bgClr = myClr
-
-                If bgClr Is Nothing Then
+                If m_myClr IsNot Nothing Then
+                    bgClr = m_myClr
+                Else
                     ed.WriteMessage(vbLf & "Select color for background mask:")
                     bgClr = PickColor()
-                    If bgClr Is Nothing Then bgClr = Color.FromColorIndex(ColorMethod.ByAci, 255)
-                    myClr = bgClr
+                    If bgClr Is Nothing Then bgClr = Color.FromRgb(255, 255, 255)
+                    m_myClr = bgClr
                 End If
 
                 Using actrans As Transaction = dwgDb.TransactionManager.StartTransaction()
@@ -7021,7 +8064,7 @@ Skip:
 
             If cr = DialogResult.OK Then
                 Dim clr As Autodesk.AutoCAD.Colors.Color = cd.Color
-                myClr = clr
+                m_myClr = clr
             End If
 
         End Sub
@@ -7079,13 +8122,14 @@ Skipit:
         '<CommandMethod("LC")>
 
         <CommandMethod("MUTCDCOLORS")>
-        Public Sub MUTCDcolors()
+        Public Sub ListMUTCDcolors()
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim ed As Editor = curDwg.Editor
 
             Try
                 Dim pkwOpts As New PromptKeywordOptions(vbCrLf & "Enter the MUTCD Color to translate: ")
+
                 With pkwOpts
                     .Keywords.Add("Red")
                     .Keywords.Add("Yellow")
@@ -7095,9 +8139,9 @@ Skipit:
                     .Keywords.Add("Orange")
                     .Keywords.Add("Purple")
                     .Keywords.Add("Pink")
-                    .Keywords.Add("Yellow-Green")
-                    .Keywords.Add("Red-Pavement")
-                    .Keywords.Add("Green-Pavement")
+                    .Keywords.Add("YellowGreen")
+                    .Keywords.Add("RedPavement")
+                    .Keywords.Add("GreenPavement")
                     .AppendKeywordsToMessage = True
                 End With
 
@@ -7123,7 +8167,7 @@ Skipit:
                         ed.WriteMessage(vbLf & "Pantone:294C;  RGB:0,47,108;  ACI:156")
                     Case Is = "Orange"
                         ed.WriteMessage(vbLf & "Pantone:152C;  RGB:229,114,0;  ACI:30")
-                    Case Is = "Yellow-Green"
+                    Case Is = "YellowGreen"
                         ed.WriteMessage(vbLf & "Pantone:382C;  RGB:196,214,0;  ACI:52")
                     Case Is = "Purple"
                         ed.WriteMessage(vbLf & "Pantone:519C;  RGB:89,49,95;  ACI:219")
@@ -7131,9 +8175,9 @@ Skipit:
                         ed.WriteMessage(vbLf & "Pantone:469C;  RGB:105,63,35;  ACI:27")
                     Case Is = "Pink"
                         ed.WriteMessage(vbLf & "Pantone:198C;  RGB:223,70,97;  ACI:13")
-                    Case Is = "Green-Pavement"
+                    Case Is = "GreenPavement"
                         ed.WriteMessage(vbLf & "Pantone:802C;  RGB:68,214,44;  ACI:82")
-                    Case Is = "Red-Pavement"
+                    Case Is = "RedPavement"
                         ed.WriteMessage(vbLf & "Pantone:485C;  RGB:218,41,28;  ACI:22")
                 End Select
 
@@ -7282,6 +8326,7 @@ Skipit:
             myDic("RG_2000D") = "Roadgeek 2000 Series D.TTF"
             myDic("RG_2000E") = "Roadgeek 2000 Series E.TTF"
             myDic("RG_2000F") = "Roadgeek 2000 Series F.TTF"
+
             myDic("RG_20051BW") = "Roadgeek2005BlendB1W.ttf"
             myDic("RG_20051B") = "Roadgeek_2005_Series_5.ttf"
             myDic("RG_20052B") = "Roadgeek_2005_Series_6.ttf"
@@ -7421,7 +8466,6 @@ Skipit:
 
 
     End Module
-
 
 
 

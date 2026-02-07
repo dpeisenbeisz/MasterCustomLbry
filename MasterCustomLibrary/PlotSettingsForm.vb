@@ -1,4 +1,5 @@
 ﻿Public Class PlotSettingsForm
+    Inherits System.Windows.Forms.Form
 
     Private m_PageSetups As Collection
     Private m_selectedSetup As String

@@ -26,12 +26,12 @@ Partial Class BlkViewPanel
         Me.DGV1 = New System.Windows.Forms.DataGridView()
         Me.FlowLayoutPanel1 = New System.Windows.Forms.FlowLayoutPanel()
         Me.ButOk = New System.Windows.Forms.Button()
-        Me.RefName = New System.Windows.Forms.DataGridViewButtonColumn()
         Me.RefHandle = New System.Windows.Forms.DataGridViewTextBoxColumn()
+        Me.RefName = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.Insertion = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.Rotation = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.ReferenceId = New System.Windows.Forms.DataGridViewTextBoxColumn()
-        Me.HasAttributes = New System.Windows.Forms.DataGridViewButtonColumn()
+        Me.HasAttributes = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.IsDynamic = New System.Windows.Forms.DataGridViewCheckBoxColumn()
         Me.RefCount = New System.Windows.Forms.DataGridViewTextBoxColumn()
         Me.DynamicName = New System.Windows.Forms.DataGridViewTextBoxColumn()
@@ -59,13 +59,14 @@ Partial Class BlkViewPanel
         '
         Me.DGV1.AllowUserToAddRows = False
         Me.DGV1.AllowUserToDeleteRows = False
+        Me.DGV1.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.AllCells
         Me.DGV1.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize
-        Me.DGV1.Columns.AddRange(New System.Windows.Forms.DataGridViewColumn() {Me.RefName, Me.RefHandle, Me.Insertion, Me.Rotation, Me.ReferenceId, Me.HasAttributes, Me.IsDynamic, Me.RefCount, Me.DynamicName})
+        Me.DGV1.Columns.AddRange(New System.Windows.Forms.DataGridViewColumn() {Me.RefHandle, Me.RefName, Me.Insertion, Me.Rotation, Me.ReferenceId, Me.HasAttributes, Me.IsDynamic, Me.RefCount, Me.DynamicName})
         Me.DGV1.Dock = System.Windows.Forms.DockStyle.Fill
         Me.DGV1.Location = New System.Drawing.Point(3, 3)
         Me.DGV1.Name = "DGV1"
         Me.DGV1.ReadOnly = True
-        Me.DGV1.Size = New System.Drawing.Size(1288, 403)
+        Me.DGV1.Size = New System.Drawing.Size(1288, 404)
         Me.DGV1.TabIndex = 1
         '
         'FlowLayoutPanel1
@@ -73,9 +74,9 @@ Partial Class BlkViewPanel
         Me.FlowLayoutPanel1.Controls.Add(Me.ButOk)
         Me.FlowLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill
         Me.FlowLayoutPanel1.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft
-        Me.FlowLayoutPanel1.Location = New System.Drawing.Point(3, 412)
+        Me.FlowLayoutPanel1.Location = New System.Drawing.Point(3, 413)
         Me.FlowLayoutPanel1.Name = "FlowLayoutPanel1"
-        Me.FlowLayoutPanel1.Size = New System.Drawing.Size(1288, 35)
+        Me.FlowLayoutPanel1.Size = New System.Drawing.Size(1288, 34)
         Me.FlowLayoutPanel1.TabIndex = 5
         '
         'ButOk
@@ -87,58 +88,61 @@ Partial Class BlkViewPanel
         Me.ButOk.Text = "Close"
         Me.ButOk.UseVisualStyleBackColor = True
         '
+        'RefHandle
+        '
+        Me.RefHandle.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
+        Me.RefHandle.HeaderText = "RefHandle"
+        Me.RefHandle.Name = "RefHandle"
+        Me.RefHandle.ReadOnly = True
+        Me.RefHandle.Resizable = System.Windows.Forms.DataGridViewTriState.[True]
+        Me.RefHandle.Width = 83
+        '
         'RefName
         '
-        Me.RefName.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.RefName.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
         Me.RefName.HeaderText = "RefName"
         Me.RefName.Name = "RefName"
         Me.RefName.ReadOnly = True
         Me.RefName.Resizable = System.Windows.Forms.DataGridViewTriState.[True]
-        Me.RefName.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.Automatic
-        Me.RefName.Width = 150
-        '
-        'RefHandle
-        '
-        Me.RefHandle.HeaderText = "RefHandle"
-        Me.RefHandle.Name = "RefHandle"
-        Me.RefHandle.ReadOnly = True
-        Me.RefHandle.Width = 150
+        Me.RefName.Width = 77
         '
         'Insertion
         '
+        Me.Insertion.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
         Me.Insertion.HeaderText = "Insertion"
         Me.Insertion.Name = "Insertion"
         Me.Insertion.ReadOnly = True
         Me.Insertion.Resizable = System.Windows.Forms.DataGridViewTriState.[True]
-        Me.Insertion.Width = 150
+        Me.Insertion.Width = 72
         '
         'Rotation
         '
+        Me.Rotation.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
         Me.Rotation.HeaderText = "Rotation"
         Me.Rotation.Name = "Rotation"
         Me.Rotation.ReadOnly = True
-        Me.Rotation.Width = 150
+        Me.Rotation.Width = 72
         '
         'ReferenceId
         '
+        Me.ReferenceId.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
         Me.ReferenceId.HeaderText = "ReferenceId"
         Me.ReferenceId.Name = "ReferenceId"
         Me.ReferenceId.ReadOnly = True
-        Me.ReferenceId.Width = 250
+        Me.ReferenceId.Width = 91
         '
         'HasAttributes
         '
         Me.HasAttributes.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
-        Me.HasAttributes.FlatStyle = System.Windows.Forms.FlatStyle.Flat
         Me.HasAttributes.HeaderText = "HasAttributes"
         Me.HasAttributes.Name = "HasAttributes"
         Me.HasAttributes.ReadOnly = True
         Me.HasAttributes.Resizable = System.Windows.Forms.DataGridViewTriState.[True]
-        Me.HasAttributes.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.Automatic
         Me.HasAttributes.Width = 95
         '
         'IsDynamic
         '
+        Me.IsDynamic.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
         Me.IsDynamic.FalseValue = "false"
         Me.IsDynamic.HeaderText = "IsDynamic"
         Me.IsDynamic.Name = "IsDynamic"
@@ -146,24 +150,30 @@ Partial Class BlkViewPanel
         Me.IsDynamic.Resizable = System.Windows.Forms.DataGridViewTriState.[True]
         Me.IsDynamic.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.Automatic
         Me.IsDynamic.TrueValue = "true"
+        Me.IsDynamic.Width = 81
         '
         'RefCount
         '
+        Me.RefCount.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
         Me.RefCount.HeaderText = "RefCount"
         Me.RefCount.Name = "RefCount"
         Me.RefCount.ReadOnly = True
+        Me.RefCount.Width = 77
         '
         'DynamicName
         '
+        Me.DynamicName.AutoSizeMode = System.Windows.Forms.DataGridViewAutoSizeColumnMode.AllCells
         Me.DynamicName.HeaderText = "DynamicName"
         Me.DynamicName.Name = "DynamicName"
         Me.DynamicName.ReadOnly = True
+        Me.DynamicName.Width = 101
         '
         'BlkViewPanel
         '
         Me.AcceptButton = Me.ButOk
         Me.AutoScaleDimensions = New System.Drawing.SizeF(96.0!, 96.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi
+        Me.AutoSize = True
         Me.ClientSize = New System.Drawing.Size(1294, 450)
         Me.Controls.Add(Me.TableLayoutPanel1)
         Me.Name = "BlkViewPanel"
@@ -179,12 +189,12 @@ Partial Class BlkViewPanel
     Friend WithEvents DGV1 As Windows.Forms.DataGridView
     Friend WithEvents FlowLayoutPanel1 As Windows.Forms.FlowLayoutPanel
     Friend WithEvents ButOk As Windows.Forms.Button
-    Friend WithEvents RefName As Windows.Forms.DataGridViewButtonColumn
     Friend WithEvents RefHandle As Windows.Forms.DataGridViewTextBoxColumn
+    Friend WithEvents RefName As Windows.Forms.DataGridViewTextBoxColumn
     Friend WithEvents Insertion As Windows.Forms.DataGridViewTextBoxColumn
     Friend WithEvents Rotation As Windows.Forms.DataGridViewTextBoxColumn
     Friend WithEvents ReferenceId As Windows.Forms.DataGridViewTextBoxColumn
-    Friend WithEvents HasAttributes As Windows.Forms.DataGridViewButtonColumn
+    Friend WithEvents HasAttributes As Windows.Forms.DataGridViewTextBoxColumn
     Friend WithEvents IsDynamic As Windows.Forms.DataGridViewCheckBoxColumn
     Friend WithEvents RefCount As Windows.Forms.DataGridViewTextBoxColumn
     Friend WithEvents DynamicName As Windows.Forms.DataGridViewTextBoxColumn

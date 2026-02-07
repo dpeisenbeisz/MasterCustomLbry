@@ -136,6 +136,7 @@
     <Compile Include="AttributeForm.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="RetainingWall.vb" />
     <Compile Include="FontPicker.designer.vb">
       <DependentUpon>FontPicker.vb</DependentUpon>
     </Compile>

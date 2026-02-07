@@ -19,8 +19,8 @@ Public Class Picker : Inherits Form
         For Each it As String In mySelection
             tempCol.Add(it)
         Next
-        Me.DialogResult = DialogResult.OK
         m_PickColl = tempCol
+        Me.DialogResult = DialogResult.OK
         Hide()
     End Sub
     Private Sub Cancel_Click(sender As Object, e As EventArgs) Handles ButCancel.Click

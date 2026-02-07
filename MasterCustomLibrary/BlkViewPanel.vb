@@ -113,105 +113,48 @@ Public Class BlkViewPanel
 
                 'If AcCommon.OtherMethods.IsInModel Then
                 Dim vtr As ViewTableRecord = ed.GetCurrentView
-                    Dim vRatio As Double = (vtr.Width / vtr.Height)
-                    Debug.Print("VTRwidth:  " & vtr.Width.ToString)
-                    Debug.Print("VTRheight:  " & vtr.Height.ToString)
+                Dim vWRatio As Double = (vtr.Width / vtr.Height)
+                Dim vHRatio As Double = vtr.Height / vtr.Width
+                Debug.Print("VTRwidth:  " & vtr.Width.ToString)
+                Debug.Print("VTRheight:  " & vtr.Height.ToString)
+                Debug.Print("ViewRatio = " & vWRatio.ToString)
 
-                    Dim bRef As BlockReference
+                Dim bRef As BlockReference
 
-                    Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
-                        Dim bRefObj As DBObject = TryCast(acTrans.GetObject(refId, OpenMode.ForRead), DBObject)
-                        If TypeOf bRefObj Is BlockReference Then
-                            bRef = TryCast(CType(bRefObj, BlockReference), BlockReference)
-
-                        Else
-                            Exit Sub
-                        End If
-                        If bRef IsNot Nothing Then
-                            Dim objExt As Extents3d = bRef.GeometricExtents
-                            Dim minPt As Point3d = bRef.Bounds.Value.MinPoint
-                            Dim maxPt As Point3d = bRef.Bounds.Value.MaxPoint
-
-                            Dim wdth As Double = maxPt.X - minPt.X
-                            Dim ht As Double = maxPt.Y - minPt.Y
-
-                            Dim vWidth As Double
-                            Dim vHt As Double
-                            Dim sclFact As Double
-
-                            If wdth >= ht Then
-                                vWidth = wdth
-                                vHt = vWidth / vRatio
-                                Debug.Print("width controls.")
-                                'If vWidth >= vtr.Width Then
-                                sclFact = vtr.Width / vWidth
-                                'Else
-                                'sclFact = vtr.Width / vWidth
-                                'End If
-                            Else
-                                vHt = ht
-                                vWidth = vHt * vRatio
-                                Debug.Print("Ht controls.")
-                                'If vHt >= vtr.Height Then
-                                'sclFact = vtr.Height / vHt
-                                'Else
-                                sclFact = vtr.Height / vHt
-                                'End If
-                            End If
-
-                            Debug.Print("SclFact:  " & sclFact.ToString)
-
-                            'Dim ln As New Polyline(2)
-                            'ln.AddVertexAt(0, New Point2d(objExt.MinPoint.X, objExt.MinPoint.Y), 0, 0, 0)
-                            'ln.AddVertexAt(0, New Point2d(objExt.MaxPoint.X, objExt.MaxPoint.Y), 0, 0, 0)
-
-                            'Dim midp As Point3d = ln.GetPointAtDist(ln.Length / 2)
-                            Dim ctr As New Point3d(minPt.X + (Width / 2), minPt.Y + (ht / 2), 0)
-
-                            Zoom(minPt, maxPt, Point3d.Origin, 1)
-
-                            'ln.Dispose()
-
-                            'Dim wdth As Double = 50
-                            'Dim ht As Double = 50
-                            'Dim ctr3d As Point3d = bRef.Position
-                            'Dim ctrNew As New Point2d(ctr3d.X, ctr3d.Y)
-
-                            'If ht > (wdth * vRatio) Then wdth = ht / vRatio
-                            'Debug.Print(ctr.ToString)
-                            'Debug.Print(midp.ToString)
-                            'Debug.Print(insPt.ToString)
-                            'Debug.Print(ctrNew.ToString)
-                            Debug.Print(objExt.ToString)
-                            Debug.Print(sclFact.ToString)
-
-                            vtr.Dispose()
-
-                            'Dim vtr2 As New ViewTableRecord
-                            'With vtr2
-                            '    .Name = "TestView"
-                            '    '.CenterPoint = midp.Convert2d(New Plane(Point3d.Origin, Vector3d.ZAxis))
-                            '    .CenterPoint = ctr
-                            '    .Height = ht
-                            '    .Width = wdth
-                            'End With
-
-                            'Dim vt As ViewTable = acTrans.GetObject(dwgDB.ViewTableId, OpenMode.ForWrite)
-                            'Dim vtID As ObjectId = vt.Add(vtr2)
-
-                            'ed.SetCurrentView(vtr2)
-
-                        End If
-                        acTrans.Commit()
-                    End Using
-
-                    'ed.Regen()
-EndIt:
-                    'End If
-
-                ElseIf colName = "HasAttributes" Then
-                    Dim bref As BlockReference
                 Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
+                    Dim bRefObj As DBObject = TryCast(acTrans.GetObject(refId, OpenMode.ForRead), DBObject)
+                    If TypeOf bRefObj Is BlockReference Then
+                        bRef = TryCast(CType(bRefObj, BlockReference), BlockReference)
+
+                    Else
+                        Exit Sub
+                    End If
+                    If bRef IsNot Nothing Then
+                        Dim objExt As Extents3d = bRef.GeometricExtents
+                        objExt.TransformBy(ed.CurrentUserCoordinateSystem.Inverse())
+
+                        'Dim minPt As Point3d = bRef.Bounds.Value.MinPoint
+                        'Dim maxPt As Point3d = bRef.Bounds.Value.MaxPoint
+                        Dim minPt As Point3d = objExt.MinPoint
+                        Dim maxPt As Point3d = objExt.MaxPoint
+
+                        Dim wdth As Double = maxPt.X - minPt.X
+                        Dim ht As Double = maxPt.Y - minPt.Y
+
+                        ZoomWin(ed, minPt, maxPt)
+                        acTrans.Commit()
+                        vtr.Dispose()
+                    End If
+                End Using
+
+
+                'ed.Regen()
+EndIt:
+
+            ElseIf colName = "HasAttributes" Then
+
+                Dim bref As BlockReference
+                        Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction
 
                     Dim bRefObj As DBObject = TryCast(acTrans.GetObject(refId, OpenMode.ForRead), DBObject)
                     If TypeOf bRefObj Is BlockReference Then
@@ -234,7 +177,10 @@ EndIt:
                                 End If
                             Next
                             Using attForm As New AttributeForm(csvList)
-                                Autodesk.AutoCAD.ApplicationServices.Application.ShowModalDialog(attForm)
+                                Me.Hide()
+                                attForm.ShowDialog()
+                                Me.Show()
+                                'Autodesk.AutoCAD.ApplicationServices.Application.ShowModalDialog(attForm)
                             End Using
                         End If
                     End If
@@ -242,6 +188,22 @@ EndIt:
             End If
         End If
     End Sub
+
+    Private Sub ZoomWin(ed As Editor, min As Point3d, max As Point3d)
+
+        Dim min2d As New Point2d(min.X, min.Y)
+        Dim max2d As New Point2d(max.X, max.Y)
+        Dim vtr As New ViewTableRecord
+        With vtr
+            .CenterPoint = min2d + ((max2d - min2d) / 2.0)
+            .Height = max2d.Y - min2d.Y
+            .Width = max2d.X - min2d.X
+        End With
+
+        ed.SetCurrentView(vtr)
+
+    End Sub
+
 
 
     Public Sub Zoom(ByVal pMin As Point3d, ByVal pMax As Point3d,
@@ -275,6 +237,8 @@ ByVal pCenter As Point3d, ByVal dFactor As Double)
                 End If
             End If
         End If
+
+
         '' Start a transaction
         Using acTrans As Transaction = acCurDb.TransactionManager.StartTransaction
             '' Get the current view

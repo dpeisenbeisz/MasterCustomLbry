@@ -1,14 +1,18 @@
-﻿Imports Autodesk.AutoCAD.Runtime
-Imports Autodesk.AutoCAD.ApplicationServices
-Imports Autodesk.AutoCAD.EditorInput
-Imports Autodesk.AutoCAD.DatabaseServices
-Imports System.Windows.Forms
-Imports Autodesk.AutoCAD.Geometry
+﻿Imports System.Drawing.Drawing2D
 Imports System.Math
+Imports System.Runtime.InteropServices.ComTypes
+Imports System.Runtime.Remoting.Services
+Imports System.Windows.Controls
+Imports System.Windows.Documents
+Imports System.Windows.Forms
+Imports Autodesk.AutoCAD.ApplicationServices
+Imports Autodesk.AutoCAD.DatabaseServices
+Imports Autodesk.AutoCAD.EditorInput
+Imports Autodesk.AutoCAD.Geometry
+Imports Autodesk.AutoCAD.Runtime
 'Imports System.Windows.Forms.Help
 
 Imports MasterCustomLibrary.AcCommon
-Imports System.Windows.Documents
 
 Namespace AcCommon
     Public Module WallCommands
@@ -113,8 +117,8 @@ Namespace AcCommon
 
             Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
 
-            Dim footPts As New Point2dCollection
-            footPts.Add(pb1.Convert2d(refPln))
+            Dim wallPts As New Point2dCollection
+            wallPts.Add(pb1.Convert2d(refPln))
 
             Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
@@ -133,7 +137,7 @@ Namespace AcCommon
 
 TryAgain:
                     If bl.Elevation <> 0 Then bl.Elevation = 0
-                    Dim topfoot As New Point2dCollection
+                    Dim topWall As New Point2dCollection
                     Dim brk As Integer = 0
                     Dim failsafe As Integer = 0
                     Dim lastx As Double = curX
@@ -169,7 +173,7 @@ TryAgain:
                                             'if next point is beyond end of bl then create one final point
                                             If curX > endX Then
                                                 Dim tps1 As New Point2d(curX, curY)
-                                                footPts.Add(tps1)
+                                                wallPts.Add(tps1)
                                             End If
                                             brk += 1
                                         Else  'cury is above reference line
@@ -183,8 +187,8 @@ TryAgain:
                                             Loop While fSafe < 50
                                             Dim tps1 As New Point2d(curX, lasty)
                                             Dim tps2 As New Point2d(curX + 0.02, curY)
-                                            footPts.Add(tps1)
-                                            footPts.Add(tps2)
+                                            wallPts.Add(tps1)
+                                            wallPts.Add(tps2)
                                         End If
                                     Else    'cury is below minimum
                                         Dim fSafe As Integer = 0
@@ -198,8 +202,8 @@ TryAgain:
                                         Loop While fSafe < 50
                                         Dim tps1 As New Point2d(curX, lasty)
                                         Dim tps2 As New Point2d(curX + 0.02, curY)
-                                        footPts.Add(tps1)
-                                        footPts.Add(tps2)
+                                        wallPts.Add(tps1)
+                                        wallPts.Add(tps2)
                                     End If
 
                                 End If
@@ -253,7 +257,7 @@ TryAgain:
                                             'if next point is beyond end of bl then create one final point
                                             If curX < endX Then
                                                 Dim tps1 As New Point2d(curX, curY)
-                                                footPts.Add(tps1)
+                                                wallPts.Add(tps1)
                                             End If
                                             brk += 1
                                         Else  'cury is above reference line
@@ -266,8 +270,8 @@ TryAgain:
                                             Loop While fSafe < 50
                                             Dim tps1 As New Point2d(curX, lasty)
                                             Dim tps2 As New Point2d(curX - 0.02, curY)
-                                            footPts.Add(tps1)
-                                            footPts.Add(tps2)
+                                            wallPts.Add(tps1)
+                                            wallPts.Add(tps2)
                                         End If
                                     Else    'cury is below minimum
                                         Dim fSafe As Integer = 0
@@ -279,8 +283,8 @@ TryAgain:
                                         Loop While fSafe < 50
                                         Dim tps1 As New Point2d(curX, lasty)
                                         Dim tps2 As New Point2d(curX - 0.02, curY)
-                                        footPts.Add(tps1)
-                                        footPts.Add(tps2)
+                                        wallPts.Add(tps1)
+                                        wallPts.Add(tps2)
                                     End If
                                 End If
 SkipPt:
@@ -300,8 +304,8 @@ SkipPt:
                     'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
                     'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
                     Using pl As New Polyline
-                        For k = 0 To footPts.Count - 1
-                            pl.AddVertexAt(k, footPts(k), 0, 0, 0)
+                        For k = 0 To wallPts.Count - 1
+                            pl.AddVertexAt(k, wallPts(k), 0, 0, 0)
                         Next
                         If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
                         curSpc.AppendEntity(pl)
@@ -366,34 +370,15 @@ SkipPt:
                 If concreteQ.Status = PromptStatus.OK Then
                     Dim pRes As String = concreteQ.StringResult
                     If pRes = "Yes" Then
-                        'hasConcreteBase = True
                         rwData.HasConcreteBase = True
-
-                        'get footing step height - can be anything with a concrete stem, but usually a CMU height if a block wall is to be placed on top
-                        Dim footopts As New PromptDistanceOptions(vbLf & "Pick or enter the vertical distance for each step in the top of the footing")
-                        With footopts
-                            If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingStepHeight Else .DefaultValue = 0.67
-                            .AllowNegative = False
-                            .AllowNone = False
-                            .AllowZero = False
-                        End With
-
-                        Dim footres As PromptDoubleResult = ed.GetDistance(footopts)
-                        If footres.Status = PromptStatus.OK Then
-                            rwData.FootingStepHeight = footres.Value
-                            'unadjFootStep = footres.Value
-                        Else
-                            Exit Sub
-                        End If
-
                     End If
                 End If
 
                 'cover dimension
-                Dim pdoCover As New PromptDistanceOptions(vbLf & "Enter or pick minimum distance between top of footing and ground elevation")
+                Dim pdoCover As New PromptDistanceOptions(vbLf & "Enter or pick minimum distance (in feet) between top of footing and ground elevation")
 
                 With pdoCover
-                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingCover Else .DefaultValue = 1
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingCover
                     .AllowArbitraryInput = True
                     .AllowZero = False
                     .AllowNegative = False
@@ -410,10 +395,10 @@ SkipPt:
 
 
                 'get length of a CMU.  1/2 of this value will be used for each check of wall height and footing depth
-                Dim pdo2 As New PromptDistanceOptions(vbLf & "Enter or pick length of a single brick in feet")
+                Dim pdo2 As New PromptDistanceOptions(vbLf & "Enter or pick length of a single brick in inches")
 
                 With pdo2
-                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.BrickLength Else .DefaultValue = 1.333
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.BrickLenInches Else .DefaultValue = 16
                     .AllowArbitraryInput = True
                     .AllowZero = False
                     .AllowNegative = False
@@ -423,17 +408,17 @@ SkipPt:
                 Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
 
                 If pdr2.Status = PromptStatus.OK Then
-                    rwData.BrickLength = pdr2.Value
+                    rwData.BrickLenInches = pdr2.Value
                 Else
                     Exit Sub
                 End If
 
 
                 'get height of a CMU.  Reference line must be within 1 CMU of the top of the wall.  Also used for footing step if CMU for full height
-                Dim pdo3 As New PromptDistanceOptions(vbLf & "Enter or pick the true height of a single brick in feet")
+                Dim pdo3 As New PromptDistanceOptions(vbLf & "Enter or pick the true height of a single brick in inches")
 
                 With pdo3
-                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.BrickHeight Else .DefaultValue = 0.667
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.BrickHtInches Else .DefaultValue = 8
                     .AllowArbitraryInput = True
                     .AllowZero = False
                     .AllowNegative = False
@@ -442,30 +427,66 @@ SkipPt:
 
                 Dim pdr3 As PromptDoubleResult = ed.GetDistance(pdo3)
 
-
                 'unless the wall has a concrete stem at bottom, use brick height to set footing step height
                 If pdr3.Status = PromptStatus.OK Then
-                    rwData.BrickHeight = pdr3.Value
-                    If Not rwData.HasConcreteBase Then rwData.FootingStepHeight = pdr3.Value
+                    rwData.BrickHtInches = pdr3.Value
+
+                    If Not rwData.HasConcreteBase Then
+                        Dim pcOpts As New PromptIntegerOptions(vbLf & "Number of courses (vertical) for each step in the top of the footing?")
+                        With pcOpts
+                            .DefaultValue = 1
+                            .AllowArbitraryInput = True
+                            .AllowZero = False
+                            .AllowNegative = False
+                            .AllowNone = False
+                        End With
+
+                        Dim pcRes As PromptIntegerResult = ed.GetInteger(pcOpts)
+
+                        If pcRes.Status = PromptStatus.OK Then
+                            rwData.FootStepCourses = pcRes.Value
+                            rwData.FootingStepHeight = rwData.BrickHeight * rwData.FootStepCourses
+                        Else
+                            Exit Sub
+                        End If
+
+                    Else
+                        'get footing step height - can be anything with a concrete stem, but usually a CMU height if a block wall is to be placed on top
+                        Dim footStepOp As New PromptDistanceOptions(vbLf & "Pick or enter the vertical distance (in feet) for each step in the top of the footing")
+                        With footStepOp
+                            If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingStepHeight Else .DefaultValue = 0.67
+                            .AllowNegative = False
+                            .AllowNone = False
+                            .AllowZero = False
+                        End With
+
+                        Dim footStepRes As PromptDoubleResult = ed.GetDistance(footStepOp)
+                        If footStepRes.Status = PromptStatus.OK Then
+                            rwData.FootingStepHeight = footStepRes.Value
+                            'unadjFootStep = footres.Value
+                        Else
+                            Exit Sub
+                        End If
+
+                    End If
                 Else
                     Exit Sub
                 End If
 
+                Dim pdoFootThickInches As New PromptDistanceOptions(vbLf & "Enter or pick the minimum footing thickness in inches.")
 
-                Dim pdoFoot As New PromptDistanceOptions(vbLf & "Enter or pick the minimum footing thickness.")
-
-                With pdoFoot
-                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingThickness
+                With pdoFootThickInches
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingThicknessInches
                     .AllowArbitraryInput = True
                     .AllowZero = False
                     .AllowNegative = False
                     .AllowNone = False
                 End With
 
-                Dim pdrFoot As PromptDoubleResult = ed.GetDistance(pdoFoot)
+                Dim pdrFootThickInches As PromptDoubleResult = ed.GetDistance(pdoFootThickInches)
 
-                If pdrFoot.Status = PromptStatus.OK Then
-                    rwData.FootingThickness = pdrFoot.Value
+                If pdrFootThickInches.Status = PromptStatus.OK Then
+                    rwData.FootingThicknessInches = pdrFootThickInches.Value
                 Else
                     Exit Sub
                 End If
@@ -473,6 +494,25 @@ SkipPt:
                 ''''''''''''''''''''''''''''''Pick points and reference lines for location of wall profile'''''''''''''''''''''''''''''''''''''''''''''
 
             End If
+
+            Dim peo As New PromptEntityOptions(vbLf & "Pick polyline for the maximum top of wall elevation.")
+
+            Dim twId As ObjectId
+
+            With peo
+                .SetRejectMessage(vbLf & "Must be a polyline entity.")
+                .AddAllowedClass(GetType(Polyline), True)
+                .AllowNone = False
+            End With
+
+            Dim per As PromptEntityResult = ed.GetEntity(peo)
+
+            If per.Status = PromptStatus.OK Then
+                twId = per.ObjectId
+            Else
+                Exit Sub
+            End If
+
 
             If rwData.HasConcreteBase Then
 
@@ -492,25 +532,6 @@ SkipPt:
                     Exit Sub
                 End If
 
-            End If
-
-
-            Dim peo As New PromptEntityOptions(vbLf & "Pick polyline for the maximum top of wall elevation.")
-
-            Dim twId As ObjectId
-
-            With peo
-                .SetRejectMessage(vbLf & "Must be a polyline entity.")
-                .AddAllowedClass(GetType(Polyline), True)
-                .AllowNone = False
-            End With
-
-            Dim per As PromptEntityResult = ed.GetEntity(peo)
-
-            If per.Status = PromptStatus.OK Then
-                twId = per.ObjectId
-            Else
-                Exit Sub
             End If
 
             'Dim hasTopWall As Boolean = False
@@ -559,22 +580,22 @@ SkipPt:
 
             Dim pltSide As Integer
 
-
             If dirPt.X > pb1.X Then
                 pltSide = 1
             Else
                 pltSide = -1
             End If
 
-
             Dim endX As Double = dirPt.X
 
             Dim bht As Double = rwData.ProfBrickHt
             Dim blen As Double = rwData.BrickLength
-            'Dim vfact As Double = rwData.VertFactor
+            Dim vfact As Double = rwData.VertFactor
             Dim cover As Double = rwData.ProfFootCover
-            Dim footstep As Double = rwData.ProfFootCover
+            Dim footstep As Double = rwData.ProfFootStep
             Dim footthk As Double = rwData.ProfFootThickness
+
+            'Debug.Print(vbLf & bht & vbLf & blen & vbLf & vfact & vbLf & cover & vbLf & footstep & vbLf & footthk & vbLf)
 
             Try
 
@@ -582,250 +603,266 @@ SkipPt:
 
                 Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
+                    'if wall has a concrete base, then first get the top of concrete stem profile
                     If rwData.HasConcreteBase Then
                         Dim tConcStart As Point2d = TopConcPfile(pb1, topConcId, rwData, endX, pltSide, acTrans)
-                        If Not tConcStart = Point2d.Origin Then
+                        If rwData.HasConcreteBase AndAlso Not tConcStart = Point2d.Origin Then
                             pb1 = New Point3d(tConcStart.X, tConcStart.Y, 0)
-                        Else
-                            Exit Sub
+
+                            '                    'loop variables
+                            '                    Dim startX As Double = pb1.X
+                            'Dim curX As Double = pb1.X
+                            'Dim curY As Double = pb1.Y
+                            'Dim lasty As Double = curY
+
+                            '                    Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
+
+                            '                    Dim topPts As New Point2dCollection
+                            '                    Dim tempPt2d As Point2d = pb1.Convert2d(refPln)
+                            '                    topPts.Add(tempPt2d)
+
+                            '                    Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
+
+                            '                    'get the top of the wall and EG (toe elevation)
+                            '                    Dim baseline As DBObject = acTrans.GetObject(twId, OpenMode.ForRead)
+                            '                    Dim bl As Polyline = TryCast(baseline, Polyline)
+
+
+
+                            ''temporary coordinates of vertical line for testing y coordinates
+                            'Dim temppos2d As New Point2d(curX, pb1.Y - 1000)
+                            'Dim tempneg2d As New Point2d(curX, pb1.Y + 1000)
+
+                            '                    'make sure bline is good object
+                            '                    If bl Is Nothing OrElse bl.Closed = True Then
+                            '                        MessageBox.Show("Error.  Picked entity cannot be used for top of wall or polyline is closed.")
+                            '                        acTrans.Abort()
+                            '                        Exit Sub
+                            '                    End If
+                            'TryAgain:
+                            '                    'make sure the z coordinate of the reference pline is 0
+                            '                    If bl.Elevation <> 0 Then bl.Elevation = 0
+
+                            '                    Dim brk As Integer = 0
+                            '                    Dim failsafe As Integer = 0
+                            '                    Dim lastx As Double = curX
+
+                            '                    If pltSide = 1 Then  'reference moves from left to right
+                            '                        Do
+                            '                            'create a temporary line for testing y coordinates
+                            '                            Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
+                            '                            Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
+
+                            '                            Using tLine As New Polyline
+
+                            '                                With tLine
+                            '                                    .AddVertexAt(0, negpt2d, 0, 0, 0)
+                            '                                    .AddVertexAt(1, pospt2d, 0, 0, 0)
+                            '                                End With
+
+                            '                                Dim pts2d As New Point3dCollection
+
+                            '                                'get the intersection point of the temporary vertical line and the top of the wall
+                            '                                tLine.IntersectWith(bl, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+
+                            '                                'make sure we have an intersection (points in the collection pts2d)
+                            '                                If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
+
+                            '                                    'make minY the top of the wall +- 1/2 brick height
+                            '                                    Dim refY As Double = pts2d(0).Y + (bht * 0.5)
+                            '                                    Dim minY As Double = refY - (bht * 0.5)
+
+                            '                                    'find first point
+
+                            '                                    If brk = 0 Then
+
+                            '                                        Do
+                            '                                            curY -= bht
+
+                            '                                            If curY < refY Then
+                            '                                                Exit Do
+                            '                                            End If
+                            '                                            failsafe += 1
+                            '                                        Loop While failsafe < 50
+                            '                                    End If
+
+                            '                                    If curY > minY Then  'cury is above minimum elevation
+                            '                                        If curY <= refY Then  'cury is below reference line so this is a good point
+                            '                                            'keep track of x value for later and move down the wall
+                            '                                            lastx = curX
+                            '                                            curX = startX + (brk * 0.5 * blen)
+                            '                                            'if next point is beyond end of bl then create one final point
+                            '                                            If curX > endX Then
+                            '                                                Dim tps1 As New Point2d(curX, curY)
+                            '                                                topPts.Add(tps1)
+                            '                                            End If
+
+                            '                                            brk += 1
+                            '                                        Else  'cury is above reference line nso adjust the elevation by step height
+                            '                                            Dim fSafe As Integer = 0
+                            '                                            'store current y before adjusting
+                            '                                            lasty = curY
+                            '                                            'adjust height until it is within 1 brick below top of wall
+                            '                                            Do
+                            '                                                curY -= bht
+                            '                                                If curY < refY Then
+                            '                                                    Exit Do
+                            '                                                End If
+                            '                                                fSafe += 1
+                            '                                            Loop While fSafe < 50
+                            '                                            'set points for the bottom of the previous step and the top of the current step
+                            '                                            Dim tps1 As New Point2d(curX, lasty)
+                            '                                            Dim tps2 As New Point2d(curX + 0.02, curY)
+                            '                                            topPts.Add(tps1)
+                            '                                            topPts.Add(tps2)
+                            '                                        End If
+                            '                                    Else    'cury is below minimum
+                            '                                        Dim fSafe As Integer = 0
+                            '                                        'store current y value and loop until y is within 1 brick of the top of wall
+                            '                                        lasty = curY
+                            '                                        Do
+                            '                                            curY += bht
+                            '                                            If curY > minY Then
+                            '                                                Exit Do
+                            '                                            End If
+                            '                                            fSafe += 1
+                            '                                        Loop While fSafe < 50
+                            '                                        'set points for the bottom of the previous step and the top of the current step
+                            '                                        Dim tps1 As New Point2d(curX, lasty)
+                            '                                        Dim tps2 As New Point2d(curX + 0.02, curY)
+                            '                                        topPts.Add(tps1)
+                            '                                        topPts.Add(tps2)
+                            '                                    End If
+                            '                                Else
+                            '                                    MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
+                            '                                    Exit Sub
+                            '                                End If
+
+                            '                            End Using
+
+                            '                            failsafe += 1
+                            '                            If curX > endX Then Exit Do
+
+                            '                            'limit the loop to 5000 brick lengths
+                            '                        Loop While failsafe < 5000
+
+                            '                    Else  'reference moves from right to left
+                            '                        Do
+                            '                            Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
+                            '                            Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
+
+                            '                            Using tLine As New Polyline
+
+                            '                                With tLine
+                            '                                    .AddVertexAt(0, negpt2d, 0, 0, 0)
+                            '                                    .AddVertexAt(1, pospt2d, 0, 0, 0)
+                            '                                End With
+
+                            '                                'If tLine.Elevation <> 0 Then tLine.Elevation = 0
+
+                            '                                Dim pts2d As New Point3dCollection
+
+                            '                                bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+
+                            '                                'If pts2d.Count <= 0 Then
+                            '                                '    tLine.Dispose()
+                            '                                '    GoTo SkipPt
+                            '                                'End If
+
+                            '                                'check to see if refy is within 1 brick height of cury
+                            '                                If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
+
+                            '                                    'check to see if refy is within 1 brick height of cury
+                            '                                    Dim refY As Double = pts2d(0).Y
+                            '                                    Dim minY As Double = refY - bht
+                            '                                    Dim elevDiff As Double = refY - curY
+
+                            '                                    If curY > minY Then  'cury is above minimum
+                            '                                        If curY <= refY Then  'cury is below reference line
+                            '                                            'Dim lastx As Double = curX
+                            '                                            lastx = curX
+                            '                                            curX = startX - (brk * 0.5 * blen)
+                            '                                            'if next point is beyond end of bl then create one final point
+                            '                                            If curX < endX Then
+                            '                                                Dim tps1 As New Point2d(curX, curY)
+                            '                                                topPts.Add(tps1)
+                            '                                            End If
+                            '                                            brk += 1
+                            '                                        Else  'cury is above reference line
+                            '                                            Dim fSafe As Integer = 0
+                            '                                            lasty = curY
+                            '                                            Do
+                            '                                                curY -= bht
+                            '                                                If curY < refY Then
+                            '                                                    'curY -= bht
+                            '                                                    Exit Do
+                            '                                                End If
+                            '                                                fSafe += 1
+                            '                                            Loop While fSafe < 50
+                            '                                            Dim tps1 As New Point2d(curX, lasty)
+                            '                                            Dim tps2 As New Point2d(curX - 0.02, curY)
+                            '                                            topPts.Add(tps1)
+                            '                                            topPts.Add(tps2)
+                            '                                        End If
+                            '                                    Else    'cury is below minimum
+                            '                                        Dim fSafe As Integer = 0
+                            '                                        lasty = curY
+                            '                                        Do
+                            '                                            curY += bht
+                            '                                            If curY > minY Then
+                            '                                                Exit Do
+                            '                                            End If
+                            '                                            fSafe += 1
+                            '                                        Loop While fSafe < 50
+                            '                                        Dim tps1 As New Point2d(curX, lasty)
+                            '                                        Dim tps2 As New Point2d(curX - 0.02, curY)
+                            '                                        topPts.Add(tps1)
+                            '                                        topPts.Add(tps2)
+                            '                                    End If
+
+                            '                                Else
+                            '                                    MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
+                            '                                    Exit Sub
+                            '                                End If
+                            'SkipPt:
+                            '                            End Using
+
+                            '                            failsafe += 1
+                            '                            If curX < endX Then Exit Do
+
+                            '                        Loop While failsafe < 5000
+
+                            '                        Debug.Print(failsafe)
+
+                            '                    End If
+
+                            '                    bl.Dispose()
+
+                            '                    'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                            '                    'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                            '                    Using pl As New Polyline
+                            '                        For k = 0 To topPts.Count - 1
+                            '                            pl.AddVertexAt(k, topPts(k), 0, 0, 0)
+                            '                        Next
+                            '                        If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                            '                        tWallId = curSpc.AppendEntity(pl)
+                            '                        acTrans.AddNewlyCreatedDBObject(pl, True)
+                            '                    End Using
+
                         End If
                     End If
 
-                    'loop variables
-                    Dim startX As Double = pb1.X
-                    Dim curX As Double = pb1.X
-                    Dim curY As Double = pb1.Y
-                    Dim lasty As Double = curY
-
-                    Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
-
-                    Dim topPts As New Point2dCollection
-                    topPts.Add(pb1.Convert2d(refPln))
-
-                    Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
-
-                    'get the top of the wall and EG (toe elevation)
-                    Dim baseline As DBObject = acTrans.GetObject(twId, OpenMode.ForRead)
-                    Dim bl As Polyline = TryCast(baseline, Polyline)
-
-                    'temporary coordinates of vertical line for testing y coordinates
-                    Dim temppos2d As New Point2d(curX, pb1.Y - 1000)
-                    Dim tempneg2d As New Point2d(curX, pb1.Y + 1000)
-
-                    'make sure bline is good object
-                    If bl Is Nothing OrElse bl.Closed = True Then
-                        MessageBox.Show("Error.  Picked entity cannot be used for top of wall or polyline is closed.")
-                        acTrans.Abort()
-                        Exit Sub
-                    End If
-TryAgain:
-                    'make sure the z coordinate of the reference pline is 0
-                    If bl.Elevation <> 0 Then bl.Elevation = 0
-
-                    Dim brk As Integer = 0
-                    Dim failsafe As Integer = 0
-                    Dim lastx As Double = curX
-
-                    If pltSide = 1 Then  'reference moves from left to right
-                        Do
-                            'create a temporary line for testing y coordinates
-                            Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
-                            Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
-
-                            Using tLine As New Polyline
-
-                                With tLine
-                                    .AddVertexAt(0, negpt2d, 0, 0, 0)
-                                    .AddVertexAt(1, pospt2d, 0, 0, 0)
-                                End With
-
-                                Dim pts2d As New Point3dCollection
-
-                                'get the intersection point of the temporary vertical line and the top of the wall
-                                bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
-
-                                'check to see if refy is within 1 brick height of cury
-                                If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
-
-                                    'make minY the top of the wall (refY) - 1 brick height
-                                    Dim refY As Double = pts2d(0).Y
-                                    Dim minY As Double = refY - bht
-
-                                    If curY > minY Then  'cury is above minimum elevation
-                                        If curY <= refY Then  'cury is below reference line so this is a good point
-                                            'keep track of x value for later and move down the wall
-                                            lastx = curX
-                                            curX = startX + (brk * 0.5 * blen)
-                                            'if next point is beyond end of bl then create one final point
-                                            If curX > endX Then
-                                                Dim tps1 As New Point2d(curX, curY)
-                                                topPts.Add(tps1)
-                                            End If
-                                            brk += 1
-                                        Else  'cury is above reference line
-                                            Dim fSafe As Integer = 0
-                                            'store current y before adjusting
-                                            lasty = curY
-                                            'adjust height until it is within 1 brick below top of wall
-                                            Do
-                                                curY -= bht
-                                                If curY < refY Then
-                                                    Exit Do
-                                                End If
-                                                fSafe += 1
-                                            Loop While fSafe < 50
-                                            'set points for the bottom of the previous step and the top of the current step
-                                            Dim tps1 As New Point2d(curX, lasty)
-                                            Dim tps2 As New Point2d(curX + 0.02, curY)
-                                            topPts.Add(tps1)
-                                            topPts.Add(tps2)
-                                        End If
-                                    Else    'cury is below minimum
-                                        Dim fSafe As Integer = 0
-                                        'store current y value and loop until y is within 1 brick of the top of wall
-                                        lasty = curY
-                                        Do
-                                            curY += bht
-                                            If curY > minY Then
-                                                Exit Do
-                                            End If
-                                            fSafe += 1
-                                        Loop While fSafe < 50
-                                        'set points for the bottom of the previous step and the top of the current step
-                                        Dim tps1 As New Point2d(curX, lasty)
-                                        Dim tps2 As New Point2d(curX + 0.02, curY)
-                                        topPts.Add(tps1)
-                                        topPts.Add(tps2)
-                                    End If
-
-                                Else
-                                    MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
-                                    Exit Sub
-                                End If
-
-                            End Using
-
-                            failsafe += 1
-                            If curX > endX Then Exit Do
-
-                            'limit the loop to 5000 brick lengths
-                        Loop While failsafe < 5000
-
-                        Debug.Print(failsafe)
-
-                    Else  'reference moves from right to left
-                        Do
-                            Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
-                            Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
-
-                            Using tLine As New Polyline
-
-                                With tLine
-                                    .AddVertexAt(0, negpt2d, 0, 0, 0)
-                                    .AddVertexAt(1, pospt2d, 0, 0, 0)
-                                End With
-
-                                'If tLine.Elevation <> 0 Then tLine.Elevation = 0
-
-                                Dim pts2d As New Point3dCollection
-
-                                bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
-
-                                'If pts2d.Count <= 0 Then
-                                '    tLine.Dispose()
-                                '    GoTo SkipPt
-                                'End If
-
-                                'check to see if refy is within 1 brick height of cury
-                                If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
-
-                                    'check to see if refy is within 1 brick height of cury
-                                    Dim refY As Double = pts2d(0).Y
-                                    Dim minY As Double = refY - bht
-                                    Dim elevDiff As Double = refY - curY
-
-                                    If curY > minY Then  'cury is above minimum
-                                        If curY <= refY Then  'cury is below reference line
-                                            'Dim lastx As Double = curX
-                                            lastx = curX
-                                            curX = startX - (brk * 0.5 * blen)
-                                            'if next point is beyond end of bl then create one final point
-                                            If curX < endX Then
-                                                Dim tps1 As New Point2d(curX, curY)
-                                                topPts.Add(tps1)
-                                            End If
-                                            brk += 1
-                                        Else  'cury is above reference line
-                                            Dim fSafe As Integer = 0
-                                            lasty = curY
-                                            Do
-                                                curY -= bht
-                                                If curY < refY Then
-                                                    'curY -= bht
-                                                    Exit Do
-                                                End If
-                                                fSafe += 1
-                                            Loop While fSafe < 50
-                                            Dim tps1 As New Point2d(curX, lasty)
-                                            Dim tps2 As New Point2d(curX - 0.02, curY)
-                                            topPts.Add(tps1)
-                                            topPts.Add(tps2)
-                                        End If
-                                    Else    'cury is below minimum
-                                        Dim fSafe As Integer = 0
-                                        lasty = curY
-                                        Do
-                                            curY += bht
-                                            If curY > minY Then
-                                                Exit Do
-                                            End If
-                                            fSafe += 1
-                                        Loop While fSafe < 50
-                                        Dim tps1 As New Point2d(curX, lasty)
-                                        Dim tps2 As New Point2d(curX - 0.02, curY)
-                                        topPts.Add(tps1)
-                                        topPts.Add(tps2)
-                                    End If
-
-                                Else
-                                    MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
-                                    Exit Sub
-                                End If
-SkipPt:
-                            End Using
-
-                            failsafe += 1
-                            If curX < endX Then Exit Do
-
-                        Loop While failsafe < 5000
-
-                        Debug.Print(failsafe)
-
-                    End If
-
-                    bl.Dispose()
-
-                    Dim tWallId As ObjectId
-
-                    'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-                    'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
-                    Using pl As New Polyline
-                        For k = 0 To topPts.Count - 1
-                            pl.AddVertexAt(k, topPts(k), 0, 0, 0)
-                        Next
-                        If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
-                        tWallId = curSpc.AppendEntity(pl)
-                        acTrans.AddNewlyCreatedDBObject(pl, True)
-                    End Using
+                    Dim tWallId As ObjectId = TopWall(pb1, twId, rwData, dirPt.X, pltSide, acTrans)
 
                     'Dim adjCover As Double = vFact * cover
 
-                    Dim topFtId As ObjectId = TopFooting(egID, pb1, dirPt, pltSide, rwData, acTrans)
+                    Dim topFtId As ObjectId
+                    topFtId = TopFooting(egID, pb1, Point3d.Origin, pltSide, rwData, dirPt.X, acTrans)
+                    Dim strtFoot As Point3d = rwData.StartTopFooting
 
                     If Not topFtId = ObjectId.Null Then
-                        Dim tF As Polyline = acTrans.GetObject(topFtId, OpenMode.ForRead)
-                        Dim sp As Point3d = tF.StartPoint
-                        Dim GoodFooting As Boolean = FootBottom(topFtId, sp, rwData, pltSide)
+                        'Dim tF As Polyline = acTrans.GetObject(topFtId, OpenMode.ForRead)
+                        Dim GoodFooting As Boolean = FootBottom(topFtId, strtFoot, rwData, pltSide)
                     Else
                         Exit Sub
                     End If
@@ -843,7 +880,8 @@ SkipPt:
 
         End Sub
 
-        Private Function TopConcPfile(pb1 As Point3d, topConcId As ObjectId, rwData As RetainingWall, endX As Double, pltSide As Double, acTrans As Transaction) As Point2d
+
+        Private Function TopConcPfile(pb1 As Point3d, topConcRefId As ObjectId, ByRef rwData As RetainingWall, endX As Double, pltSide As Double, acTrans As Transaction) As Point2d
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
@@ -864,8 +902,8 @@ SkipPt:
 
                 Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
 
-                'get the top of the wall and EG (toe elevation)
-                Dim baseline As DBObject = acTrans.GetObject(topConcId, OpenMode.ForRead)
+                'get the reference line
+                Dim baseline As DBObject = acTrans.GetObject(topConcRefId, OpenMode.ForRead)
 
                 If TypeOf baseline IsNot Polyline Then
                     Throw New InvalidCastException
@@ -892,6 +930,8 @@ TryAgain:
 
                 If pltSide = 1 Then  'reference moves from left to right
                     Do
+
+                        'create a temporary vertical line at current x coordinate
                         Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
                         Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
 
@@ -910,22 +950,29 @@ TryAgain:
                             'check to see if refy is within 1 brick height of cury
                             If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                                'make minY the top of the wall (refY) - 1 brick height
+                                'make minY refY - 1 brick height
                                 Dim refY As Double = pts2d(0).Y
                                 Dim minY As Double = refY - bht
 
                                 If curY > minY Then  'cury is above minimum 
                                     If curY <= refY Then  'cury is below reference line so this is a good point
-                                        'keep track of x value for later and move down the wall
-                                        lastx = curX
-                                        curX = startX + (brk * 0.5 * blen)
-                                        'if next point is beyond end of bl then create one final point
-                                        If curX > endX Then
-                                            Dim tps1 As New Point2d(curX, curY)
-                                            topPts.Add(tps1)
+                                        'if it is the first good point, then set it and move on
+                                        If brk = 0 Then
+                                            Dim begcStem As New Point2d(curX, curY)
+                                            topPts.Add(begcStem)
+                                            rwData.StartConcreteStem = New Point3d(curX, curY, 0)
+                                        Else
+                                            'keep track of x value for later and move down the wall
+                                            lastx = curX
+                                            curX = startX + (brk * 0.5 * blen)
+                                            'if next point is beyond end of bl then create one final point
+                                            If curX > endX Then
+                                                Dim tps1 As New Point2d(curX, curY)
+                                                topPts.Add(tps1)
+                                            End If
+                                            brk += 1
                                         End If
-                                        brk += 1
-                                    Else  'cury is above reference line
+                                    Else 'cury is above reference line
                                         Dim fSafe As Integer = 0
                                         'store current y before adjusting
                                         lasty = curY
@@ -940,16 +987,18 @@ TryAgain:
                                             fSafe += 1
                                         Loop While fSafe < 50
 
-                                        If foundY Then
-                                            'set a point for the bottom of the previous step and the top of the current step
-                                            Dim tps1 As New Point2d(curX, lasty)
-                                            Dim tps2 As New Point2d(curX + 0.02, curY)
-                                            topPts.Add(tps1)
-                                            topPts.Add(tps2)
-                                        Else
-                                            MessageBox.Show("Error.  point is outside of wall ends.")
-                                            Return Point2d.Origin
-                                            Exit Function
+                                        If Not brk = 0 Then
+                                            If foundY Then
+                                                'set a point for the bottom of the previous step and the top of the current step
+                                                Dim tps1 As New Point2d(curX, lasty)
+                                                Dim tps2 As New Point2d(curX + 0.02, curY)
+                                                topPts.Add(tps1)
+                                                topPts.Add(tps2)
+                                            Else
+                                                MessageBox.Show("Error.  point is outside of wall ends.")
+                                                Return Point2d.Origin
+                                                Exit Function
+                                            End If
                                         End If
                                     End If
                                 Else    'cury is below minimum
@@ -965,16 +1014,18 @@ TryAgain:
                                         End If
                                         fSafe += 1
                                     Loop While fSafe < 50
-                                    If foundY Then
-                                        'set a point for the bottom of the previous step and the top of the current step
-                                        Dim tps1 As New Point2d(curX, lasty)
-                                        Dim tps2 As New Point2d(curX + 0.02, curY)
-                                        topPts.Add(tps1)
-                                        topPts.Add(tps2)
-                                    Else
-                                        MessageBox.Show("Error.  point is outside of wall ends.")
-                                        Return Point2d.Origin
-                                        Exit Function
+                                    If Not brk = 0 Then
+                                        If foundY Then
+                                            'set a point for the bottom of the previous step and the top of the current step
+                                            Dim tps1 As New Point2d(curX, lasty)
+                                            Dim tps2 As New Point2d(curX + 0.02, curY)
+                                            topPts.Add(tps1)
+                                            topPts.Add(tps2)
+                                        Else
+                                            MessageBox.Show("Error.  point is outside of wall ends.")
+                                            Return Point2d.Origin
+                                            Exit Function
+                                        End If
                                     End If
                                 End If
                             Else
@@ -991,7 +1042,7 @@ TryAgain:
                         'limit the loop to 5000 brick lengths
                     Loop While failsafe < 5000
 
-                    Debug.Print(failsafe)
+                    'Debug.Print(failsafe)
 
                 Else  'reference moves from right to left
                     Do
@@ -1019,22 +1070,28 @@ TryAgain:
                             'check to see if refy is within 1 brick height of cury
                             If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                                'check to see if refy is within 1 brick height of cury
+                                'check to see if refy is within 1/2 brick height of cury
                                 Dim refY As Double = pts2d(0).Y
                                 Dim minY As Double = refY - bht
-                                Dim elevDiff As Double = refY - curY
+                                'Dim elevDiff As Double = refY - curY
 
                                 If curY > minY Then  'cury is above minimum
-                                    If curY <= refY Then  'cury is below reference line
+                                    If curY <= refY Then  'cury is below reference line - good point
                                         'Dim lastx As Double = curX
-                                        lastx = curX
-                                        curX = startX - (brk * 0.5 * blen)
-                                        'if next point is beyond end of bl then create one final point
-                                        If curX < endX Then
-                                            Dim tps1 As New Point2d(curX, curY)
-                                            topPts.Add(tps1)
+                                        If brk = 0 Then
+                                            Dim begcStem As New Point2d(curX, curY)
+                                            topPts.Add(begcStem)
+                                            rwData.StartConcreteStem = New Point3d(curX, curY, 0)
+                                        Else
+                                            lastx = curX
+                                            curX = startX - (brk * 0.5 * blen)
+                                            'if next point is beyond end of bl then create one final point
+                                            If curX < endX Then
+                                                Dim tps1 As New Point2d(curX, curY)
+                                                topPts.Add(tps1)
+                                            End If
+                                            brk += 1
                                         End If
-                                        brk += 1
                                     Else  'cury is above reference line
                                         Dim fSafe As Integer = 0
                                         Dim foundY As Boolean = False
@@ -1048,19 +1105,22 @@ TryAgain:
                                             fSafe += 1
                                         Loop While fSafe < 50
 
-                                        If foundY Then
-                                            Dim tps1 As New Point2d(curX, lasty)
-                                            Dim tps2 As New Point2d(curX - 0.02, curY)
-                                            topPts.Add(tps1)
-                                            topPts.Add(tps2)
-                                        Else
-                                            MessageBox.Show("Error.  point is outside of wall ends.")
-                                            Return Point2d.Origin
-                                            Exit Function
+                                        If Not brk = 0 Then
+                                            If foundY Then
+                                                Dim tps1 As New Point2d(curX, lasty)
+                                                Dim tps2 As New Point2d(curX - 0.02, curY)
+                                                topPts.Add(tps1)
+                                                topPts.Add(tps2)
+                                            Else
+                                                MessageBox.Show("Error.  point is outside of wall ends.")
+                                                Return Point2d.Origin
+                                                Exit Function
+                                            End If
                                         End If
-
                                     End If
+
                                 Else    'cury is below minimum
+
                                     Dim fSafe As Integer = 0
                                     Dim foundY As Boolean = False
                                     lasty = curY
@@ -1073,28 +1133,33 @@ TryAgain:
                                         fSafe += 1
                                     Loop While fSafe < 50
 
-                                    If foundY Then
-                                        Dim tps1 As New Point2d(curX, lasty)
-                                        Dim tps2 As New Point2d(curX - 0.02, curY)
-                                        topPts.Add(tps1)
-                                        topPts.Add(tps2)
-                                    Else
-                                        MessageBox.Show("Error.  point is outside of wall ends.")
-                                        Return Point2d.Origin
-                                        Exit Function
-                                    End If
+                                    If Not brk = 0 Then
+                                        If foundY Then
+                                            Dim tps1 As New Point2d(curX, lasty)
+                                            Dim tps2 As New Point2d(curX - 0.02, curY)
+                                            topPts.Add(tps1)
+                                            topPts.Add(tps2)
+                                        Else
+                                            MessageBox.Show("Error.  point is outside of wall ends.")
+                                            Return Point2d.Origin
+                                            Exit Function
+                                        End If
 
+                                    End If
                                 End If
+
                             Else
                                 MessageBox.Show("Error.  Polyline for max concrete stem height is not long enough.")
                                 Return Point2d.Origin
                                 Exit Function
                             End If
+
 SkipPt:
                         End Using
 
                         failsafe += 1
                         If curX < endX Then Exit Do
+
 
                     Loop While failsafe < 5000
 
@@ -1127,328 +1192,302 @@ SkipPt:
 
         End Function
 
-
-        Private Function TopConcStem(egId As ObjectId, twid As ObjectId, tcID As ObjectId, pb1 As Point3d, pltside As Integer, endX As Double, vfact As Double, bht As Double, blen As Double, acTrans As Transaction) As Point2d
+        Private Function TopWall(pb1 As Point3d, topRefId As ObjectId, ByRef rwData As RetainingWall, endX As Double, pltSide As Double, acTrans As Transaction) As ObjectId
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
             Dim ed As Editor = CurDwg.Editor
 
+            If rwData.HasConcreteBase Then
+                pb1 = rwData.StartConcreteStem
+            End If
+
+            'loop variables
+            Dim startX As Double = pb1.X
+            Dim curX As Double = pb1.X
+            Dim curY As Double = pb1.Y
+            Dim lasty As Double = curY
+
+            Dim bht As Double = rwData.ProfBrickHt
+            Dim blen As Double = rwData.BrickLength
+            Dim vfact As Double = rwData.VertFactor
+            Dim cover As Double = rwData.ProfFootCover
+            Dim footstep As Double = rwData.ProfFootStep
+            Dim footthk As Double = rwData.ProfFootThickness
+
+            Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
+
+            Dim topPts As New Point2dCollection
+            'Dim tempPt2d As Point2d = pb1.Convert2d(refPln)
+
+            Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
+
+            'get the top of the wall and EG (toe elevation)
+
+            Dim baseline As DBObject
+            baseline = acTrans.GetObject(topRefId, OpenMode.ForRead)
+
+            'Dim baseline As DBObject = acTrans.GetObject(topRefId, OpenMode.ForRead)
+            Dim bl As Polyline = TryCast(baseline, Polyline)
+
+            'make sure bline is good object
+            If bl Is Nothing OrElse bl.Closed = True Then
+                MessageBox.Show("Error.  Picked entity cannot be used for top of wall or polyline is closed.")
+                Return ObjectId.Null
+            End If
+TryAgain:
+            'make sure the z coordinate of the reference pline is 0
+            If bl.Elevation <> 0 Then bl.Elevation = 0
+
+            Dim brk As Integer = 0
+            Dim failsafe As Integer = 0
+            Dim lastx As Double = curX
+
             Try
 
-                'loop variables
-                Dim startX As Double = pb1.X
-                Dim curX As Double = pb1.X
-                Dim curY As Double = pb1.Y
-                Dim lasty As Double = curY
-
-                Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
-
-                Dim tconcPts As New Point2dCollection
-                tconcPts.Add(pb1.Convert2d(refPln))
-
-                Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
-
-                'get the top of the concrete stem, top of wall, and EG (toe elevation)
-                Dim baseline As DBObject = acTrans.GetObject(tcID, OpenMode.ForRead)
-                Dim bl As Polyline = TryCast(baseline, Polyline)
-                Dim twLine As Polyline = TryCast(acTrans.GetObject(twid, OpenMode.ForRead), Polyline)
-
-                'temporary coordinates for vertical line
-                Dim temppos2d As New Point2d(curX, pb1.Y - 1000)
-                Dim tempneg2d As New Point2d(curX, pb1.Y + 1000)
-
-                If bl Is Nothing OrElse bl.Closed = True Then
-                    MessageBox.Show("Error.  Picked entity cannot be used or polyline is closed.")
-                    Return Nothing
-                    Exit Function
-                End If
-TryAgain:
-                If bl.Elevation <> 0 Then bl.Elevation = 0
-
-                Dim twPts As New Point3dCollection
-                'Dim tfootPts As New Point3dCollection
-
-                Dim brk As Integer = 0
-                Dim failsafe As Integer = 0
-                Dim lastx As Double = curX
-                Dim startTopPt As Point2d
-
-                If pltside = 1 Then  'reference moves from left to right
-                    Dim firstPt As Boolean = True
-                    Dim ptsTopConc As New Point3dCollection
-
+                If pltSide = 1 Then  'reference moves from left to right
                     Do
+                        'create a temporary line for testing y coordinates
                         Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
                         Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
 
-                        Using tempLine As New Polyline
+                        Using tLine As New Polyline
 
-                            With tempLine
+                            With tLine
                                 .AddVertexAt(0, negpt2d, 0, 0, 0)
                                 .AddVertexAt(1, pospt2d, 0, 0, 0)
                             End With
 
-                            'get the intersection point of the temporary vertical line and the top of the concrete stem
-                            tempLine.IntersectWith(bl, Intersect.OnBothOperands, ptsTopConc, IntPtr.Zero, IntPtr.Zero)
+                            Dim pts2d As New Point3dCollection
 
-                            'check to see if refy is within 1 brick height of cury
-                            If ptsTopConc IsNot Nothing AndAlso ptsTopConc.Count > 0 Then
+                            'get the intersection point of the temporary vertical line and the top of the wall
+                            tLine.IntersectWith(bl, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
 
-                                'make minY the top of the concrete (refY) - 1 brick height
-                                Dim reftopY As Double = ptsTopConc(0).Y
-                                Dim mintopConcY As Double = reftopY - bht
+                            'make sure we have an intersection (points in the collection pts2d)
+                            If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                                If curY > mintopConcY Then  'cury is above minY
-                                    If curY <= reftopY Then  'cury is below reference line so this is a good point
-                                        'keep track of x value for later
-                                        lastx = curX
-                                        curX = startX + (brk * 0.5 * blen)
-                                        'if next point is beyond end of bl then create one final point
+                                'make minY the top of the wall - 1/2 brick height
+                                Dim refY As Double = pts2d(0).Y + (bht * 0.5)
+                                Dim minY As Double = refY - (bht * 0.5)
 
-                                        If curX > endX Then
-                                            Dim lastpt As New Point2d(curX, curY)
-                                            tconcPts.Add(lastpt)
+                                If curY > minY Then  'cury is above minimum elevation
+                                    If curY <= refY Then  'cury is below reference line so this is a good point
+                                        'keep track of x value for later and move down the wall
+                                        If brk = 0 Then
+                                            Dim begTop As New Point2d(curX, curY)
+                                            topPts.Add(begTop)
+                                            rwData.StartTopWall = New Point3d(begTop.X, begTop.Y, 0)
+                                        Else
+                                            lastx = curX
+                                            curX = startX + (brk * 0.5 * blen)
+                                            'if next point is beyond end of bl then create one final point
+                                            If curX > endX Then
+                                                Dim tps1 As New Point2d(curX, curY)
+                                                topPts.Add(tps1)
+                                            End If
                                         End If
                                         brk += 1
-                                    Else  'cury is above reference line
+                                    Else  'cury is above reference line nso adjust the elevation by step height
                                         Dim fSafe As Integer = 0
                                         'store current y before adjusting
                                         lasty = curY
                                         'adjust height until it is within 1 brick below top of wall
                                         Do
                                             curY -= bht
-                                            If curY < reftopY Then
+                                            If curY < refY Then
                                                 Exit Do
                                             End If
                                             fSafe += 1
                                         Loop While fSafe < 50
-                                        'set a point for the bottom of the previous step and the top of the current step
+
+                                        'set points for the bottom of the previous step and the top of the current step
+                                        If Not brk = 0 Then
+                                            Dim tps1 As New Point2d(curX, lasty)
+                                            Dim tps2 As New Point2d(curX + 0.02, curY)
+                                            topPts.Add(tps1)
+                                            topPts.Add(tps2)
+                                        End If
+
+                                    End If
+                                Else    'cury is below minimum
+                                    Dim fSafe As Integer = 0
+                                    'store current y value and loop until y is within 1 brick of the top of wall
+                                    lasty = curY
+                                    Do
+                                        curY += bht
+                                        If curY > minY Then
+                                            Exit Do
+                                        End If
+                                        fSafe += 1
+                                    Loop While fSafe < 50
+                                    'set points for the bottom of the previous step and the top of the current step
+                                    If Not brk = 0 Then
                                         Dim tps1 As New Point2d(curX, lasty)
                                         Dim tps2 As New Point2d(curX + 0.02, curY)
-                                        tconcPts.Add(tps1)
-                                        tconcPts.Add(tps2)
+                                        topPts.Add(tps1)
+                                        topPts.Add(tps2)
                                     End If
-
-                                Else    'cury is below minimum
-                                    Dim fSafe As Integer = 0
-                                    'store current y value and loop until y is within 1 brick of the top of wall
-                                    lasty = curY
-                                    Do
-                                        curY += bht
-                                        If curY > mintopConcY Then
-                                            Exit Do
-                                        End If
-                                        fSafe += 1
-                                    Loop While fSafe < 50
-                                    Dim tps1 As New Point2d(curX, lasty)
-                                    Dim tps2 As New Point2d(curX + 0.02, curY)
-                                    tconcPts.Add(tps1)
-                                    tconcPts.Add(tps2)
                                 End If
 
-                                ''store a point for top of wall...
-                                'If firstPt Then
-                                '    Dim ptsTopWall As New Point3dCollection
-                                '    tempLine.IntersectWith(twLine, Intersect.OnBothOperands, ptsTopWall, IntPtr.Zero, IntPtr.Zero)
-
-                                '    If ptsTopWall IsNot Nothing AndAlso ptsTopWall.Count > 0 Then
-                                '        Dim curtwY As Double = curY
-                                '        'make minY the top of the wall (refY) - 1 brick height
-
-                                '        Dim reftopWallY As Double = ptsTopWall(0).Y
-                                '        Dim mintopWallY As Double = reftopWallY - bht
-
-                                '        'curtwy is always below minimum unless very short wall
-                                '        Dim fSafe As Integer = 0
-                                '        'store current y value and loop until y is within 1 brick of the top of wall
-                                '        Dim lasttwy As Double = curtwY
-                                '        Do
-                                '            curtwY += bht
-                                '            If curtwY > mintopWallY Then
-                                '                Exit Do
-                                '            End If
-                                '            fSafe += 1
-                                '        Loop While fSafe < 50
-
-                                '        startTopPt = New Point2d(curX, curtwY)
-                                '    End If
-                                '    firstPt = False
-                                'End If
-
-                                failsafe += 1
-                                If curX > endX Then Exit Do
-                                'limit the loop to 5000 brick lengths
+                            Else
+                                MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
+                                Return ObjectId.Null
+                                Exit Function
                             End If
+
 
                         End Using
 
+                        failsafe += 1
+                        If curX > endX Then Exit Do
+
+                        'limit the loop to 5000 brick lengths
                     Loop While failsafe < 5000
-                    Debug.Print(failsafe)
 
                 Else  'reference moves from right to left
-                    Dim firstPt As Boolean = True
-                    Dim ptsTopConc As New Point3dCollection
-
                     Do
                         Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
                         Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
 
-                        Using tempLine As New Polyline
+                        Using tLine As New Polyline
 
-                            With tempLine
+                            With tLine
                                 .AddVertexAt(0, negpt2d, 0, 0, 0)
                                 .AddVertexAt(1, pospt2d, 0, 0, 0)
                             End With
 
-                            'get the intersection point of the temporary vertical line and the top of the concrete stem
-                            tempLine.IntersectWith(bl, Intersect.OnBothOperands, ptsTopConc, IntPtr.Zero, IntPtr.Zero)
+                            'If tLine.Elevation <> 0 Then tLine.Elevation = 0
+
+                            Dim pts2d As New Point3dCollection
+
+                            bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+
+                            'If pts2d.Count <= 0 Then
+                            '    tLine.Dispose()
+                            '    GoTo SkipPt
+                            'End If
 
                             'check to see if refy is within 1 brick height of cury
-                            If ptsTopConc IsNot Nothing AndAlso ptsTopConc.Count > 0 Then
+                            If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                                'make minY the top of the concrete (refY) - 1 brick height
-                                Dim reftopY As Double = ptsTopConc(0).Y
-                                Dim mintopConcY As Double = reftopY - bht
+                                'check to see if refy is within 1 brick height of cury
+                                'make minY the top of the wall +- 1/2 brick height
+                                Dim refY As Double = pts2d(0).Y + (bht * 0.5)
+                                Dim minY As Double = refY - (bht * 0.5)
+                                'Dim elevDiff As Double = refY - curY
 
-                                If curY > mintopConcY Then  'cury is above minY
-                                    If curY <= reftopY Then  'cury is below reference line so this is a good point
-                                        'keep track of x value for later
-                                        lastx = curX
-                                        curX = startX - (brk * 0.5 * blen)
-                                        'if next point is beyond end of bl then create one final point
-
-                                        If curX > endX Then
-                                            Dim lastpt As New Point2d(curX, curY)
-                                            tconcPts.Add(lastpt)
+                                If curY > minY Then  'cury is above minimum
+                                    If curY <= refY Then  'cury is below reference line so good point
+                                        If brk = 0 Then  'if first point, store it and move on
+                                            Dim begTop As New Point2d(curX, curY)
+                                            topPts.Add(begTop)
+                                            rwData.StartTopWall = New Point3d(begTop.X, begTop.Y, 0)
+                                        Else
+                                            lastx = curX
+                                            curX = startX - (brk * 0.5 * blen)
+                                            'if next point is beyond end of bl then create one final point
+                                            If curX < endX Then
+                                                Dim tpend As New Point2d(curX, curY)
+                                                topPts.Add(tpend)
+                                                Exit Do
+                                            End If
+                                            brk += 1
                                         End If
-                                        brk += 1
                                     Else  'cury is above reference line
                                         Dim fSafe As Integer = 0
-                                        'store current y before adjusting
                                         lasty = curY
-                                        'adjust height until it is within 1 brick below top of wall
                                         Do
                                             curY -= bht
-                                            If curY < reftopY Then
+                                            If curY < refY Then
+                                                'curY -= bht
                                                 Exit Do
                                             End If
                                             fSafe += 1
                                         Loop While fSafe < 50
-                                        'set a point for the bottom of the previous step and the top of the current step
+                                    End If
+                                    If Not brk = 0 Then
                                         Dim tps1 As New Point2d(curX, lasty)
                                         Dim tps2 As New Point2d(curX - 0.02, curY)
-                                        tconcPts.Add(tps1)
-                                        tconcPts.Add(tps2)
+                                        topPts.Add(tps1)
+                                        topPts.Add(tps2)
                                     End If
-
                                 Else    'cury is below minimum
                                     Dim fSafe As Integer = 0
-                                    'store current y value and loop until y is within 1 brick of the top of wall
                                     lasty = curY
                                     Do
                                         curY += bht
-                                        If curY > mintopConcY Then
+                                        If curY > minY Then
                                             Exit Do
                                         End If
                                         fSafe += 1
                                     Loop While fSafe < 50
-                                    Dim tps1 As New Point2d(curX, lasty)
-                                    Dim tps2 As New Point2d(curX - 0.02, curY)
-                                    tconcPts.Add(tps1)
-                                    tconcPts.Add(tps2)
+                                    If Not brk = 0 Then
+                                        Dim tps1 As New Point2d(curX, lasty)
+                                        Dim tps2 As New Point2d(curX - 0.02, curY)
+                                        topPts.Add(tps1)
+                                        topPts.Add(tps2)
+                                    End If
                                 End If
-
-                                ''store a point for top of wall...
-                                'If firstPt Then
-                                '    Dim ptsTopWall As New Point3dCollection
-                                '    tempLine.IntersectWith(twLine, Intersect.OnBothOperands, ptsTopWall, IntPtr.Zero, IntPtr.Zero)
-
-                                '    If ptsTopWall IsNot Nothing AndAlso ptsTopWall.Count > 0 Then
-                                '        Dim curtwY As Double = curY
-                                '        'make minY the top of the wall (refY) - 1 brick height
-
-                                '        Dim reftopWallY As Double = ptsTopWall(0).Y
-                                '        Dim mintopWallY As Double = reftopWallY - bht
-
-                                '        'curtwy is always below minimum unless very short wall
-                                '        Dim fSafe As Integer = 0
-                                '        'store current y value and loop until y is within 1 brick of the top of wall
-                                '        Dim lasttwy As Double = curtwY
-                                '        Do
-                                '            curtwY += bht
-                                '            If curtwY > mintopWallY Then
-                                '                Exit Do
-                                '            End If
-                                '            fSafe += 1
-                                '        Loop While fSafe < 50
-
-                                '        startTopPt = New Point2d(curX, curtwY)
-                                '    End If
-                                '    firstPt = False
-                                'End If
-
-                                failsafe += 1
-                                If curX < endX Then Exit Do
-                                'limit the loop to 5000 brick lengths
+                            Else
+                                MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
+                                Return ObjectId.Null
+                                Exit Function
                             End If
-
+SkipPt:
                         End Using
 
+                        failsafe += 1
+                        If curX < endX Then Exit Do
+
                     Loop While failsafe < 5000
-                    Debug.Print(failsafe)
+
+                    'Debug.Print(failsafe)
 
                 End If
 
                 bl.Dispose()
 
-                Dim tConcid As ObjectId
+                Dim tWallId As ObjectId
 
                 'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
                 'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
                 Using pl As New Polyline
-                    For k = 0 To tconcPts.Count - 1
-                        pl.AddVertexAt(k, tconcPts(k), 0, 0, 0)
+                    For k = 0 To topPts.Count - 1
+                        pl.AddVertexAt(k, topPts(k), 0, 0, 0)
                     Next
                     If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
-                    tConcid = curSpc.AppendEntity(pl)
+                    tWallId = curSpc.AppendEntity(pl)
                     acTrans.AddNewlyCreatedDBObject(pl, True)
                 End Using
 
-                Return startTopPt
+                Return tWallId
 
             Catch ex As Exception
-                MessageBox.Show(vbLf & "Error in TopConcPfile function.  Check data and try again." & vbLf & vbLf & ex.Message)
-                Return Point2d.Origin
+                MessageBox.Show(vbLf & "Error in TopWall function.  Check data and try again." & vbLf & vbLf & ex.Message)
+                Return ObjectId.Null
                 Exit Function
             End Try
 
-
-
-
         End Function
 
-        Private Function TopFooting(egId As ObjectId, twStart As Point3d, dirPt As Point3d, pltside As Integer, rwData As RetainingWall, acTrans As Transaction) As ObjectId
+        Private Function TopFooting(egId As ObjectId, startpt As Point3d, startFoot As Point3d, pltside As Integer, ByRef rwData As RetainingWall, endx As Double, acTrans As Transaction) As ObjectId
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
             Dim DwgDB As Database = CurDwg.Database
             Dim ed As Editor = CurDwg.Editor
 
-            Dim curX As Double = twStart.X
-            Dim testPt1 As New Point2d(curX, twStart.Y - 1000)
-            Dim testPt2 As New Point2d(curX, twStart.Y + 1000)
+            Dim pb1 As Point3d
+            If startpt = Point3d.Origin Or rwData.UseFootPoint Then
+                If startFoot = Point3d.Origin Then
+                    Return Nothing
+                    Exit Function
+                End If
+                pb1 = startFoot
+            Else
+                pb1 = startpt
+            End If
 
-            Dim tempLine As New Polyline
-
-            With tempLine
-                .AddVertexAt(0, testPt1, 0, 0, 0)
-                .AddVertexAt(1, testPt2, 0, 0, 0)
-            End With
-
-            If tempLine.Elevation <> 0 Then tempLine.Elevation = 0
-
-            Dim startX As Double = twStart.X
-            Dim endX As Double = dirPt.X
+            Dim curX As Double = pb1.X
             Dim lastx As Double = curX
-
+            Dim startx As Double = curX
             Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
 
             Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
@@ -1464,219 +1503,246 @@ TryAgain:
 
             Dim cover As Double = rwData.ProfFootCover
             Dim bht As Double = rwData.ProfBrickHt
+            Dim ftStep As Double = rwData.ProfFootStep
             Dim blen As Double = rwData.BrickLength
 
 TryAgain:
+            'get a translation vector for the footing cover
             Dim ofPt As New Point3d(tbl.StartPoint.X, tbl.StartPoint.Y - cover, 0)
             Dim transVect As Vector3d = tbl.StartPoint.GetVectorTo(ofPt)
-
-            Dim bl As Polyline = tbl.Clone
-            bl.TransformBy(Matrix3d.Displacement(transVect))
-            If bl.Elevation <> 0 Then bl.Elevation = 0
-
-            If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
-            curSpc.AppendEntity(bl)
-            acTrans.AddNewlyCreatedDBObject(bl, True)
-
-            Dim tfAtStart As New Point3dCollection
-            bl.IntersectWith(tempLine, Intersect.OnBothOperands, tfAtStart, IntPtr.Zero, IntPtr.Zero)
-
-            Dim rY As Double
-
-            If tfAtStart IsNot Nothing AndAlso tfAtStart.Count > 0 Then
-                rY = twStart.Y
-                Dim teststart As Point3d = tfAtStart(0)
-                Do
-                    rY -= bht
-                Loop Until rY < teststart.Y
-            Else
-                ed.WriteMessage(vbLf & "Toe side ground line does not reach the start of the wall.  Lengthen the ground reference line and try again")
-                Return ObjectId.Null
-                Exit Function
-            End If
-
-            Dim pb1 As New Point3d(twStart.X, rY, 0)
-            Dim curY As Double = rY
-            Dim lasty As Double = curY
-
             Dim footPts As New Point2dCollection
-            footPts.Add(pb1.Convert2d(refPln))
 
-            tempLine.Dispose()
-            tbl.Dispose()
+            Using bl As Polyline = tbl.Clone
 
-            'Dim cont As Boolean = True
-            Dim brk As Integer = 0
-            Dim failsafe As Integer = 0
+                bl.TransformBy(Matrix3d.Displacement(transVect))
+                If bl.Elevation <> 0 Then bl.Elevation = 0
 
-            If pltside > 0 Then  'reference moves from left to right
-                Do
-                    Dim negpt2d As New Point2d(curX, curY - 1000)
-                    Dim pospt2d As New Point2d(curX, curY + 1000)
+                If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                curSpc.AppendEntity(bl)
+                acTrans.AddNewlyCreatedDBObject(bl, True)
 
-                    Using tLine As New Polyline
+                'set a point at the top of the wall or top of concrete stem
+                'Dim pb1 As New Point3d(twStart.X, rY, 0)
 
-                        With tLine
-                            .AddVertexAt(0, negpt2d, 0, 0, 0)
-                            .AddVertexAt(1, pospt2d, 0, 0, 0)
-                        End With
+                'set variables for current and last y coordinates
+                Dim curY As Double = pb1.Y
+                Dim lasty As Double = curY
 
-                        If tLine.Elevation <> 0 Then tLine.Elevation = 0
+                'footPts.Add(pb1.Convert2d(refPln))
 
-                        Dim pts2d As New Point3dCollection
+                'Dim cont As Boolean = True
+                Dim brk As Integer = 0
+                Dim failsafe As Integer = 0
+                'Dim wStep As Integer = 0
 
-                        bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+                If pltside > 0 Then  'reference moves from left to right
+                    Do
+                        Dim negpt2d As New Point2d(curX, curY - 1000)
+                        Dim pospt2d As New Point2d(curX, curY + 1000)
 
-                        If pts2d.Count <= 0 Then
-                            MessageBox.Show("Ground line on toe side is not long enough.  Check input data and try again.")
-                            Exit Do
-                        End If
+                        Using tLine As New Polyline
 
-                        'check to see if refy is within 1 brick height of cury
-                        If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
+                            With tLine
+                                .AddVertexAt(0, negpt2d, 0, 0, 0)
+                                .AddVertexAt(1, pospt2d, 0, 0, 0)
+                            End With
 
-                            Debug.Print(pts2d(0).ToString)
-                            Dim refY As Double = pts2d(0).Y
-                            Dim minY As Double = refY - bht
-                            Dim elevDiff As Double = refY - curY
+                            If tLine.Elevation <> 0 Then tLine.Elevation = 0
 
-                            If curY > minY Then  'cury is above minimum
-                                If curY <= refY Then  'cury is below reference line
-                                    'Dim lastx As Double = curX
-                                    lastx = curX
-                                    curX = startX + (brk * 0.5 * blen)
-                                    'if next point is beyond end of bl then create one final point
-                                    If curX > endX Then
-                                        Dim tps1 As New Point2d(curX, curY)
-                                        footPts.Add(tps1)
-                                    End If
-                                    brk += 1
-                                Else  'cury is above reference line
-                                    'lastx = curX - blen
-                                    Dim fSafe As Integer = 0
-                                    lasty = curY
-                                    Do
-                                        curY -= bht
-                                        If curY < refY Then
-                                            'curY -= bht
-                                            Exit Do
-                                        End If
-                                        fSafe += 1
-                                    Loop While fSafe < 50
-                                    Dim tps1 As New Point2d(curX, lasty)
-                                    Dim tps2 As New Point2d(curX + 0.02, curY)
-                                    footPts.Add(tps1)
-                                    footPts.Add(tps2)
-                                End If
-                            Else    'cury is below minimum
-                                Dim fSafe As Integer = 0
-                                lasty = curY
-                                Do
-                                    curY += bht
-                                    If curY > minY Then
-                                        Exit Do
-                                    End If
-                                    fSafe += 1
-                                Loop While fSafe < 50
-                                Dim tps1 As New Point2d(curX, lasty)
-                                Dim tps2 As New Point2d(curX + 0.02, curY)
-                                footPts.Add(tps1)
-                                footPts.Add(tps2)
+                            Dim pts2d As New Point3dCollection
+
+                            tLine.IntersectWith(bl, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+
+                            If pts2d.Count <= 0 Then
+                                MessageBox.Show("Ground line on toe side is not long enough.  Check input data and try again.")
+                                Return ObjectId.Null
+                                Exit Function
                             End If
-
-                        End If
-
-                    End Using
-
-                    'lastx = curX
-                    failsafe += 1
-                    If curX > endX Then Exit Do
-
-                Loop While failsafe < 5000
-
-            Else  'reference moves from right to left
-                Do
-                    Dim negpt2d As New Point2d(curX, curY - 1000)
-                    Dim pospt2d As New Point2d(curX, curY + 1000)
-
-                    Using tLine As New Polyline
-
-                        With tLine
-                            .AddVertexAt(0, negpt2d, 0, 0, 0)
-                            .AddVertexAt(1, pospt2d, 0, 0, 0)
-                        End With
-
-                        If tLine.Elevation <> 0 Then tLine.Elevation = 0
-
-                        Dim pts2d As New Point3dCollection
-
-                        bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
-
-                        If pts2d.Count <= 0 Then
-                            MessageBox.Show("Ground line on toe side is not long enough.  Check input data and try again.")
-                            Exit Do
-                        End If
-
-                        'check to see if refy is within 1 brick height of cury
-                        If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
                             'check to see if refy is within 1 brick height of cury
-                            Dim refY As Double = pts2d(0).Y
-                            Dim minY As Double = refY - bht
-                            Dim elevDiff As Double = refY - curY
+                            If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                            If curY > minY Then  'cury is above minimum
-                                If curY <= refY Then  'cury is below reference line
-                                    'Dim lastx As Double = curX
-                                    lastx = curX
-                                    curX = startX - (brk * 0.5 * blen)
-                                    'if next point is beyond end of bl then create one final point
-                                    If curX < endX Then
-                                        Dim tps1 As New Point2d(curX, curY)
-                                        footPts.Add(tps1)
+                                Dim refY As Double = pts2d(0).Y
+                                Dim minY As Double = refY - bht
+
+                                'Dim elevDiff As Double = refY - curY
+
+                                If curY >= minY Then  'cury is above minimum
+                                    If curY <= refY Then  'cury is below reference line so good point
+                                        If brk = 0 Then  'if first point, store it and move on
+                                            Dim begfoot As New Point2d(curX, curY)
+                                            rwData.StartTopFooting = New Point3d(curX, curY, 0)
+                                            footPts.Add(begfoot)
+                                            brk += 1
+                                        Else
+                                            'Dim lastx As Double = curX
+                                            lastx = curX
+                                            curX = startx + (brk * 0.5 * blen)
+                                            'if next point is beyond end of bl then create one final point
+                                            If curX > endx Then
+                                                Dim tps1 As New Point2d(curX, curY)
+                                                footPts.Add(tps1)
+                                            End If
+                                            brk += 1
+                                        End If
+                                    Else  'cury is above reference line
+                                        'lastx = curX - blen
+                                        Dim fSafe As Integer = 0
+                                        lasty = curY
+                                        Do
+                                            curY -= ftStep
+                                            If curY < refY Then
+                                                'curY -= bht
+                                                Exit Do
+                                            End If
+                                            fSafe += 1
+                                        Loop While fSafe < 50
+
+                                        'set points back 1/2 brick to keep footing below min cover
+                                        If Not brk = 0 Then
+                                            Dim tps1 As New Point2d(curX - (0.5 * blen), lasty)
+                                            Dim tps2 As New Point2d(curX - (0.5 * blen) + 0.02, curY)
+                                            footPts.Add(tps1)
+                                            footPts.Add(tps2)
+                                            brk += 1
+                                        Else
+                                            lasty = curY
+                                        End If
                                     End If
-                                    brk += 1
-                                Else  'cury is above reference line
+                                Else    'cury is below minimum
                                     Dim fSafe As Integer = 0
                                     lasty = curY
                                     Do
-                                        curY -= bht
-                                        If curY < refY Then
-                                            'curY -= bht
+                                        curY += ftStep
+                                        If curY > minY Then
                                             Exit Do
                                         End If
                                         fSafe += 1
                                     Loop While fSafe < 50
-                                    Dim tps1 As New Point2d(curX, lasty)
-                                    Dim tps2 As New Point2d(curX - 0.02, curY)
-                                    footPts.Add(tps1)
-                                    footPts.Add(tps2)
-                                End If
-                            Else    'cury is below minimum
-                                Dim fSafe As Integer = 0
-                                lasty = curY
-                                Do
-                                    curY += bht
-                                    If curY > minY Then
-                                        Exit Do
+                                    'set points back 1/2 brick to keep footing below min cover
+                                    If Not brk = 0 Then
+                                        Dim tps1 As New Point2d(curX - (0.5 * blen), lasty)
+                                        Dim tps2 As New Point2d(curX - (0.5 * blen) + 0.02, curY)
+                                        footPts.Add(tps1)
+                                        footPts.Add(tps2)
+                                        brk += 1
+                                    Else
+                                        lasty = curY
                                     End If
-                                    fSafe += 1
-                                Loop While fSafe < 50
-                                Dim tps1 As New Point2d(curX, lasty)
-                                Dim tps2 As New Point2d(curX - 0.02, curY)
-                                footPts.Add(tps1)
-                                footPts.Add(tps2)
+                                End If
                             End If
-                        End If
+                        End Using
+
+                        'lastx = curX
+                        failsafe += 1
+                        If curX > endx Then Exit Do
+
+                    Loop While failsafe < 5000
+
+                Else  'reference moves from right to left
+                    Do
+                        Dim negpt2d As New Point2d(curX, curY - 1000)
+                        Dim pospt2d As New Point2d(curX, curY + 1000)
+
+                        Using tLine As New Polyline
+
+                            With tLine
+                                .AddVertexAt(0, negpt2d, 0, 0, 0)
+                                .AddVertexAt(1, pospt2d, 0, 0, 0)
+                            End With
+
+                            If tLine.Elevation <> 0 Then tLine.Elevation = 0
+
+                            Dim pts2d As New Point3dCollection
+
+                            bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+
+                            If pts2d.Count <= 0 Then
+                                MessageBox.Show("Ground line on toe side is not long enough.  Check input data and try again.")
+                                Exit Do
+                            End If
+
+                            'check to see if refy is within 1 brick height of cury
+                            If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
+
+                                'check to see if refy is within 1 brick height of cury
+                                Dim refY As Double = pts2d(0).Y
+                                Dim minY As Double = refY - ftStep
+                                Dim elevDiff As Double = refY - curY
+
+                                If curY >= minY Then  'cury is above minimum
+                                    If curY <= refY Then  'cury is below reference line so good point
+                                        If brk = 0 Then  'if first point, store it and move on
+                                            Dim begfoot As New Point2d(curX, curY)
+                                            rwData.StartTopFooting = New Point3d(curX, curY, 0)
+                                            footPts.Add(begfoot)
+                                            brk += 1
+                                        Else
+                                            'Dim lastx As Double = curX
+                                            lastx = curX
+                                            curX = startx - (brk * 0.5 * blen)
+                                            'if next point is beyond end of bl then create one final point
+                                            If curX < endx Then
+                                                Dim tps1 As New Point2d(curX, curY)
+                                                footPts.Add(tps1)
+                                            End If
+                                            brk += 1
+                                        End If
+                                    Else  'cury is above reference line
+                                        Dim fSafe As Integer = 0
+                                        lasty = curY
+                                        Do
+                                            curY -= ftStep
+                                            If curY < refY Then
+                                                'curY -= bht
+                                                Exit Do
+                                            End If
+                                            fSafe += 1
+                                        Loop While fSafe < 50
+                                        'set points back 1/2 brick to keep footing below min cover
+                                        If Not brk = 0 Then
+                                            Dim tps1 As New Point2d(curX + (0.5 * blen), lasty)
+                                            Dim tps2 As New Point2d(curX + (0.5 * blen) - 0.02, curY)
+                                            footPts.Add(tps1)
+                                            footPts.Add(tps2)
+                                            brk += 1
+                                        Else
+                                            lasty = curY
+                                        End If
+                                    End If
+                                Else    'cury is below minimum
+                                    Dim fSafe As Integer = 0
+                                    lasty = curY
+                                    Do
+                                        curY += ftStep
+                                        If curY > minY Then
+                                            Exit Do
+                                        End If
+                                        fSafe += 1
+                                    Loop While fSafe < 50
+                                    'set points back 1/2 brick to keep footing below min cover
+                                    If Not brk = 0 Then
+                                        Dim tps1 As New Point2d(curX + (0.5 * blen), lasty)
+                                        Dim tps2 As New Point2d(curX + (0.5 * blen) - 0.02, curY)
+                                        footPts.Add(tps1)
+                                        footPts.Add(tps2)
+                                        brk += 1
+                                    Else
+                                        lasty = curY
+                                    End If
+                                End If
+                            End If
 SkipPt:
-                    End Using
+                        End Using
 
-                    failsafe += 1
-                    If curX < endX Then Exit Do
 
-                Loop While failsafe < 10000
+                        failsafe += 1
+                        If curX < endx Then Exit Do
 
-            End If
+                    Loop While failsafe < 10000
+
+                End If
+            End Using
 
             Dim tpFtID As ObjectId
 
@@ -1684,12 +1750,14 @@ SkipPt:
             'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
             'Using acTrans2 As Transaction = DwgDB.TransactionManager.StartTransaction
             'Dim mSpace As BlockTableRecord = acTrans2.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
-            Dim pl As New Polyline
-            For k = 0 To footPts.Count - 1
-                pl.AddVertexAt(k, footPts(k), 0, 0, 0)
-            Next
-            tpFtID = curSpc.AppendEntity(pl)
-            acTrans.AddNewlyCreatedDBObject(pl, True)
+            Using pl As New Polyline
+                For k = 0 To footPts.Count - 1
+                    pl.AddVertexAt(k, footPts(k), 0, 0, 0)
+                Next
+                If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                tpFtID = curSpc.AppendEntity(pl)
+                acTrans.AddNewlyCreatedDBObject(pl, True)
+            End Using
 
             Return tpFtID
 
@@ -1701,9 +1769,87 @@ SkipPt:
             Dim DwgDB As Database = CurDwg.Database
             Dim ed As Editor = CurDwg.Editor
 
-            Dim peo As New PromptEntityOptions(vbLf & "Pick polyline for the ground surface elevation.")
+            Dim rwData As New RetainingWall
+            Dim useCurrent As Boolean
+            Dim pb1 As Point3d
 
-            Dim egId As ObjectId
+            If m_RWallData IsNot Nothing Then
+                useCurrent = YesNoQuery(vbLf & "Do you want to use the previous retaining wall parameters?")
+                If useCurrent Then rwData = m_RWallData
+
+            Else
+
+                Dim pdoVFact As New PromptDistanceOptions(vbLf & "Enter the vertical exaggeration factor.")
+
+                With pdoVFact
+                    .DefaultValue = 1
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdrVFact As PromptDoubleResult = ed.GetDistance(pdoVFact)
+
+                Dim vFact As Double
+                If pdrVFact.Status = PromptStatus.OK Then
+                    vFact = pdrVFact.Value
+                    rwData.VertFactor = vFact
+                Else
+                    Exit Sub
+                End If
+
+                Dim pdo1 As New PromptDistanceOptions(vbLf & "Enter minimum earth cover for footing in inches")
+
+                With pdo1
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdr As PromptDoubleResult = ed.GetDistance(pdo1)
+
+                Dim cover As Double
+                If pdr.Status = PromptStatus.OK Then
+                    Dim cvr As Double = pdr.Value
+                    cover = (cvr / 12) * vFact
+                    rwData.CoverInches = cvr
+                Else
+                    Exit Sub
+                End If
+
+                pdo1.Message = vbLf & "Enter or pick width of a single brick in inches"
+
+                With pdo1
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                pdr = ed.GetDistance(pdo1)
+
+                If pdr.Status = PromptStatus.OK Then
+                    Dim brkLen As Double = pdr.Value
+                    rwData.BrickLenInches = brkLen
+                Else
+                    Exit Sub
+                End If
+
+                pdo1.Message = vbLf & "Enter of pick the true height of a single brick in inches"
+                pdr = ed.GetDistance(pdo1)
+
+                If pdr.Status = PromptStatus.OK Then
+                    Dim tbht As Double = pdr.Value
+                    rwData.BrickHtInches = tbht
+                Else
+                    Exit Sub
+                End If
+
+            End If
+
+            Dim peo As New PromptEntityOptions(vbLf & "Pick polyline for the ground surface elevation.")
 
             With peo
                 .AllowNone = False
@@ -1711,8 +1857,9 @@ SkipPt:
 
             Dim per As PromptEntityResult = ed.GetEntity(peo)
 
+            Dim egID As ObjectId
             If per.Status = PromptStatus.OK Then
-                egId = per.ObjectId
+                egID = per.ObjectId
             Else
                 Exit Sub
             End If
@@ -1722,17 +1869,15 @@ SkipPt:
                 .AllowNone = False
             End With
 
-            Dim pb1 As Point3d
             Dim ppr As PromptPointResult = ed.GetPoint(ppo)
-
             If ppr.Status = PromptStatus.OK Then
                 pb1 = ppr.Value
+                rwData.StartTopFooting = pb1
             Else
                 Exit Sub
             End If
 
             ppo.Message = vbLf & "Pick approximate location where the steps will end."
-
             Dim dirPt As Point3d
             ppr = ed.GetPoint(ppo)
 
@@ -1741,322 +1886,255 @@ SkipPt:
             Else
                 Exit Sub
             End If
-
-            Dim pltSide As Integer
+            Dim endX As Double = dirPt.X
+            Dim pltside As Integer
 
             If dirPt.X > pb1.X Then
-                pltSide = 1  'wall plots from left to right
+                pltside = 1  'wall plots from left to right
             Else
-                pltSide = -1  'wall plots from right to left
+                pltside = -1  'wall plots from right to left
             End If
 
-            Dim pdoVFact As New PromptDistanceOptions(vbLf & "Enter the vertical exaggeration factor.")
+            rwData.Direction = pltside
 
-            With pdoVFact
-                .DefaultValue = 1
-                .AllowArbitraryInput = True
-                .AllowZero = False
-                .AllowNegative = False
-                .AllowNone = False
-            End With
-
-            Dim pdrVFact As PromptDoubleResult = ed.GetDistance(pdoVFact)
-
-            Dim vFact As Double
-
-            If pdrVFact.Status = PromptStatus.OK Then
-                vFact = pdrVFact.Value
-
-            Else
-                Exit Sub
-            End If
-
-            Dim endX As Double = dirPt.X
-
-            Dim pdo1 As New PromptDistanceOptions(vbLf & "Enter or pick minimum distance between top of footing and ground elevation adjusted for vertical scale.")
-
-            With pdo1
-                .AllowArbitraryInput = True
-                .AllowZero = False
-                .AllowNegative = False
-                .AllowNone = False
-            End With
-
-            Dim pdr As PromptDoubleResult = ed.GetDistance(pdo1)
-
-            Dim cover As Double
-
-            If pdr.Status = PromptStatus.OK Then
-                Dim cvr As Double = pdr.Value
-                cover = cvr * vFact
-            Else
-                Exit Sub
-            End If
-
-            pdo1.Message = vbLf & "Enter or pick width of a single brick"
-
-            With pdo1
-                .AllowArbitraryInput = True
-                .AllowZero = False
-                .AllowNegative = False
-                .AllowNone = False
-            End With
-
-            pdr = ed.GetDistance(pdo1)
-
-            Dim blen As Double
-
-            If pdr.Status = PromptStatus.OK Then
-                blen = pdr.Value
-            Else
-                Exit Sub
-            End If
-
-            pdo1.Message = vbLf & "Enter of pick the true height of a single brick"
-            pdr = ed.GetDistance(pdo1)
-
-            Dim bht As Double
-
-            If pdr.Status = PromptStatus.OK Then
-                Dim tbht As Double = pdr.Value
-                bht = tbht * vFact
-            Else
-                Exit Sub
-            End If
-
-            Dim startX As Double = pb1.X
-            Dim curX As Double = pb1.X
-            Dim curY As Double = pb1.Y
-            Dim lastx As Double = curX
-            Dim lasty As Double = curY
+            'Dim startX As Double = pb1.X
+            'Dim curX As Double = pb1.X
+            'Dim curY As Double = pb1.Y
+            'Dim lastx As Double = curX
+            'Dim lasty As Double = curY
 
             Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
 
-            Dim footPts As New Point2dCollection
-            footPts.Add(pb1.Convert2d(refPln))
+            'Dim footPts As New Point2dCollection
+            'footPts.Add(pb1.Convert2d(refPln))
 
             Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
                 Try
 
-                    Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
-                    Dim baseline As DBObject = acTrans.GetObject(egId, OpenMode.ForRead)
-                    Dim tbl As Polyline = TryCast(baseline, Polyline)
-                    'Dim tempObj As Object = GetVertexCoords(topid)
+                    Dim footTopId As ObjectId = TopFooting(egID, Point3d.Origin, pb1, pltside, rwData, endX, acTrans)
 
-                    If tbl Is Nothing Or tbl.Closed = True Then
-                        MessageBox.Show("Error.  Picked entity cannot be used for top of wall or path is closed.")
-                        acTrans.Abort()
-                        Exit Sub
+                    If Not footTopId = ObjectId.Null Then
+                        Dim goodfooting As Boolean = FootBottom(footTopId, pb1, rwData, pltside)
                     End If
+                    'Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
+                    'Dim baseline As DBObject = acTrans.GetObject(egID, OpenMode.ForRead)
+                    'Dim tbl As Polyline = TryCast(baseline, Polyline)
+                    ''Dim tempObj As Object = GetVertexCoords(topid)
 
-                    'TryAgain:
+                    'If tbl Is Nothing Or tbl.Closed = True Then
+                    '    MessageBox.Show("Error.  Picked entity cannot be used for top of wall or path is closed.")
+                    '    acTrans.Abort()
+                    '    Exit Sub
+                    'End If
 
-                    Dim ofPt As New Point3d(tbl.StartPoint.X, tbl.StartPoint.Y - cover, 0)
-                    Dim transVect As Vector3d = tbl.StartPoint.GetVectorTo(ofPt)
+                    ''TryAgain:
 
-                    Dim bl As Polyline = tbl.Clone
-                    bl.TransformBy(Matrix3d.Displacement(transVect))
-                    If bl.Elevation <> 0 Then bl.Elevation = 0
+                    'Dim ofPt As New Point3d(tbl.StartPoint.X, tbl.StartPoint.Y - cover, 0)
+                    'Dim transVect As Vector3d = tbl.StartPoint.GetVectorTo(ofPt)
 
-                    If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
-                    curSpc.AppendEntity(bl)
-                    acTrans.AddNewlyCreatedDBObject(bl, True)
+                    'Dim bl As Polyline = tbl.Clone
+                    'bl.TransformBy(Matrix3d.Displacement(transVect))
+                    'If bl.Elevation <> 0 Then bl.Elevation = 0
 
-                    tbl.Dispose()
+                    'If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                    'curSpc.AppendEntity(bl)
+                    'acTrans.AddNewlyCreatedDBObject(bl, True)
 
-                    'Dim cont As Boolean = True
-                    Dim brk As Integer = 0
-                    Dim failsafe As Integer = 0
+                    'tbl.Dispose()
 
-                    If pltSide > 0 Then  'reference moves from left to right
-                        Do
-                            Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
-                            Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
+                    ''Dim cont As Boolean = True
+                    'Dim brk As Integer = 0
+                    'Dim failsafe As Integer = 0
 
-                            Using tLine As New Polyline
+                    'If pltside > 0 Then  'reference moves from left to right
+                    '    Do
+                    '        Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
+                    '        Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
 
-                                With tLine
-                                    .AddVertexAt(0, negpt2d, 0, 0, 0)
-                                    .AddVertexAt(1, pospt2d, 0, 0, 0)
-                                End With
+                    '        Using tLine As New Polyline
 
-                                If tLine.Elevation <> 0 Then tLine.Elevation = 0
+                    '            With tLine
+                    '                .AddVertexAt(0, negpt2d, 0, 0, 0)
+                    '                .AddVertexAt(1, pospt2d, 0, 0, 0)
+                    '            End With
 
-                                Dim pts2d As New Point3dCollection
+                    '            If tLine.Elevation <> 0 Then tLine.Elevation = 0
 
-                                bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+                    '            Dim pts2d As New Point3dCollection
 
-                                If pts2d.Count <= 0 Then
-                                    MessageBox.Show("No valid footings.  Check input data and try again.")
-                                    Exit Sub
-                                End If
+                    '            bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
 
-                                'check to see if refy is within 1 brick height of cury
-                                If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
+                    '            If pts2d.Count <= 0 Then
+                    '                MessageBox.Show("No valid footings.  Check input data and try again.")
+                    '                Exit Sub
+                    '            End If
 
-                                    Debug.Print(pts2d(0).ToString)
-                                    Dim refY As Double = pts2d(0).Y
-                                    Dim minY As Double = refY - bht
-                                    Dim elevDiff As Double = refY - curY
+                    '            'check to see if refy is within 1 brick height of cury
+                    '            If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                                    If curY > minY Then  'cury is above minimum
-                                        If curY <= refY Then  'cury is below reference line
-                                            'Dim lastx As Double = curX
-                                            lastx = curX
-                                            curX = startX + (brk * 0.5 * blen * pltSide)
-                                            'if next point is beyond end of bl then create one final point
+                    '                Debug.Print(pts2d(0).ToString)
+                    '                Dim refY As Double = pts2d(0).Y
+                    '                Dim minY As Double = refY - bht
+                    '                Dim elevDiff As Double = refY - curY
 
-                                            If pltSide = 1 Then
-                                                If curX > endX Then
-                                                    Dim tps1 As New Point2d(curX, curY)
-                                                    footPts.Add(tps1)
-                                                End If
-                                            Else
-                                                If curX < endX Then
-                                                    Dim tps1 As New Point2d(curX, curY)
-                                                    footPts.Add(tps1)
-                                                End If
-                                            End If
-                                            brk += 1
+                    '                If curY > minY Then  'cury is above minimum
+                    '                    If curY <= refY Then  'cury is below reference line
+                    '                        'Dim lastx As Double = curX
+                    '                        lastx = curX
+                    '                        curX = startX + (brk * 0.5 * blen * pltside)
+                    '                        'if next point is beyond end of bl then create one final point
 
-                                        Else  'cury is above reference line
-                                            'lastx = curX - blen
-                                            Dim fSafe As Integer = 0
-                                            lasty = curY
-                                            Do
-                                                curY -= bht
-                                                If curY < refY Then Exit Do
-                                                fSafe += 1
-                                            Loop While fSafe < 50
-                                            Dim tps1 As New Point2d(curX, lasty)
-                                            Dim tps2 As New Point2d(curX + (0.02 * pltSide), curY)
+                    '                        If pltside = 1 Then
+                    '                            If curX > endX Then
+                    '                                Dim tps1 As New Point2d(curX, curY)
+                    '                                footPts.Add(tps1)
+                    '                            End If
+                    '                        Else
+                    '                            If curX < endX Then
+                    '                                Dim tps1 As New Point2d(curX, curY)
+                    '                                footPts.Add(tps1)
+                    '                            End If
+                    '                        End If
+                    '                        brk += 1
 
-                                            footPts.Add(tps1)
-                                            footPts.Add(tps2)
-                                        End If
-                                    Else    'cury is below minimum
-                                        Dim fSafe As Integer = 0
-                                        lasty = curY
+                    '                    Else  'cury is above reference line
+                    '                        'lastx = curX - blen
+                    '                        Dim fSafe As Integer = 0
+                    '                        lasty = curY
+                    '                        Do
+                    '                            curY -= bht
+                    '                            If curY < refY Then Exit Do
+                    '                            fSafe += 1
+                    '                        Loop While fSafe < 50
+                    '                        Dim tps1 As New Point2d(curX, lasty)
+                    '                        Dim tps2 As New Point2d(curX + (0.02 * pltside), curY)
 
-                                        Do
-                                            curY += bht
-                                            If curY > minY Then
-                                                Exit Do
-                                            End If
-                                            fSafe += 1
-                                        Loop While fSafe < 50
-                                        Dim tps1 As New Point2d(curX, lasty)
-                                        Dim tps2 As New Point2d(curX + (0.02 * pltSide), curY)
-                                        footPts.Add(tps1)
-                                        footPts.Add(tps2)
-                                    End If
+                    '                        footPts.Add(tps1)
+                    '                        footPts.Add(tps2)
+                    '                    End If
+                    '                Else    'cury is below minimum
+                    '                    Dim fSafe As Integer = 0
+                    '                    lasty = curY
 
-                                End If
+                    '                    Do
+                    '                        curY += bht
+                    '                        If curY > minY Then
+                    '                            Exit Do
+                    '                        End If
+                    '                        fSafe += 1
+                    '                    Loop While fSafe < 50
+                    '                    Dim tps1 As New Point2d(curX, lasty)
+                    '                    Dim tps2 As New Point2d(curX + (0.02 * pltside), curY)
+                    '                    footPts.Add(tps1)
+                    '                    footPts.Add(tps2)
+                    '                End If
 
-                            End Using
+                    '            End If
 
-                            failsafe += 1
+                    '        End Using
 
-                            If pltSide = 1 Then
-                                If curX > endX Then Exit Do
-                            Else
-                                If curX < endX Then Exit Do
-                            End If
+                    '        failsafe += 1
 
-                        Loop While failsafe < 5000
+                    '        If pltside = 1 Then
+                    '            If curX > endX Then Exit Do
+                    '        Else
+                    '            If curX < endX Then Exit Do
+                    '        End If
 
-                    Else  'reference moves from right to left
-                        Do
-                            Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
-                            Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
+                    '    Loop While failsafe < 5000
 
-                            Using tLine As New Polyline
+                    'Else  'reference moves from right to left
+                    '    Do
+                    '        Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
+                    '        Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
 
-                                With tLine
-                                    .AddVertexAt(0, negpt2d, 0, 0, 0)
-                                    .AddVertexAt(1, pospt2d, 0, 0, 0)
-                                End With
+                    '        Using tLine As New Polyline
 
-                                If tLine.Elevation <> 0 Then tLine.Elevation = 0
+                    '            With tLine
+                    '                .AddVertexAt(0, negpt2d, 0, 0, 0)
+                    '                .AddVertexAt(1, pospt2d, 0, 0, 0)
+                    '            End With
 
-                                Dim pts2d As New Point3dCollection
+                    '            If tLine.Elevation <> 0 Then tLine.Elevation = 0
 
-                                bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+                    '            Dim pts2d As New Point3dCollection
 
-                                'check to see if refy is within 1 brick height of cury
-                                If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
+                    '            bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
 
-                                    'check to see if refy is within 1 brick height of cury
-                                    Dim refY As Double = pts2d(0).Y
-                                    Dim minY As Double = refY - bht
-                                    Dim elevDiff As Double = refY - curY
+                    '            'check to see if refy is within 1 brick height of cury
+                    '            If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                                    If curY > minY Then  'cury is above minimum
-                                        If curY <= refY Then  'cury is below reference line
-                                            'Dim lastx As Double = curX
-                                            lastx = curX
-                                            curX = startX - (brk * 0.5 * blen)
-                                            'if next point is beyond end of bl then create one final point
-                                            If curX < endX Then
-                                                Dim tps1 As New Point2d(curX, curY)
-                                                footPts.Add(tps1)
-                                            End If
-                                            brk += 1
-                                        Else  'cury is above reference line
-                                            Dim fSafe As Integer = 0
-                                            lasty = curY
-                                            Do
-                                                curY -= bht
-                                                If curY < refY Then
-                                                    'curY -= bht
-                                                    Exit Do
-                                                End If
-                                                fSafe += 1
-                                            Loop While fSafe < 50
-                                            Dim tps1 As New Point2d(curX, lasty)
-                                            Dim tps2 As New Point2d(curX - 0.02, curY)
-                                            footPts.Add(tps1)
-                                            footPts.Add(tps2)
-                                        End If
-                                    Else    'cury is below minimum
-                                        Dim fSafe As Integer = 0
-                                        lasty = curY
-                                        Do
-                                            curY += bht
-                                            If curY > minY Then
-                                                Exit Do
-                                            End If
-                                            fSafe += 1
-                                        Loop While fSafe < 50
-                                        Dim tps1 As New Point2d(curX, lasty)
-                                        Dim tps2 As New Point2d(curX - 0.02, curY)
-                                        footPts.Add(tps1)
-                                        footPts.Add(tps2)
-                                    End If
-                                End If
-                                'SkipPt:
-                            End Using
+                    '                'check to see if refy is within 1 brick height of cury
+                    '                Dim refY As Double = pts2d(0).Y
+                    '                Dim minY As Double = refY - bht
+                    '                Dim elevDiff As Double = refY - curY
 
-                            failsafe += 1
-                            If curX < endX Then Exit Do
+                    '                If curY > minY Then  'cury is above minimum
+                    '                    If curY <= refY Then  'cury is below reference line
+                    '                        'Dim lastx As Double = curX
+                    '                        lastx = curX
+                    '                        curX = startX - (brk * 0.5 * blen)
+                    '                        'if next point is beyond end of bl then create one final point
+                    '                        If curX < endX Then
+                    '                            Dim tps1 As New Point2d(curX, curY)
+                    '                            footPts.Add(tps1)
+                    '                        End If
+                    '                        brk += 1
+                    '                    Else  'cury is above reference line
+                    '                        Dim fSafe As Integer = 0
+                    '                        lasty = curY
+                    '                        Do
+                    '                            curY -= bht
+                    '                            If curY < refY Then
+                    '                                'curY -= bht
+                    '                                Exit Do
+                    '                            End If
+                    '                            fSafe += 1
+                    '                        Loop While fSafe < 50
+                    '                        Dim tps1 As New Point2d(curX, lasty)
+                    '                        Dim tps2 As New Point2d(curX - 0.02, curY)
+                    '                        footPts.Add(tps1)
+                    '                        footPts.Add(tps2)
+                    '                    End If
+                    '                Else    'cury is below minimum
+                    '                    Dim fSafe As Integer = 0
+                    '                    lasty = curY
+                    '                    Do
+                    '                        curY += bht
+                    '                        If curY > minY Then
+                    '                            Exit Do
+                    '                        End If
+                    '                        fSafe += 1
+                    '                    Loop While fSafe < 50
+                    '                    Dim tps1 As New Point2d(curX, lasty)
+                    '                    Dim tps2 As New Point2d(curX - 0.02, curY)
+                    '                    footPts.Add(tps1)
+                    '                    footPts.Add(tps2)
+                    '                End If
+                    '            End If
+                    '            'SkipPt:
+                    '        End Using
 
-                        Loop While failsafe < 10000
+                    '        failsafe += 1
+                    '        If curX < endX Then Exit Do
 
-                    End If
+                    '    Loop While failsafe < 10000
 
-                    bl.Dispose()
+                    'End If
 
-                    'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-                    'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
-                    Using pl As New Polyline
-                        For k = 0 To footPts.Count - 1
-                            pl.AddVertexAt(k, footPts(k), 0, 0, 0)
-                        Next
-                        If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
-                        curSpc.AppendEntity(pl)
-                        acTrans.AddNewlyCreatedDBObject(pl, True)
-                    End Using
+                    'bl.Dispose()
+
+                    ''Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                    ''Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                    'Using pl As New Polyline
+                    '    For k = 0 To footPts.Count - 1
+                    '        pl.AddVertexAt(k, footPts(k), 0, 0, 0)
+                    '    Next
+                    '    If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                    '    curSpc.AppendEntity(pl)
+                    '    acTrans.AddNewlyCreatedDBObject(pl, True)
+                    'End Using
 
                     acTrans.Commit()
 
@@ -2065,6 +2143,7 @@ SkipPt:
                     'acTrans.Abort()
                     Exit Sub
                 End Try
+
 
             End Using
 
@@ -2075,9 +2154,59 @@ SkipPt:
             Dim DwgDB As Database = CurDwg.Database
             Dim ed As Editor = CurDwg.Editor
 
-            Dim peo As New PromptEntityOptions(vbLf & "Pick polyline for the top of footing.")
-
+            Dim rwData As New RetainingWall
+            Dim useCurrent As Boolean
+            Dim pb1 As Point3d
+            Dim pltside As Integer
             Dim topId As ObjectId
+
+            If m_RWallData IsNot Nothing Then
+                useCurrent = YesNoQuery(vbLf & "Do you want to use the previous retaining wall parameters?")
+            End If
+
+            If useCurrent Then
+                rwData = m_RWallData
+            Else
+                Dim pdo2 As New PromptDistanceOptions(vbLf & "Enter the vertical exaggeration factor.")
+
+                With pdo2
+                    .DefaultValue = 5
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
+
+                If pdr2.Status = PromptStatus.OK Then
+                    Dim vScale As Double = pdr2.Value
+                    rwData.VertFactor = vScale
+                Else
+                    Exit Sub
+                End If
+
+                Dim pdo1 As New PromptDistanceOptions(vbLf & "Enter or pick the minimum footing thickness.")
+
+                With pdo1
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdr1 As PromptDoubleResult = ed.GetDistance(pdo1)
+
+                If pdr1.Status = PromptStatus.OK Then
+                    Dim fThick As Double = pdr1.Value
+                    rwData.FootingThickness = fThick
+                Else
+                    Exit Sub
+                End If
+
+            End If
+
+            Dim peo As New PromptEntityOptions(vbLf & "Pick polyline for the top of footing.")
 
             With peo
                 .AllowNone = False
@@ -2091,236 +2220,782 @@ SkipPt:
                 Exit Sub
             End If
 
+
             Dim ppo As New PromptPointOptions(vbLf & "Pick point for the top of footing at start point")
             With ppo
                 .AllowNone = False
             End With
 
-            Dim pb1 As Point3d
             Dim ppr As PromptPointResult = ed.GetPoint(ppo)
 
             If ppr.Status = PromptStatus.OK Then
                 pb1 = ppr.Value
+                rwData.StartTopFooting = pb1
             Else
                 Exit Sub
             End If
 
-            Dim pdo1 As New PromptDistanceOptions(vbLf & "Enter or pick the minimum footing thickness.")
+            With ppo
+                .Message = vbLf & "Pick approximate location where the steps will end."
+                .UseBasePoint = True
+                .BasePoint = pb1
+            End With
 
-            With pdo1
-                .AllowArbitraryInput = True
-                .AllowZero = False
-                .AllowNegative = False
+            Dim dirPt As Point3d
+            ppr = ed.GetPoint(ppo)
+
+            If ppr.Status = PromptStatus.OK Then
+                dirPt = ppr.Value
+            Else
+                Exit Sub
+            End If
+
+            Dim endX As Double = dirPt.X
+
+            If dirPt.X > pb1.X Then
+                pltside = 1  'wall plots from left to right
+            Else
+                pltside = -1  'wall plots from right to left
+            End If
+
+            rwData.Direction = pltside
+
+            Try
+
+                If Not topId = ObjectId.Null Then
+                    Dim goodFoot As Boolean = FootBottom(topId, pb1, rwData, pltside)
+                End If
+
+                'Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
+                'Dim cover As Double = cvr * vScale
+
+                'Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+
+                '    Try
+
+                '        Dim baseline As DBObject = acTrans.GetObject(topId, OpenMode.ForRead)
+                '        Dim bl As Polyline = TryCast(baseline, Polyline)
+                '        'Dim tempObj As Object = GetVertexCoords(topid)
+
+                '        If bl Is Nothing OrElse bl.Closed = True Then
+                '            MessageBox.Show("Error.  Picked entity cannot be used for top of footing path.")
+                '            acTrans.Abort()
+                '            Exit Sub
+                '        End If
+
+                '        'If pb1.GetVectorTo(bl.StartPoint).Length > pb1.GetVectorTo(bl.EndPoint).Length Then
+                '        '    If Not bl.IsWriteEnabled Then bl.UpgradeOpen()
+                '        '    bl.ReverseCurve()
+                '        '    'tempObj = GetVertexCoords(bl.ObjectId)
+                '        'End If
+
+                '        'Dim spX As Double = bl.StartPoint.X
+                '        'Dim epX As Double = bl.EndPoint.X
+
+                '        'If spX < epX Then
+                '        '    pltSide = 1
+                '        'Else
+                '        '    pltSide = -1
+                '        'End If
+
+                '        'If ide < 0 Then  'bl oriented from right to left
+                '        '    If spX < epX Then
+                '        '        If Not bl.IsWriteEnabled Then bl.UpgradeOpen()
+                '        '        bl.ReverseCurve()
+                '        '        'tempObj = GetVertexCoords(bl.ObjectId)
+                '        '        GoTo TryAgain
+                '        '    End If
+                '        'Else  'bl oriented from left to right
+                '        '    If spX > epX Then
+                '        '        If Not bl.IsWriteEnabled Then bl.UpgradeOpen()
+                '        '        bl.ReverseCurve()
+                '        '        'tempObj = GetVertexCoords(bl.ObjectId)
+                '        '        GoTo TryAgain
+                '        '    End If
+                '        'End If
+
+                '        Dim tempObj As Object = GetVertices(bl.ObjectId)
+                '        Dim numverts As Long = bl.NumberOfVertices
+                '        Dim ptcol As Point2dCollection
+
+                '        If TypeOf tempObj Is Point3dCollection Then
+                '            Dim tempPoints As Point3dCollection = TryCast(tempObj, Point3dCollection)
+                '            If tempPoints IsNot Nothing Then
+                '                ptcol = AcCommon.ConvertPoints2d(tempPoints)
+                '            Else
+                '                Exit Sub
+                '            End If
+                '        ElseIf TypeOf tempObj Is Point2dCollection Then
+                '            ptcol = CType(tempObj, Point2dCollection)
+                '            If ptcol Is Nothing Then Exit Sub
+                '        Else
+                '            Exit Sub
+                '        End If
+
+                '        'Dim ofPt As New Point3d(bl.StartPoint.X, bl.StartPoint.Y - cover, 0)
+                '        'Dim transVect As Vector3d = bl.StartPoint.GetVectorTo(ofPt)
+
+                '        'Dim bl As Polyline = tbl.Clone
+                '        'bl.TransformBy(Matrix3d.Displacement(transVect))
+                '        'If bl.Elevation <> 0 Then bl.Elevation = 0
+
+                '        'If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                '        'curSpc.AppendEntity(bl)
+                '        'acTrans.AddNewlyCreatedDBObject(bl, True)
+
+                '        'Dim cont As Boolean = True
+
+                '        Dim linePts As New Point2dCollection
+                '        Dim firstpt As New Point2d(pb1.X, pb1.Y - cover)
+                '        linePts.Add(firstpt)
+
+                '        If pltSide > 0 Then  'reference moves from left to right
+                '            For i = 0 To numverts - 1
+                '                If i = numverts - 1 Then
+                '                    linePts.Add(New Point2d(bl.EndPoint.X, bl.EndPoint.Y - cover))
+                '                Else
+                '                    Dim curPt As Point2d = ptcol(i)
+                '                    Dim nextPt As Point2d = ptcol(i + 1)
+
+                '                    Dim curY As Double = ptcol(i).Y
+                '                    Dim nextY As Double = ptcol(i + 1).Y
+                '                    Dim olap As Double = 2 * Abs((curY - nextY) / vScale)
+                '                    If olap < cvr Then olap = cvr
+
+                '                    If nextY > curY Then 'current point is at a step up
+                '                        Dim stepBotX As Double = curPt.X + olap
+                '                        Dim stepTopX As Double = curPt.X + (2 * olap)
+                '                        Dim botStep As New Point2d(stepBotX, curY - cover)
+                '                        Dim topstep As New Point2d(stepTopX, nextY - cover)
+                '                        If Not botStep = firstpt Then linePts.Add(botStep)
+                '                        linePts.Add(topstep)
+                '                    ElseIf nextY < curY Then    'current point is a step down
+                '                        Dim stepBotX As Double = curPt.X - olap
+                '                        Dim stepTopX As Double = curPt.X - (2 * olap)
+                '                        Dim topStep As New Point2d(stepTopX, curY - cover)
+                '                        Dim botstep As New Point2d(stepBotX, nextY - cover)
+                '                        If Not topStep = firstpt Then linePts.Add(topStep)
+                '                        linePts.Add(botstep)
+                '                    Else   'current vertex is not a step
+                '                    End If
+                '                End If
+                '            Next
+                '        Else  'reference moves from right to left
+                '            For i = 0 To numverts - 1
+                '                If i = numverts - 1 Then
+                '                    linePts.Add(New Point2d(bl.EndPoint.X, bl.EndPoint.Y - cover))
+                '                Else
+                '                    Dim curPt As Point2d = ptcol(i)
+                '                    Dim nextPt As Point2d = ptcol(i + 1)
+
+                '                    Dim curY As Double = ptcol(i).Y
+                '                    Dim nextY As Double = ptcol(i + 1).Y
+                '                    Dim olap As Double = 2 * Abs((curY - nextY) / vScale)
+                '                    If olap < cvr Then olap = cvr
+
+                '                    If nextY < curY Then 'current point is at a step down
+                '                        Dim stepTopX As Double = curPt.X + (2 * olap)
+                '                        Dim stepBotX As Double = curPt.X + olap
+                '                        Dim topstep As New Point2d(stepTopX, curY - cover)
+                '                        Dim botStep As New Point2d(stepBotX, nextY - cover)
+                '                        If Not topstep = firstpt Then linePts.Add(topstep)
+                '                        linePts.Add(botStep)
+                '                    ElseIf nextY > curY Then    'current point is a step up
+                '                        Dim stepBotX As Double = curPt.X - olap
+                '                        Dim stepTopX As Double = curPt.X - (2 * olap)
+                '                        Dim botStep As New Point2d(stepBotX, curY - cover)
+                '                        Dim topstep As New Point2d(stepTopX, nextY - cover)
+                '                        If Not botStep = firstpt Then linePts.Add(botStep)
+                '                        linePts.Add(topstep)
+                '                    Else   'current vertex is not a step
+                '                    End If
+                '                End If
+                '            Next
+                '        End If
+
+                '        If Not bl.IsDisposed Then bl.Dispose()
+
+                '        'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                '        'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+
+                '        Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
+
+                '        Using pl As New Polyline
+                '            For k = 0 To linePts.Count - 1
+                '                pl.AddVertexAt(k, linePts(k), 0, 0, 0)
+                '            Next
+                '            If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                '            curSpc.AppendEntity(pl)
+                '            acTrans.AddNewlyCreatedDBObject(pl, True)
+                '        End Using
+
+                'acTrans.Commit()
+
+            Catch ex As Exception
+                MessageBox.Show(vbLf & "Error in footing layout command.  Check data and try again." & vbLf & vbLf & ex.Message)
+                'acTrans.Abort()
+            End Try
+        End Sub
+
+
+        <CommandMethod("CWProf")>
+        Public Sub ConcreteWallProfiles()
+            Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim DwgDB As Database = CurDwg.Database
+            Dim ed As Editor = CurDwg.Editor
+
+            Dim pb1 As Point3d
+            Dim pb2 As Point3d
+
+            'create a retaining wall object
+            Dim rwData As New RetainingWall With {.HasConcreteBase = False}
+            Dim useCurrent As Boolean = False
+
+            'check for current data
+            If m_RWallData IsNot Nothing Then
+                useCurrent = YesNoQuery(vbLf & "Do you want to use the previous retaining wall parameters?")
+                If useCurrent Then rwData = m_RWallData
+            End If
+
+            Dim topHasSteps As Boolean = False
+            'Dim twID As ObjectId
+
+            If Not useCurrent Then
+
+                Dim pdoVFact As New PromptDistanceOptions(vbLf & "Enter the vertical exaggeration factor.")
+
+                With pdoVFact
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.VertFactor Else .DefaultValue = 1
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdrVFact As PromptDoubleResult = ed.GetDistance(pdoVFact)
+
+                'save vert factor in rwall object
+                If pdrVFact.Status = PromptStatus.OK Then
+                    rwData.VertFactor = pdrVFact.Value
+                Else
+                    Exit Sub
+                End If
+
+                topHasSteps = YesNoQuery(vbLf & "Will the top of the wall have steps (answer no for a sloped wall)?")
+
+                'get top of wall step height - can be anything with a concrete stem
+                If topHasSteps Then
+
+                    Dim topStepOp As New PromptDistanceOptions(vbLf & "Pick or enter the vertical distance (in feet) for each step in the top of the wall")
+
+                    With topStepOp
+                        If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingStepHeight Else .DefaultValue = 0.67
+                        .AllowNegative = False
+                        .AllowNone = False
+                        .AllowZero = False
+                    End With
+
+                    Dim TopStepRes As PromptDoubleResult = ed.GetDistance(topStepOp)
+                    If TopStepRes.Status = PromptStatus.OK Then
+                        rwData.TopStepHeight = TopStepRes.Value
+                        'unadjFootStep = footres.Value
+                    Else
+                        Exit Sub
+                    End If
+                Else
+                    rwData.TopStepHeight = 0
+                End If
+
+                'cover dimension
+                Dim pdoCover As New PromptDistanceOptions(vbLf & "Enter or pick minimum cover distance (in feet) between top of footing and ground elevation")
+
+                With pdoCover
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingCover
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdrCover As PromptDoubleResult = ed.GetDistance(pdoCover)
+
+                If pdrCover.Status = PromptStatus.OK Then
+                    rwData.FootingCover = pdrCover.Value
+                Else
+                    Exit Sub
+                End If
+
+                'get footing step height - can be anything with a concrete stem
+                Dim footStepOp As New PromptDistanceOptions(vbLf & "Enter the vertical distance (in feet) for each step in the top of the footing.")
+
+                With footStepOp
+                    If rwData.TopStepHeight <> 0 Then .DefaultValue = m_RWallData.TopStepHeight Else .DefaultValue = 0.5
+                    .AllowNegative = False
+                    .AllowNone = False
+                    .AllowZero = False
+                End With
+
+                Dim footStepRes As PromptDoubleResult = ed.GetDistance(footStepOp)
+                If footStepRes.Status = PromptStatus.OK Then
+                    rwData.BrickHeight = footStepRes.Value
+                    rwData.FootingStepHeight = footStepRes.Value
+                Else
+                    Exit Sub
+                End If
+
+                'get length of a CMU.  1/2 of this value will be used for each check of wall height and footing depth
+                Dim pdo2 As New PromptDistanceOptions(vbLf & "Enter the incremental distance (in feet) to check profile elevations. (Minimum step length)")
+
+                With pdo2
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.BrickLength Else .DefaultValue = 1
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
+
+                If pdr2.Status = PromptStatus.OK Then
+                    rwData.BrickLength = pdr2.Value
+                Else
+                    Exit Sub
+                End If
+
+                Dim pdoFootThickInches As New PromptDistanceOptions(vbLf & "Enter or pick the minimum footing thickness in inches.")
+                With pdoFootThickInches
+                    If m_RWallData IsNot Nothing Then .DefaultValue = m_RWallData.FootingThicknessInches
+                    .AllowArbitraryInput = True
+                    .AllowZero = False
+                    .AllowNegative = False
+                    .AllowNone = False
+                End With
+
+                Dim pdrFootThickInches As PromptDoubleResult = ed.GetDistance(pdoFootThickInches)
+
+                If pdrFootThickInches.Status = PromptStatus.OK Then
+                    rwData.FootingThicknessInches = pdrFootThickInches.Value
+                Else
+                    Exit Sub
+                End If
+
+                ''''''''''''''''''''''''''''''Pick points and reference lines for location of wall profile'''''''''''''''''''''''''''''''''''''''''''''
+
+            End If
+
+            Dim twId As ObjectId
+
+            If topHasSteps Then
+                Dim peo As New PromptEntityOptions(vbLf & "Pick polyline for the maximum top of wall elevation.")
+
+                With peo
+                    .SetRejectMessage(vbLf & "Must be a polyline entity.")
+                    .AddAllowedClass(GetType(Polyline), True)
+                    .AllowNone = False
+                End With
+
+                Dim per As PromptEntityResult = ed.GetEntity(peo)
+
+                If per.Status = PromptStatus.OK Then
+                    twId = per.ObjectId
+                Else
+                    Exit Sub
+                End If
+            End If
+
+            Dim peo2 As New PromptEntityOptions(vbLf & "Pick polyline for the ground elevation on the toe side of the wall.")
+            With peo2
+                .SetRejectMessage(vbLf & "Must be a polyline entity.")
+                .AddAllowedClass(GetType(Polyline), True)
                 .AllowNone = False
             End With
 
-            Dim pdr1 As PromptDoubleResult = ed.GetDistance(pdo1)
+            Dim egID As ObjectId
 
-            Dim cvr As Double
-
-            If pdr1.Status = PromptStatus.OK Then
-                cvr = pdr1.Value
+            Dim per2 As PromptEntityResult = ed.GetEntity(peo2)
+            If per2.Status = PromptStatus.OK Then
+                egID = per2.ObjectId
             Else
                 Exit Sub
             End If
 
-            Dim pdo2 As New PromptDistanceOptions(vbLf & "Enter the vertical exaggeration factor.")
+            If topHasSteps Then
+                Dim ppoWall As New PromptPointOptions(vbLf & "Pick point for the top of wall at start point")
 
-            With pdo2
-                .DefaultValue = 5
-                .AllowArbitraryInput = True
-                .AllowZero = False
-                .AllowNegative = False
-                .AllowNone = False
-            End With
+                With ppoWall
+                    .AllowNone = False
+                End With
 
-            Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
+                Dim pprWall As PromptPointResult = ed.GetPoint(ppoWall)
 
-            Dim vScale As Double
+                If pprWall.Status = PromptStatus.OK Then
+                    pb1 = pprWall.Value
+                Else
+                    Exit Sub
+                End If
 
-            If pdr2.Status = PromptStatus.OK Then
-                vScale = pdr2.Value
+                Dim ppofoot As New PromptPointOptions(vbLf & "Pick point for the top of the footing at start point or press escape to calculate the top of footing from the wall elevation.")
+                Dim pprFoot As PromptPointResult = ed.GetPoint(ppofoot)
+
+                If pprFoot.Status = PromptStatus.OK Then
+                    pb2 = pprFoot.Value
+                    rwData.StartTopFooting = pb2
+                    rwData.UseFootPoint = True
+                Else
+                    pb2 = Point3d.Origin
+                    rwData.UseFootPoint = False
+                End If
+
+            Else
+                Dim ppoFoot As New PromptPointOptions(vbLf & "Pick point for the top of the footing at the start of the wall.")
+                With ppoFoot
+                    .AllowNone = False
+                End With
+
+                Dim pprFoot As PromptPointResult = ed.GetPoint(ppoFoot)
+
+                If pprFoot.Status = PromptStatus.OK Then
+                    pb2 = pprFoot.Value
+                    pb1 = Point3d.Origin
+                    rwData.StartTopFooting = pb2
+                    rwData.UseFootPoint = True
+                Else
+                    Exit Sub
+                End If
+            End If
+
+            'Dim ppo As New PromptPointOptions(vbLf & "Pick point for the top of wall at start point")
+
+            'With ppo
+            '    .AllowNone = False
+            'End With
+
+            'Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+
+            'If ppr.Status = PromptStatus.OK Then
+            '    pb1 = ppr.Value
+            'Else
+            '    Exit Sub
+            'End If
+
+            Dim ppo2 As New PromptPointOptions(vbLf & "Pick approximate location where the wall will end.")
+
+            Dim dirPt As Point3d
+            Dim ppr2 As PromptPointResult = ed.GetPoint(ppo2)
+
+            If ppr2.Status = PromptStatus.OK Then
+                dirPt = ppr2.Value
             Else
                 Exit Sub
             End If
 
-            Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
-            Dim cover As Double = cvr * vScale
+            Dim pltSide As Integer
 
+            If Not pb1 = Point3d.Origin Then
+                If dirPt.X > pb1.X Then
+                    pltSide = 1
+                Else
+                    pltSide = -1
+                End If
+            ElseIf Not pb2 = Point3d.Origin Then
+                If dirPt.X > pb2.X Then
+                    pltSide = 1
+                Else
+                    pltSide = -1
+                End If
+            End If
 
-            Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+            Dim endX As Double = dirPt.X
+            Dim bht As Double = rwData.ProfBrickHt
+            Dim blen As Double = rwData.BrickLength
+            Dim topStpHt As Double = rwData.ProfTopStepHt
+            Dim vfact As Double = rwData.VertFactor
+            Dim cover As Double = rwData.ProfFootCover
+            Dim footstep As Double = rwData.ProfFootStep
+            Dim footthk As Double = rwData.ProfFootThickness
 
-                Try
+            'Debug.Print(vbLf & bht & vbLf & blen & vbLf & vfact & vbLf & cover & vbLf & footstep & vbLf & footthk & vbLf)
 
-                    Dim baseline As DBObject = acTrans.GetObject(topId, OpenMode.ForRead)
-                    Dim bl As Polyline = TryCast(baseline, Polyline)
-                    'Dim tempObj As Object = GetVertexCoords(topid)
+            Try
 
-                    If bl Is Nothing OrElse bl.Closed = True Then
-                        MessageBox.Show("Error.  Picked entity cannot be used for top of footing path.")
-                        acTrans.Abort()
+                ''''''''''''''''''''''''''''''''''Wall Geometry'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+                Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
+
+                    Dim tWallId As ObjectId
+                    If topHasSteps Then tWallId = TopWall(pb1, twId, rwData, dirPt.X, pltSide, acTrans)
+
+                    'Dim adjCover As Double = vFact * cover
+
+                    Dim topFtId As ObjectId
+                    topFtId = TopFooting(egID, pb1, pb2, pltSide, rwData, dirPt.X, acTrans)
+                    Dim strtFoot As Point3d = rwData.StartTopFooting
+
+                    If Not topFtId = ObjectId.Null Then
+                        'Dim tF As Polyline = acTrans.GetObject(topFtId, OpenMode.ForRead)
+                        Dim GoodFooting As Boolean = FootBottom(topFtId, strtFoot, rwData, pltSide)
+                    Else
                         Exit Sub
                     End If
 
-                    If pb1.GetVectorTo(bl.StartPoint).Length > pb1.GetVectorTo(bl.EndPoint).Length Then
-                        If Not bl.IsWriteEnabled Then bl.UpgradeOpen()
-                        bl.ReverseCurve()
-                        'tempObj = GetVertexCoords(bl.ObjectId)
-                    End If
 
-                    Dim spX As Double = bl.StartPoint.X
-                    Dim epX As Double = bl.EndPoint.X
-                    Dim pltSide As Integer
 
-                    If spX < epX Then
-                        pltSide = 1
-                    Else
-                        pltSide = -1
-                    End If
-
-                    'If ide < 0 Then  'bl oriented from right to left
-                    '    If spX < epX Then
-                    '        If Not bl.IsWriteEnabled Then bl.UpgradeOpen()
-                    '        bl.ReverseCurve()
-                    '        'tempObj = GetVertexCoords(bl.ObjectId)
-                    '        GoTo TryAgain
-                    '    End If
-                    'Else  'bl oriented from left to right
-                    '    If spX > epX Then
-                    '        If Not bl.IsWriteEnabled Then bl.UpgradeOpen()
-                    '        bl.ReverseCurve()
-                    '        'tempObj = GetVertexCoords(bl.ObjectId)
-                    '        GoTo TryAgain
-                    '    End If
                     'End If
 
-                    Dim tempObj As Object = GetVertices(bl.ObjectId)
-                    Dim numverts As Long = bl.NumberOfVertices
-                    Dim ptcol As Point2dCollection
 
-                    If TypeOf tempObj Is Point3dCollection Then
-                        Dim tempPoints As Point3dCollection = TryCast(tempObj, Point3dCollection)
-                        If tempPoints IsNot Nothing Then
-                            ptcol = AcCommon.ConvertPoints2d(tempPoints)
-                        Else
-                            Exit Sub
-                        End If
-                    ElseIf TypeOf tempObj Is Point2dCollection Then
-                        ptcol = CType(tempObj, Point2dCollection)
-                        If ptcol Is Nothing Then Exit Sub
-                    Else
-                        Exit Sub
-                    End If
+                    'loop variables
+                    '                    Dim startX As Double = pb1.X
+                    '                    Dim curX As Double = pb1.X
+                    '                    Dim curY As Double = pb1.Y
+                    '                    Dim lasty As Double = curY
 
-                    'Dim ofPt As New Point3d(bl.StartPoint.X, bl.StartPoint.Y - cover, 0)
-                    'Dim transVect As Vector3d = bl.StartPoint.GetVectorTo(ofPt)
+                    '                    Dim refPln As New Plane(New Point3d(0, 0, 0), Vector3d.ZAxis)
 
-                    'Dim bl As Polyline = tbl.Clone
-                    'bl.TransformBy(Matrix3d.Displacement(transVect))
-                    'If bl.Elevation <> 0 Then bl.Elevation = 0
+                    '                    Dim topPts As New Point2dCollection
+                    '                    Dim tempPt2d As Point2d = pb1.Convert2d(refPln)
+                    '                    topPts.Add(tempPt2d)
 
-                    'If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
-                    'curSpc.AppendEntity(bl)
-                    'acTrans.AddNewlyCreatedDBObject(bl, True)
+                    '                    Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
 
-                    'Dim cont As Boolean = True
+                    '                    Dim brk As Integer = 0
+                    '                    Dim failsafe As Integer = 0
+                    '                    Dim lastx As Double = curX
 
-                    Dim linePts As New Point2dCollection
-                    Dim firstpt As New Point2d(pb1.X, pb1.Y - cover)
-                    linePts.Add(firstpt)
+                    '                    If topHasSteps Then
+                    '                        'get the top of the wall and EG (toe elevation)
+                    '                        Dim baseline As DBObject = acTrans.GetObject(twId, OpenMode.ForRead)
+                    '                        Dim bl As Polyline = TryCast(baseline, Polyline)
 
-                    If pltSide > 0 Then  'reference moves from left to right
-                        For i = 0 To numverts - 1
-                            If i = numverts - 1 Then
-                                linePts.Add(New Point2d(bl.EndPoint.X, bl.EndPoint.Y - cover))
-                            Else
-                                Dim curPt As Point2d = ptcol(i)
-                                Dim nextPt As Point2d = ptcol(i + 1)
+                    '                        'temporary coordinates of vertical line for testing y coordinates
+                    '                        Dim temppos2d As New Point2d(curX, pb1.Y - 1000)
+                    '                        Dim tempneg2d As New Point2d(curX, pb1.Y + 1000)
 
-                                Dim curY As Double = ptcol(i).Y
-                                Dim nextY As Double = ptcol(i + 1).Y
-                                Dim olap As Double = 2 * Abs((curY - nextY) / vScale)
-                                If olap < cvr Then olap = cvr
+                    '                        'make sure bline is good object
+                    '                        If bl Is Nothing OrElse bl.Closed = True Then
+                    '                            MessageBox.Show("Error.  Picked entity cannot be used for top of wall or polyline is closed.")
+                    '                            acTrans.Abort()
+                    '                            Exit Sub
+                    '                        End If
+                    'TryAgain:
+                    '                        'make sure the z coordinate of the reference pline is 0
+                    '                        If bl.Elevation <> 0 Then bl.Elevation = 0
 
-                                If nextY > curY Then 'current point is at a step up
-                                    Dim stepBotX As Double = curPt.X + olap
-                                    Dim stepTopX As Double = curPt.X + (2 * olap)
-                                    Dim botStep As New Point2d(stepBotX, curY - cover)
-                                    Dim topstep As New Point2d(stepTopX, nextY - cover)
-                                    If Not botStep = firstpt Then linePts.Add(botStep)
-                                    linePts.Add(topstep)
-                                ElseIf nextY < curY Then    'current point is a step down
-                                    Dim stepBotX As Double = curPt.X - olap
-                                    Dim stepTopX As Double = curPt.X - (2 * olap)
-                                    Dim topStep As New Point2d(stepTopX, curY - cover)
-                                    Dim botstep As New Point2d(stepBotX, nextY - cover)
-                                    If Not topStep = firstpt Then linePts.Add(topStep)
-                                    linePts.Add(botstep)
-                                Else   'current vertex is not a step
-                                End If
-                            End If
-                        Next
-                    Else  'reference moves from right to left
-                        For i = 0 To numverts - 1
-                            If i = numverts - 1 Then
-                                linePts.Add(New Point2d(bl.EndPoint.X, bl.EndPoint.Y - cover))
-                            Else
-                                Dim curPt As Point2d = ptcol(i)
-                                Dim nextPt As Point2d = ptcol(i + 1)
+                    '                        If pltSide = 1 Then  'reference moves from left to right
+                    '                            Do
+                    '                                'create a temporary line for testing y coordinates
+                    '                                Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
+                    '                                Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
 
-                                Dim curY As Double = ptcol(i).Y
-                                Dim nextY As Double = ptcol(i + 1).Y
-                                Dim olap As Double = 2 * Abs((curY - nextY) / vScale)
-                                If olap < cvr Then olap = cvr
+                    '                                Using tLine As New Polyline
 
-                                If nextY < curY Then 'current point is at a step down
-                                    Dim stepTopX As Double = curPt.X + (2 * olap)
-                                    Dim stepBotX As Double = curPt.X + olap
-                                    Dim topstep As New Point2d(stepTopX, curY - cover)
-                                    Dim botStep As New Point2d(stepBotX, nextY - cover)
-                                    If Not topstep = firstpt Then linePts.Add(topstep)
-                                    linePts.Add(botStep)
-                                ElseIf nextY > curY Then    'current point is a step up
-                                    Dim stepBotX As Double = curPt.X - olap
-                                    Dim stepTopX As Double = curPt.X - (2 * olap)
-                                    Dim botStep As New Point2d(stepBotX, curY - cover)
-                                    Dim topstep As New Point2d(stepTopX, nextY - cover)
-                                    If Not botStep = firstpt Then linePts.Add(botStep)
-                                    linePts.Add(topstep)
-                                Else   'current vertex is not a step
-                                End If
-                            End If
-                        Next
-                    End If
+                    '                                    With tLine
+                    '                                        .AddVertexAt(0, negpt2d, 0, 0, 0)
+                    '                                        .AddVertexAt(1, pospt2d, 0, 0, 0)
+                    '                                    End With
 
-                    If Not bl.IsDisposed Then bl.Dispose()
+                    '                                    Dim pts2d As New Point3dCollection
 
-                    'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
-                    'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                    '                                    'get the intersection point of the temporary vertical line and the top of the wall
+                    '                                    bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
 
-                    Dim curSpc As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForRead)
+                    '                                    'make sure we have an intersection (points in the collection pts2d)
+                    '                                    If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
 
-                    Using pl As New Polyline
-                        For k = 0 To linePts.Count - 1
-                            pl.AddVertexAt(k, linePts(k), 0, 0, 0)
-                        Next
-                        If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
-                        curSpc.AppendEntity(pl)
-                        acTrans.AddNewlyCreatedDBObject(pl, True)
-                    End Using
+                    '                                        'make minY the top of the wall (refY) - 1 brick height
+                    '                                        Dim refY As Double = pts2d(0).Y
+                    '                                        Dim minY As Double = refY - topStpHt
+
+                    '                                        'check to see if refy is within 1 brick height of cury
+                    '                                        If curY > minY Then  'cury is above minimum elevation
+                    '                                            If curY <= refY Then  'cury is below reference line so this is a good point
+                    '                                                'keep track of x value for later and move down the wall
+                    '                                                lastx = curX
+                    '                                                curX = startX + (brk * 0.5 * blen)
+                    '                                                'if next point is beyond end of bl then create one final point
+                    '                                                If curX > endX Then
+                    '                                                    Dim tps1 As New Point2d(curX, curY)
+                    '                                                    topPts.Add(tps1)
+                    '                                                End If
+                    '                                                brk += 1
+                    '                                            Else  'cury is above reference line nso adjust the elevation by step height
+                    '                                                Dim fSafe As Integer = 0
+                    '                                                'store current y before adjusting
+                    '                                                lasty = curY
+                    '                                                'adjust height until it is within 1 brick below top of wall
+                    '                                                Do
+                    '                                                    curY -= topStpHt
+                    '                                                    If curY < refY Then
+                    '                                                        Exit Do
+                    '                                                    End If
+                    '                                                    fSafe += 1
+                    '                                                Loop While fSafe < 50
+                    '                                                'set points for the bottom of the previous step and the top of the current step
+                    '                                                Dim tps1 As New Point2d(curX, lasty)
+                    '                                                Dim tps2 As New Point2d(curX + 0.02, curY)
+                    '                                                topPts.Add(tps1)
+                    '                                                topPts.Add(tps2)
+                    '                                            End If
+                    '                                        Else    'cury is below minimum
+                    '                                            Dim fSafe As Integer = 0
+                    '                                            'store current y value and loop until y is within 1 brick of the top of wall
+                    '                                            lasty = curY
+                    '                                            Do
+                    '                                                curY += topStpHt
+                    '                                                If curY > minY Then
+                    '                                                    Exit Do
+                    '                                                End If
+                    '                                                fSafe += 1
+                    '                                            Loop While fSafe < 50
+                    '                                            'set points for the bottom of the previous step and the top of the current step
+                    '                                            Dim tps1 As New Point2d(curX, lasty)
+                    '                                            Dim tps2 As New Point2d(curX + 0.02, curY)
+                    '                                            topPts.Add(tps1)
+                    '                                            topPts.Add(tps2)
+                    '                                        End If
+
+                    '                                    Else
+                    '                                        MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
+                    '                                        Exit Sub
+                    '                                    End If
+
+                    '                                End Using
+
+                    '                                failsafe += 1
+                    '                                If curX > endX Then Exit Do
+
+                    '                                'limit the loop to 5000 brick lengths
+                    '                            Loop While failsafe < 5000
+
+                    '                            Debug.Print(failsafe)
+
+                    '                        Else  'reference moves from right to left
+                    '                            Do
+                    '                                Dim negpt2d As New Point2d(curX, pb1.Y - 1000)
+                    '                                Dim pospt2d As New Point2d(curX, pb1.Y + 1000)
+
+                    '                                Using tLine As New Polyline
+
+                    '                                    With tLine
+                    '                                        .AddVertexAt(0, negpt2d, 0, 0, 0)
+                    '                                        .AddVertexAt(1, pospt2d, 0, 0, 0)
+                    '                                    End With
+
+                    '                                    'If tLine.Elevation <> 0 Then tLine.Elevation = 0
+
+                    '                                    Dim pts2d As New Point3dCollection
+
+                    '                                    bl.IntersectWith(tLine, Intersect.OnBothOperands, pts2d, IntPtr.Zero, IntPtr.Zero)
+
+                    '                                    'If pts2d.Count <= 0 Then
+                    '                                    '    tLine.Dispose()
+                    '                                    '    GoTo SkipPt
+                    '                                    'End If
+
+                    '                                    'check to see if refy is within 1 brick height of cury
+                    '                                    If pts2d IsNot Nothing AndAlso pts2d.Count > 0 Then
+
+                    '                                        'check to see if refy is within 1 brick height of cury
+                    '                                        Dim refY As Double = pts2d(0).Y
+                    '                                        Dim minY As Double = refY - topStpHt
+                    '                                        Dim elevDiff As Double = refY - curY
+
+                    '                                        If curY > minY Then  'cury is above minimum
+                    '                                            If curY <= refY Then  'cury is below reference line
+                    '                                                'Dim lastx As Double = curX
+                    '                                                lastx = curX
+                    '                                                curX = startX - (brk * 0.5 * blen)
+                    '                                                'if next point is beyond end of bl then create one final point
+                    '                                                If curX < endX Then
+                    '                                                    Dim tps1 As New Point2d(curX, curY)
+                    '                                                    topPts.Add(tps1)
+                    '                                                End If
+                    '                                                brk += 1
+                    '                                            Else  'cury is above reference line
+                    '                                                Dim fSafe As Integer = 0
+                    '                                                lasty = curY
+                    '                                                Do
+                    '                                                    curY -= topStpHt
+                    '                                                    If curY < refY Then
+                    '                                                        'curY -= topstpht
+                    '                                                        Exit Do
+                    '                                                    End If
+                    '                                                    fSafe += 1
+                    '                                                Loop While fSafe < 50
+                    '                                                Dim tps1 As New Point2d(curX, lasty)
+                    '                                                Dim tps2 As New Point2d(curX - 0.02, curY)
+                    '                                                topPts.Add(tps1)
+                    '                                                topPts.Add(tps2)
+                    '                                            End If
+                    '                                        Else    'cury is below minimum
+                    '                                            Dim fSafe As Integer = 0
+                    '                                            lasty = curY
+                    '                                            Do
+                    '                                                curY += topStpHt
+                    '                                                If curY > minY Then
+                    '                                                    Exit Do
+                    '                                                End If
+                    '                                                fSafe += 1
+                    '                                            Loop While fSafe < 50
+                    '                                            Dim tps1 As New Point2d(curX, lasty)
+                    '                                            Dim tps2 As New Point2d(curX - 0.02, curY)
+                    '                                            topPts.Add(tps1)
+                    '                                            topPts.Add(tps2)
+                    '                                        End If
+
+                    '                                    Else
+                    '                                        MessageBox.Show("Error.  Polyline for max wall height is not long enough.")
+                    '                                        Exit Sub
+                    '                                    End If
+                    'SkipPt:
+                    '                                End Using
+
+                    '                                failsafe += 1
+                    '                                If curX < endX Then Exit Do
+                    '                            Loop While failsafe < 5000
+
+                    '                        End If
+
+                    '                        bl.Dispose()
+
+                    '                        Dim tWallId As ObjectId
+
+                    '                        'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
+                    '                        'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
+                    '                        Using pl As New Polyline
+                    '                            For k = 0 To topPts.Count - 1
+                    '                                pl.AddVertexAt(k, topPts(k), 0, 0, 0)
+                    '                            Next
+                    '                            If Not curSpc.IsWriteEnabled Then curSpc.UpgradeOpen()
+                    '                            tWallId = curSpc.AppendEntity(pl)
+                    '                            acTrans.AddNewlyCreatedDBObject(pl, True)
+                    '                        End Using
+                    '                    End If
+
+                    '                    'Dim adjCover As Double = vFact * cover
+
+                    '                    Dim topFtId As ObjectId = TopFooting(egID, pb1, pltSide, rwData, dirPt.X, acTrans)
+
+                    '                    If Not topFtId = ObjectId.Null Then
+                    '                        Dim tF As Polyline = acTrans.GetObject(topFtId, OpenMode.ForRead)
+                    '                        Dim sp As Point3d = tF.StartPoint
+                    '                        Dim GoodFooting As Boolean = FootBottom(topFtId, sp, rwData, pltSide)
+                    '                    Else
+                    '                        Exit Sub
+                    '                    End If
 
                     acTrans.Commit()
+                    m_RWallData = rwData
 
-                Catch ex As Exception
-                    MessageBox.Show(vbLf & "Error in footing layout command.  Check data and try again." & vbLf & vbLf & ex.Message)
-                    'acTrans.Abort()
+                End Using
 
-                End Try
-            End Using
+            Catch ex As Exception
+                MessageBox.Show(vbLf & "Error in CWProf command.  Check data and try again." & vbLf & vbLf & ex.Message)
+                Exit Sub
+            End Try
+
+
         End Sub
-    End Module
 
-    Public Module WallCommon
         Friend Function FootBottom(topID As ObjectId, pb1 As Point3d, rwData As RetainingWall, pltside As Integer) As Boolean
 
             Dim CurDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -2332,12 +3007,11 @@ SkipPt:
             Using acTrans As Transaction = DwgDB.TransactionManager.StartTransaction
 
                 Try
-
+                    'convert max top of footing line objectid to polyline
                     Dim baseline As DBObject = acTrans.GetObject(topID, OpenMode.ForRead)
-                    Dim bl As Polyline = TryCast(baseline, Polyline)
-                    'Dim tempObj As Object = GetVertexCoords(topid)
+                    Dim bL As Polyline = TryCast(baseline, Polyline)
 
-                    If bl Is Nothing OrElse bl.Closed = True Then
+                    If bL Is Nothing OrElse bL.Closed = True Then
                         MessageBox.Show("Error.  Top of Footing not defined.")
                         Return False
                         Exit Function
@@ -2359,8 +3033,8 @@ SkipPt:
                     '    End If
                     'End If
 
-                    Dim tempObj As Object = GetVertices(bl.ObjectId)
-                    Dim numverts As Long = bl.NumberOfVertices
+                    Dim tempObj As Object = GetVertices(bL.ObjectId)
+                    Dim numverts As Long = bL.NumberOfVertices
                     Dim ptcol As Point2dCollection
 
                     If TypeOf tempObj Is Point3dCollection Then
@@ -2395,40 +3069,49 @@ SkipPt:
 
                     'Dim cont As Boolean = True
 
-                    Dim cover As Double = rwData.ProfFootThickness
+                    Dim cover As Double = rwData.ProfFootCover
                     Dim vScale As Double = rwData.VertFactor
-                    Dim ftThick As Double = rwData.FootingThickness
+                    Dim ftThick As Double = rwData.ProfFootThickness
 
                     Dim linePts As New Point2dCollection
-                    Dim firstpt As New Point2d(pb1.X, pb1.Y - cover)
+                    Dim firstpt As New Point2d(pb1.X, pb1.Y - ftThick)
 
                     linePts.Add(firstpt)
 
                     If pltside > 0 Then  'reference moves from left to right
                         For i = 0 To numverts - 1
+                            'if at the last vertex make it at the x value for the end of the line
                             If i = numverts - 1 Then
-                                linePts.Add(New Point2d(bl.EndPoint.X, bl.EndPoint.Y - cover))
+                                linePts.Add(New Point2d(bL.EndPoint.X, bL.EndPoint.Y - ftThick))
                             Else
+                                'get current and next vertices in baseline
                                 Dim curPt As Point2d = ptcol(i)
                                 Dim nextPt As Point2d = ptcol(i + 1)
 
+                                'get step height
                                 Dim curY As Double = ptcol(i).Y
                                 Dim nextY As Double = ptcol(i + 1).Y
-                                Dim olap As Double = 2 * Abs((curY - nextY) / vScale)
-                                If olap < ftThick Then olap = ftThick
+
+                                'get step height
+                                Dim stepHt As Double = rwData.FootingStepHeight
+                                'Dim stepHt As Double = rwData.FootingStepHeight
+
+                                'if overlap is less than the footing thickness, make the overlap the footing thickness
+                                Dim olap As Double = 2 * stepHt
+                                If olap < rwData.FootingThickness Then olap = rwData.FootingThickness
 
                                 If nextY > curY Then 'current point is at a step up
                                     Dim stepBotX As Double = curPt.X + olap
-                                    Dim stepTopX As Double = curPt.X + (2 * olap)
-                                    Dim botStep As New Point2d(stepBotX, curY - cover)
-                                    Dim topstep As New Point2d(stepTopX, nextY - cover)
+                                    Dim stepTopX As Double = curPt.X + olap + stepHt
+                                    Dim botStep As New Point2d(stepBotX, curY - ftThick)
+                                    Dim topstep As New Point2d(stepTopX, nextY - ftThick)
                                     If Not botStep = firstpt Then linePts.Add(botStep)
                                     linePts.Add(topstep)
                                 ElseIf nextY < curY Then    'current point is a step down
                                     Dim stepBotX As Double = curPt.X - olap
-                                    Dim stepTopX As Double = curPt.X - (2 * olap)
-                                    Dim topStep As New Point2d(stepTopX, curY - cover)
-                                    Dim botstep As New Point2d(stepBotX, nextY - cover)
+                                    Dim stepTopX As Double = curPt.X - olap - stepHt
+                                    Dim topStep As New Point2d(stepTopX, curY - ftThick)
+                                    Dim botstep As New Point2d(stepBotX, nextY - ftThick)
                                     If Not topStep = firstpt Then linePts.Add(topStep)
                                     linePts.Add(botstep)
                                 Else   'current vertex is not a step
@@ -2438,28 +3121,34 @@ SkipPt:
                     Else  'reference moves from right to left
                         For i = 0 To numverts - 1
                             If i = numverts - 1 Then
-                                linePts.Add(New Point2d(bl.EndPoint.X, bl.EndPoint.Y - cover))
+                                linePts.Add(New Point2d(bL.EndPoint.X, bL.EndPoint.Y - ftThick))
                             Else
                                 Dim curPt As Point2d = ptcol(i)
                                 Dim nextPt As Point2d = ptcol(i + 1)
 
                                 Dim curY As Double = ptcol(i).Y
                                 Dim nextY As Double = ptcol(i + 1).Y
-                                Dim olap As Double = 2 * Abs((curY - nextY) / vScale)
-                                If olap < ftThick Then olap = ftThick
+
+                                'get step height
+                                Dim stepHt As Double = Abs((curY - nextY) / vScale)
+                                'Dim stepHt As Double = rwData.FootingStepHeight
+
+                                'if overlap is less than the footing thickness, make the overlap the footing thickness
+                                Dim olap As Double = 2 * stepHt
+                                If olap < rwData.FootingThickness Then olap = rwData.FootingThickness
 
                                 If nextY < curY Then 'current point is at a step down
-                                    Dim stepTopX As Double = curPt.X + olap
-                                    Dim stepBotX As Double = curPt.X + (2 * olap)
-                                    Dim topstep As New Point2d(stepTopX, curY - cover)
-                                    Dim botStep As New Point2d(stepBotX, nextY - cover)
+                                    Dim stepBotX As Double = curPt.X + olap
+                                    Dim stepTopX As Double = curPt.X + olap + stepHt
+                                    Dim topstep As New Point2d(stepTopX, curY - ftThick)
+                                    Dim botStep As New Point2d(stepBotX, nextY - ftThick)
                                     If Not topstep = firstpt Then linePts.Add(topstep)
                                     linePts.Add(botStep)
                                 ElseIf nextY > curY Then    'current point is a step up
                                     Dim stepBotX As Double = curPt.X - olap
-                                    Dim stepTopX As Double = curPt.X - (2 * olap)
-                                    Dim botStep As New Point2d(stepBotX, curY - cover)
-                                    Dim topstep As New Point2d(stepTopX, nextY - cover)
+                                    Dim stepTopX As Double = curPt.X - olap - stepHt
+                                    Dim botStep As New Point2d(stepBotX, curY - ftThick)
+                                    Dim topstep As New Point2d(stepTopX, nextY - ftThick)
                                     If Not botStep = firstpt Then linePts.Add(botStep)
                                     linePts.Add(topstep)
                                 Else   'current vertex is not a step
@@ -2468,7 +3157,7 @@ SkipPt:
                         Next
                     End If
 
-                    If Not bl.IsDisposed Then bl.Dispose()
+                    If Not bL.IsDisposed Then bL.Dispose()
 
                     'Dim blkTbl As BlockTable = acTrans.GetObject(DwgDB.BlockTableId, OpenMode.ForRead)
                     'Dim curspace As BlockTableRecord = acTrans.GetObject(DwgDB.CurrentSpaceId, OpenMode.ForWrite)
@@ -2497,6 +3186,12 @@ SkipPt:
             Return True
 
         End Function
+
+
+
+    End Module
+
+    Public Module WallCommon
 
         <CommandMethod("WallLine", CommandFlags.UsePickSet)>
         Public Sub WallLine()
@@ -2576,10 +3271,11 @@ wallWidthInput:
                     .AllowNegative = False
                     .AllowNone = False
                 End With
-                pDblRes = ed.GetDouble(pDblOpts)
 
-                If pDblRes.Status = PromptStatus.OK Then
-                    width = pDblRes.Value
+                Dim pdblRes2 As PromptDoubleResult = ed.GetDouble(pDblOpts)
+
+                If pdblRes2.Status = PromptStatus.OK Then
+                    width = pdblRes2.Value
                     If width <= 0 Then GoTo EndFunc
                 Else
                     ed.WriteMessage(vbLf & "Input cancelled. Ending command.")
@@ -3536,130 +4232,5 @@ Retry:
         End Function
 
     End Module
-
-    Public Class RetainingWall
-        Inherits CollectionBase
-
-        Private m_HasConcBase As Boolean
-        Private m_vertFootStep As Double
-        Private m_footCover As Double
-        Private m_VertFactor As Double
-        Private m_brickHt As Double
-        Private m_brickLength As Double
-        Private m_footThick As Double
-
-        Public Sub New()
-            MyBase.New
-        End Sub
-
-        Public Sub New(vfactor As Double)
-            MyBase.New
-            m_VertFactor = vfactor
-        End Sub
-        Public Sub New(vfactor As Double, hasConcBase As Boolean, brkht As Double, brklength As Double, footcvr As Double, footingThck As Double, Optional ftStpHeight As Double = 0.667)
-            MyBase.New
-            m_VertFactor = vfactor
-            m_HasConcBase = hasConcBase
-            m_brickHt = brkht
-            m_brickLength = brklength
-            m_footCover = footcvr
-            m_footThick = footingThck
-
-            If hasConcBase Then
-                m_vertFootStep = ftStpHeight
-            Else
-                m_vertFootStep = brkht
-            End If
-
-        End Sub
-
-        Public Property HasConcreteBase As Boolean
-            Get
-                Return m_HasConcBase
-            End Get
-            Set(value As Boolean)
-                m_HasConcBase = value
-            End Set
-        End Property
-
-        Public Property FootingStepHeight As Double
-            Get
-                Return m_vertFootStep
-            End Get
-            Set(value As Double)
-                m_vertFootStep = value
-            End Set
-        End Property
-
-        Public Property FootingCover As Double
-            Get
-                Return m_footCover
-            End Get
-            Set(value As Double)
-                m_footCover = value
-            End Set
-        End Property
-
-        Public Property VertFactor As Double
-            Get
-                Return m_VertFactor
-            End Get
-            Set(value As Double)
-                m_VertFactor = value
-            End Set
-        End Property
-
-        Public Property BrickHeight As Double
-            Get
-                Return m_brickHt
-            End Get
-            Set(value As Double)
-                m_brickHt = value
-            End Set
-        End Property
-
-        Public Property BrickLength As Double
-            Get
-                Return m_brickLength
-            End Get
-            Set(value As Double)
-                m_brickLength = value
-            End Set
-        End Property
-
-        Public Property FootingThickness As Double
-            Get
-                Return m_footThick
-            End Get
-            Set(value As Double)
-                m_footThick = value
-            End Set
-        End Property
-
-        Public ReadOnly Property ProfBrickHt As Double
-            Get
-                Return m_brickHt * m_VertFactor
-            End Get
-        End Property
-
-        Public ReadOnly Property ProfFootCover As Double
-            Get
-                Return m_footCover * m_VertFactor
-            End Get
-        End Property
-
-        Public ReadOnly Property ProfFootThickness As Double
-            Get
-                Return m_footThick * m_VertFactor
-            End Get
-        End Property
-
-        Public ReadOnly Property ProfFootStep As Double
-            Get
-                Return m_vertFootStep * m_VertFactor
-            End Get
-        End Property
-
-    End Class
 
 End Namespace

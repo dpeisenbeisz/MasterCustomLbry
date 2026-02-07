@@ -1,23 +1,26 @@
 ﻿'(C) David Eisenbeisz 2023
 
+Imports System.Collections.Specialized
 Imports System.IO
+Imports System.Math
+Imports System.Reflection
+Imports System.Runtime.InteropServices.ComTypes
+Imports System.Security.Cryptography
+Imports System.Text
 Imports System.Windows.Forms
+Imports System.Windows.Input
+Imports System.Xml
+Imports System.Xml.Schema
+Imports System.Xml.Serialization
 Imports Autodesk.AutoCAD.ApplicationServices
+Imports Autodesk.AutoCAD.Colors
 Imports Autodesk.AutoCAD.DatabaseServices
 Imports Autodesk.AutoCAD.EditorInput
-Imports Autodesk.AutoCAD.Runtime
 Imports Autodesk.AutoCAD.Geometry
-Imports System.Xml
-Imports System.Text
-Imports Autodesk.AutoCAD.Colors
-Imports System.Xml.Serialization
-Imports System.Math
-Imports System.Collections.Specialized
 Imports Autodesk.AutoCAD.PlottingServices
-Imports System.Xml.Schema
-Imports System.Reflection
+Imports Autodesk.AutoCAD.Runtime
+Imports MasterCustomLibrary.AcCommands.MiscCommands
 Imports Microsoft.Build.Tasks.Xaml
-Imports System.Runtime.InteropServices.ComTypes
 
 
 Namespace AcCommon
@@ -605,14 +608,17 @@ Namespace AcCommon
                 Dim bRef As BlockReference = acTrans.GetObject(bRefId, OpenMode.ForRead)
                 If bRef.IsDynamicBlock Then
                     Dim appBTR As BlockTableRecord = acTrans.GetObject(bRef.DynamicBlockTableRecord, OpenMode.ForRead)
+                    btrObjId = appBTR.ObjectId
                     bName = appBTR.Name
                 Else
-                    bName = bRef.Name
+                    btrObjId = bRef.BlockId
+                    bName = bRef.BlockName
                 End If
-                Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
-                btrObjId = blkTbl(bName)
+                'Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
+                'btrObjId = blkTbl(bName)
                 acTrans.Commit()
             End Using
+
             Return btrObjId
         End Function
 
@@ -1313,7 +1319,7 @@ skipit:
 
         End Function
 
-        Public Function GetMyFileName(filtrString As String, diaTitle As String, Optional multi As Boolean = False) As String
+        Public Function GetMyFileName(filtrString As String, diaTitle As String) As String
             'function for getting filename of a particular file type.
 
             Try
@@ -1329,7 +1335,7 @@ skipit:
                     '.InitialDirectory = "\\EESSERVER\datadisk\LITIGATION\Active Cases"
                     .Title = diaTitle
                     .CheckFileExists = True
-                    .Multiselect = multi
+                    .Multiselect = False
                 End With
 
                 'get the dialog result or return nothing
@@ -1405,9 +1411,6 @@ skipit:
 
         End Function
 
-
-
-
         Public Function GetFileNameSameAsDWG(Optional filetype As String = "") As String
 
             'gets a filename same as current dwg but with different extension
@@ -1418,10 +1421,12 @@ skipit:
             Dim folderName As String = Path.GetDirectoryName(dwgName)
             Dim baseName As String = folderName & "\" & dwgBase
             Dim fileNameStr As String
+
             If Not String.IsNullOrEmpty(filetype) Then
-                fileNameStr = baseName & filetype
+                fileNameStr = Path.ChangeExtension(dwgName, filetype)
+                'fileNameStr = baseName & filetype
             Else
-                fileNameStr = baseName & ".dwg"
+                fileNameStr = dwgName
             End If
 
             Return fileNameStr
@@ -1504,6 +1509,7 @@ skipit:
                     If Not m_fldr = "" Then .InitialDirectory = m_fldr
                     .Title = "Select properly formatted CSV file"
                     .CheckFileExists = False
+                    .Multiselect = False
                 End With
 
                 'get the dialog result or return nothing
@@ -1715,11 +1721,12 @@ skipit:
                     dimId = DimTabb(dimName)
                 End If
 
-                Dim DimTabbRecaord As DimStyleTableRecord = CType(trans.GetObject(dimId, OpenMode.ForRead), DimStyleTableRecord)
+                Dim dimTabRecrd As DimStyleTableRecord = CType(trans.GetObject(dimId, OpenMode.ForRead), DimStyleTableRecord)
 
-                If DimTabbRecaord.ObjectId <> db.Dimstyle Then
-                    db.Dimstyle = DimTabbRecaord.ObjectId
-                    db.SetDimstyleData(DimTabbRecaord)
+                If dimTabRecrd.ObjectId <> db.Dimstyle Then
+                    db.Dimstyle = dimTabRecrd.ObjectId
+                    db.SetDimstyleData(dimTabRecrd)
+
                 End If
 
                 Return dimId
@@ -1867,70 +1874,171 @@ tryAgain:
 
         End Function
 
-        Public Function GetDBTextWithStyle(stName As String, acdb As Database, Optional changeMtext As Boolean = False) As ObjectIdCollection
+        Public Function GetDBTextWithStyle(stName As String, acdb As Database) As ObjectIdCollection
 
             Dim objIdset As New ObjectIdCollection
 
             Using acTrans As Transaction = acdb.TransactionManager.StartTransaction
                 Dim blkTbl As BlockTable = acTrans.GetObject(acdb.BlockTableId, OpenMode.ForRead)
                 Dim tsTbl As TextStyleTable = acTrans.GetObject(acdb.TextStyleTableId, OpenMode.ForRead)
+                Dim dimTbl As DimStyleTable = acTrans.GetObject(acdb.DimStyleTableId, OpenMode.ForRead)
+                Dim tSTyleId As ObjectId
+
+                If tsTbl.Has(stName) Then
+                    tSTyleId = tsTbl(stName)
+                Else
+                    Return Nothing
+                    Exit Function
+                End If
+
                 For Each btrID As ObjectId In blkTbl
-                    Dim brt As BlockTableRecord = acTrans.GetObject(btrID, OpenMode.ForRead)
-                    If brt IsNot Nothing Then
-                        For Each entID As ObjectId In brt
-                            Dim dbObj As Object = acTrans.GetObject(entID, OpenMode.ForRead)
-                            If TypeOf dbObj Is DBText Then
-                                Dim textObj As DBText = TryCast(dbObj, DBText)
-                                If textObj IsNot Nothing Then
-                                    If textObj.TextStyleId = tsTbl(stName) Then
-                                        objIdset.Add(entID)
-                                    End If
-                                End If
-                            ElseIf TypeOf dbObj Is MText Then
-                                If changeMtext Then
-                                    Dim textObj As MText = TryCast(dbObj, MText)
-                                    If textObj IsNot Nothing Then
-                                        If textObj.TextStyleId = tsTbl(stName) Then
+                    Dim btr As BlockTableRecord = acTrans.GetObject(btrID, OpenMode.ForRead)
+                    If btr IsNot Nothing Then
+                        For Each entID As ObjectId In btr
+                            Dim myEnt As DBObject = acTrans.GetObject(entID, OpenMode.ForRead)
+                            If TypeOf myEnt Is DBText Then
+                                Using myText As DBText = TryCast(myEnt, DBText)
+                                    If myText IsNot Nothing Then
+                                        If myText.TextStyleId = tSTyleId Then
                                             objIdset.Add(entID)
                                         End If
                                     End If
-                                End If
+                                End Using
+                            ElseIf TypeOf myEnt Is MText Then
+                                Using myMtext As MText = TryCast(myEnt, MText)
+                                    If myMtext IsNot Nothing Then
+                                        If myMtext.TextStyleId = tSTyleId Then
+                                            objIdset.Add(entID)
+                                        End If
+                                    End If
+                                End Using
+                            ElseIf TypeOf myEnt Is AttributeReference Then
+                                Using myAtt As AttributeReference = TryCast(myEnt, AttributeReference)
+                                    If myAtt IsNot Nothing Then
+                                        If myAtt.TextStyleId = tSTyleId Then
+                                            objIdset.Add(entID)
+                                        End If
+                                    End If
+                                End Using
+                            ElseIf TypeOf myEnt Is Dimension Then
+                                Using myDim As Dimension = TryCast(myEnt, Dimension)
+                                    If myDim IsNot Nothing Then
+                                        If myDim.TextStyleId = tSTyleId Then
+                                            objIdset.Add(entID)
+                                        End If
+                                    End If
+                                End Using
+                            ElseIf TypeOf myEnt Is MLeader Then
+                                Using myDim As MLeader = TryCast(myEnt, MLeader)
+                                    If myDim IsNot Nothing Then
+                                        If myDim.TextStyleId = tSTyleId Then
+                                            objIdset.Add(entID)
+                                        End If
+                                    End If
+                                End Using
                             End If
                         Next
                     End If
                 Next
 
+                For Each obId As ObjectId In dimTbl
+                    Using dRec As DimStyleTableRecord = TryCast(acTrans.GetObject(obId, OpenMode.ForRead), DimStyleTableRecord)
+                        If dRec IsNot Nothing Then
+                            If dRec.Dimtxsty = tSTyleId Then
+                                objIdset.Add(obId)
+                            End If
+                        End If
+                    End Using
+                Next
+
                 acTrans.Commit()
                 Return objIdset
-
             End Using
+
+        End Function
+
+        Public Function CheckEntforTextStyle(acTrans As Transaction, db As Database, entId As ObjectId, tStyleId As ObjectId) As Boolean
+
+            Dim myEnt As DBObject = acTrans.GetObject(entId, OpenMode.ForRead)
+            Dim retVal As Boolean = False
+
+            If TypeOf myEnt Is DBText Then
+                Using myText As DBText = TryCast(myEnt, DBText)
+                    If myText IsNot Nothing Then
+                        If myText.TextStyleId = tStyleId Then retVal = True
+                    End If
+                End Using
+
+            ElseIf TypeOf myEnt Is MText Then
+                Using myMtext As MText = TryCast(myEnt, MText)
+                    If myMtext IsNot Nothing Then
+                        If myMtext.TextStyleId = tStyleId Then retVal = True
+                    End If
+                End Using
+            ElseIf TypeOf myEnt Is AttributeReference Then
+                Using myAtt As AttributeReference = TryCast(myEnt, AttributeReference)
+                    If myAtt IsNot Nothing Then
+                        If myAtt.TextStyleId = tStyleId Then retVal = True
+                    End If
+                End Using
+
+            ElseIf TypeOf myEnt Is Dimension Then
+                Using myDim As Dimension = TryCast(myEnt, Dimension)
+                    If myDim IsNot Nothing Then
+                        If myDim.TextStyleId = tStyleId Then retVal = True
+                    End If
+                End Using
+
+            ElseIf TypeOf myEnt Is MLeader Then
+                Using myDim As MLeader = TryCast(myEnt, MLeader)
+                    If myDim IsNot Nothing Then
+                        If myDim.TextStyleId = tStyleId Then retVal = True
+                    End If
+                End Using
+
+            End If
+
+            Dim dimTbl As DimStyleTable = acTrans.GetObject(db.DimStyleTableId, OpenMode.ForRead)
+            For Each obid As ObjectId In dimTbl
+                Using dRec As DimStyleTableRecord = TryCast(acTrans.GetObject(obId, OpenMode.ForRead), DimStyleTableRecord)
+                    If dRec IsNot Nothing Then
+                        If dRec.Dimtxsty = tStyleId Then
+                            retVal = True
+                            Exit For
+                        End If
+                    End If
+                End Using
+            Next
+
+            Return retVal
 
         End Function
 
         Public Function PickSysFnt() As String
             'lets user pick a system font
 
-            Dim fntPicker As New FontPicker
-            Dim fntName As String
-            'Dim styleNm As String
+            Using fntPicker As New FontPicker(False)
+                Dim fntName As String
+                'Dim styleNm As String
 
-            fntPicker.Text = "System Font Picker"
-            fntPicker.PickerType = "sysfont"
+                fntPicker.Text = "System Font Picker"
+                'fntPicker.PickerType = "sysfont"
 
-            'Dim styleNameStr As String
+                'Dim styleNameStr As String
 
-            fntPicker.ShowDialog()
+                fntPicker.ShowDialog()
 
-            If fntPicker.DialogResult = DialogResult.OK Then
-                'MsgBox("Picked Font Name is " & fntPicker.FontName)
-                fntName = fntPicker.FontName
-            Else
-                MessageBox.Show("error picking font name.")
-                Return ""
-                Exit Function
-            End If
+                If fntPicker.DialogResult = DialogResult.OK Then
+                    'MsgBox("Picked Font Name is " & fntPicker.FontName)
+                    fntName = fntPicker.FontName
+                Else
+                    'MessageBox.Show("Error picking font name.")
+                    Return ""
+                    Exit Function
+                End If
 
-            Return fntName
+                Return fntName
+            End Using
 
         End Function
 
@@ -1995,24 +2103,25 @@ tryAgain:
         Public Function PickStyleName() As String
             'function for picking a textstyle name
 
-            Dim fntPicker As New FontPicker
-            Dim styleName As String
+            Using fntPicker As New FontPicker(True)
+                Dim styleName As String
 
-            fntPicker.Text = "Textstyle Picker"
-            fntPicker.PickerType = "textstyle"
+                fntPicker.Text = "Textstyle Picker"
+                'fntPicker.PickerType = "textstyle"
 
-            fntPicker.ShowDialog()
+                fntPicker.ShowDialog()
 
-            If fntPicker.DialogResult = DialogResult.OK Then
-                'Messagebox.show("Picked Font Name is " & fntPicker.FontName)
-                styleName = fntPicker.FontName
-            Else
-                'Messagebox.show("error picking style.")
-                Return ""
-                Exit Function
-            End If
+                If fntPicker.DialogResult = DialogResult.OK Then
+                    'Messagebox.show("Picked Font Name is " & fntPicker.FontName)
+                    styleName = fntPicker.FontName
+                Else
+                    'Messagebox.show("error picking style.")
+                    Return ""
+                    Exit Function
+                End If
 
-            Return styleName
+                Return styleName
+            End Using
 
         End Function
 
@@ -2059,6 +2168,78 @@ tryAgain:
     Public Module Properties
 
         Private m_ltFname As String
+
+
+        Public Sub SetMUTCDColorToObj(objID As ObjectId, entColor As MUTCDColors)
+
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim dwgDB As Database = curDwg.Database
+
+            'Dim SelResult As PromptSelectionResult = ed.SelectImplied()
+
+            ''If Not SelResult.Status = PromptStatus.OK Then Exit Sub
+
+            'If SelResult.Status = PromptStatus.Error Then
+            '    Dim Seloptions As New PromptSelectionOptions With {.MessageForAdding = String.Format(vbLf & "Select objects to turn off their layers.")}
+            '    'Seloptions.MessageForAdding = String.Format(vbLf & "Select centerline(s)")
+            '    SelResult = ed.GetSelection(Seloptions)
+            'Else
+            '    ed.SetImpliedSelection(New ObjectId(-1) {})
+            'End If
+
+            'If Not SelResult.Status = PromptStatus.OK Then Exit Sub
+
+            'Dim selSet As SelectionSet = SelResult.Value
+            'Dim obIds() As ObjectId = selSet.GetObjectIds
+
+            'Dim mColor As String = [Enum].Parse(GetType(MUTCDColors), entColor, True)
+
+            Dim acdColor As Color
+
+            Select Case entColor
+                Case Is = MUTCDColors.Red
+                    acdColor = Color.FromRgb(175, 39, 2)
+                Case Is = MUTCDColors.Yellow
+                    acdColor = Color.FromRgb(254, 209, 65)
+                Case Is = MUTCDColors.Green
+                    acdColor = Color.FromRgb(0, 103, 71)
+                Case Is = MUTCDColors.Blue
+                    acdColor = Color.FromRgb(0, 47, 108)
+                Case Is = MUTCDColors.Orange
+                    acdColor = Color.FromRgb(229, 114, 0)
+                Case Is = MUTCDColors.YellowGreen
+                    acdColor = Color.FromRgb(196, 214, 0)
+                Case Is = MUTCDColors.Purple
+                    acdColor = Color.FromRgb(89, 49, 95)
+                Case Is = MUTCDColors.Brown
+                    acdColor = Color.FromRgb(105, 63, 35)
+                Case Is = MUTCDColors.Pink
+                    acdColor = Color.FromRgb(223, 70, 97)
+                Case Is = MUTCDColors.GreenPavement
+                    acdColor = Color.FromRgb(68, 214, 44)
+                Case Is = MUTCDColors.RedPavement
+                    acdColor = Color.FromRgb(218, 41, 28)
+                Case Else
+                    acdColor = Nothing
+            End Select
+
+            Try
+                Using actrans As Transaction = dwgDB.TransactionManager.StartTransaction()
+                    Dim ent As Entity = TryCast(actrans.GetObject(objID, OpenMode.ForWrite), DBObject)
+
+                    If ent IsNot Nothing And acdColor IsNot Nothing Then
+                        ent.Color = acdColor
+                    End If
+                    actrans.Commit()
+                End Using
+
+            Catch ex As Exception
+                ed.WriteMessage(ex.Message)
+            End Try
+
+        End Sub
+
 
         Public Function DwgVersion(filename As String) As String
             Using reader As New StreamReader(filename)
@@ -2345,7 +2526,7 @@ tryAgain:
 
             If cr = DialogResult.OK Then
                 Dim clr As Autodesk.AutoCAD.Colors.Color = cd.Color
-                AcCommands.MiscCommands.myClr = clr
+                AcCommands.MiscCommands.m_myClr = clr
                 Return clr
             Else
                 Return Nothing
@@ -2527,7 +2708,6 @@ Skipit:
 
 
         Public Function GetTangentPoints(ptP As Point3d, c1 As Circle, Optional verbose As Boolean = False) As Point2dCollection
-
             'gets points on a circle that are tangent to an exterior point
 
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -3004,7 +3184,6 @@ Skipit:
                 .Add(p3)
             End With
 
-
             tc1.Dispose()
             tc2.Dispose()
 
@@ -3119,7 +3298,7 @@ Skipit:
                     Exit Function
                 ElseIf cenDist > radsum Then
                     tangents = 4
-                    If verbose Then ed.WriteMessage(vbLf & "Circles have 2 common internal tangents.")
+                    If verbose Then ed.WriteMessage(vbLf & "Circles have 2 common interior tangents.")
                 End If
 
                 Dim r1 As Double = c1.Radius
@@ -3302,7 +3481,7 @@ Skipit:
         End Function
 
         Public Function GetTangentBulge(v1 As Vector2d, v2 As Vector2d) As Double
-            'gets bulge from the tangent of an arc
+            'gets tangent bulge from two approach vectors
 
             Dim blg As Double
             If v1 = v2 Then
@@ -4386,7 +4565,7 @@ OtherSide:
             'gets a list of available sheets in a plot setup
 
             Dim ed As Editor = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument.Editor
-            Dim mySheet As String
+            Dim mySheet As String = ""
 
             If Not String.IsNullOrEmpty(pset.CanonicalMediaName) Then
 
@@ -4408,9 +4587,12 @@ OtherSide:
                         mySheet = ""
                     End If
                 Else
-                    mySheet = Nothing
+                    mySheet = ""
                 End If
-            Else
+            End If
+
+            If mySheet = "" Then
+
                 Dim newPicker As New PlotSettingsForm
                 Dim myPaperSizes As StringCollection = psetVal.GetCanonicalMediaNameList(pset)
                 For Each nm As String In myPaperSizes
@@ -4501,7 +4683,7 @@ TryAgain:
 
         End Sub
 
-        Public Function CreateVP(vtr As ViewTableRecord, vpLayerName As String, hsize As Double, vsize As Double, acTrans As Transaction, pset As PlotSettings, sheetNm As String) As ObjectId
+        Public Function CreateVP(vtr As ViewTableRecord, vpLayerName As String, hsize As Double, vsize As Double, acTrans As Transaction, pset As PlotSettings, sheetNm As String, Optional loName As String = "") As ObjectId
             'creates viewports in existing layouts
             'used by the ImageMasterViews sub
 
@@ -4510,21 +4692,31 @@ TryAgain:
             Dim dwgDB As Database = curDwg.Database
 
             Dim lm As LayoutManager = LayoutManager.Current
-            Dim layId As ObjectId = lm.CreateLayout(vtr.Name)
+            Dim layId As ObjectId
+            Try
+                If loName = "" Then
+                    layId = lm.CreateLayout(vtr.Name)
+                    lm.CurrentLayout = vtr.Name
+                Else
+                    layId = lm.CreateLayout(loName)
+                    lm.CurrentLayout = loName
+                End If
+            Catch
+                Return ObjectId.Null
+                Exit Function
+            End Try
 
-            lm.CurrentLayout = vtr.Name
             Dim myptr = pset.PlotConfigurationName
 
             Dim blkTbl As BlockTable = acTrans.GetObject(dwgDB.BlockTableId, OpenMode.ForRead)
-            Dim curSpace As BlockTableRecord = acTrans.GetObject(dwgDB.CurrentSpaceId, OpenMode.ForWrite)
-            'Dim curSpace As BlockTableRecord = acTrans.GetObject(blkTbl(vtr.Name), OpenMode.ForWrite)
-
             Dim lo As Layout = acTrans.GetObject(layId, OpenMode.ForWrite)
+            Dim curSpace As BlockTableRecord = acTrans.GetObject(lo.BlockTableRecordId, OpenMode.ForWrite)
+            'Dim curSpace As BlockTableRecord = acTrans.GetObject(layId, OpenMode.ForWrite)
 
             Dim vpIDs As ObjectIdCollection = lo.GetViewports
             Dim vp As Autodesk.AutoCAD.DatabaseServices.Viewport
 
-            If vpIDs.Count > 0 Then
+            If vpIDs.Count > 1 Then
                 vp = acTrans.GetObject(vpIDs(1), OpenMode.ForWrite)
                 vp.SetDatabaseDefaults()
                 vp.CenterPoint = New Point3d(hsize / 2, vsize / 2, 0)
@@ -4541,6 +4733,7 @@ TryAgain:
             End If
 
             vp.On = True
+
             If Not String.IsNullOrEmpty(vpLayerName) Then vp.Layer = vpLayerName
 
             lo.CopyFrom(pset)
@@ -4553,6 +4746,7 @@ TryAgain:
             pSetVal.SetPlotType(pset, Autodesk.AutoCAD.DatabaseServices.PlotType.Layout)
             'pSetVal.SetPlotRotation(pset, PlotRotation.Degrees000)
             pSetVal.SetZoomToPaperOnUpdate(pset, True)
+
             Return layId
 
         End Function
@@ -4627,6 +4821,134 @@ TryAgain:
 
     End Module
     Public Module OtherMethods
+
+        Public Function PickCells() As PickCellsArgs
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim dwgDB As Database = curDwg.Database
+            Dim i As Integer = 0
+
+            Dim pca As New PickCellsArgs
+
+            Dim ppo As New PromptPointOptions(vbLf & "Pick upper left corner of first cell")
+            With ppo
+                .AllowNone = False
+                .AllowArbitraryInput = True
+            End With
+
+            Dim p1 As Point3d
+            Dim p2 As Point3d
+            Dim userPick As Boolean = True
+
+            Dim ppr As PromptPointResult = ed.GetPoint(ppo)
+
+            If ppr.Status = PromptStatus.OK Then
+                p1 = ppr.Value
+
+                Dim pco As New PromptCornerOptions(vbLf & "Pick the lower right corner of first cell.", p1)
+                With pco
+                    .UseDashedLine = True
+                    .AllowArbitraryInput = True
+                End With
+
+                Dim pcr As PromptPointResult = ed.GetCorner(pco)
+
+                If pcr.Status = PromptStatus.OK Then
+                    p2 = pcr.Value
+                Else
+                    userPick = False
+                End If
+            Else
+                userPick = False
+            End If
+
+            Dim vert As Double
+            Dim horiz As Double
+
+            If userPick Then
+                horiz = p2.X - p1.X
+                vert = p2.Y - p1.Y
+            Else
+                Dim pdo As New PromptDistanceOptions(vbLf & "Input or pick the horizontal distance for each cell")
+                With pdo
+                    .AllowNegative = True
+                    .Only2d = True
+                    .AllowNone = False
+                End With
+
+                Dim pdr As PromptDoubleResult = ed.GetDistance(pdo)
+
+                If pdr.Status = PromptStatus.OK Then
+                    horiz = pdr.Value
+                Else
+                    Return Nothing
+                    Exit Function
+                End If
+
+                Dim pdo2 As New PromptDistanceOptions(vbLf & "Input or pick the vertical distance for each cell")
+                Dim pdr2 As PromptDoubleResult = ed.GetDistance(pdo2)
+
+                If pdr2.Status = PromptStatus.OK Then
+                    vert = pdr2.Value
+                Else
+                    Return Nothing
+                    Exit Function
+                End If
+            End If
+
+            pca.Vertical = vert
+            pca.Horizontal = horiz
+            pca.point1 = p1
+            pca.point2 = p2
+
+            Return pca
+
+        End Function
+        Public Sub ZoomToEntity(ByVal entityId As ObjectId)
+
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim dwgDB As Database = curDwg.Database
+
+            ' start transaction
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction()
+
+                ' get the entity’ extends
+                Dim ent As Entity = acTrans.GetObject(entityId, OpenMode.ForRead)
+                Dim ext As Extents3d = ent.GeometricExtents
+
+                ZoomToWindow(New Point2d(ext.MinPoint.X, ext.MinPoint.Y), New Point2d(ext.MaxPoint.X, ext.MaxPoint.Y))
+                acTrans.Commit()
+
+            End Using
+
+        End Sub
+
+        Public Sub ZoomToWindow(ByVal minPoint As Point2d, ByVal maxPoint As Point2d)
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim dwgDB As Database = curDwg.Database
+
+            'get the current view
+            Dim vtr As ViewTableRecord = ed.GetCurrentView()
+
+            'start transaction
+            Using acTrans As Transaction = dwgDB.TransactionManager.StartTransaction()
+
+                'get the entity’ extends
+                'configure the new current view
+
+                vtr.Width = maxPoint.X - minPoint.X
+                vtr.Height = maxPoint.Y - minPoint.Y
+                vtr.CenterPoint = New Point2d(minPoint.X + (vtr.Width / 2), minPoint.Y + (vtr.Height / 2))
+
+                'update the view
+                ed.SetCurrentView(vtr)
+                acTrans.Commit()
+
+            End Using
+
+        End Sub
+
         Public Function LtIsLoaded(ltName As String) As Boolean
             'tests if linetype is currently loaded
             Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
@@ -4769,6 +5091,25 @@ TryAgain:
             Return corners
         End Function
 
+        Friend Function GetIntegerValue(msg As String) As Integer
+            Dim curDwg As Document = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument
+            Dim ed As Editor = curDwg.Editor
+            Dim pio As New PromptIntegerOptions(msg)
+            'pio.AllowNegative = False
+
+            Dim pir As PromptIntegerResult = ed.GetInteger(pio)
+
+            Dim res As Integer
+            If pir.Status = PromptStatus.OK Then
+                res = pir.Value
+            Else
+                res = Nothing
+            End If
+
+            Return res
+
+        End Function
+
         Friend Function GetEntityGeoExtents(ByVal entId As ObjectId) As Extents3d
             'returns the extents of an entity from its objectid
 
@@ -4808,6 +5149,38 @@ TryAgain:
         End Function
 
     End Module
+
+    Public Class PickCellsArgs
+        Public Horizontal As Double
+        Public Vertical As Double
+        Public Point1 As Point3d
+        Public Point2 As Point3d
+    End Class
+
+    Public Module Enums
+        Public Enum PickerType
+            SysFont
+            TextStyle
+            PlotScale
+        End Enum
+
+        Public Enum MUTCDColors
+            Red
+            Yellow
+            Green
+            Blue
+            Orange
+            YellowGreen
+            Purple
+            Brown
+            Pink
+            GreenPavement
+            RedPavement
+        End Enum
+
+    End Module
+
+
 
 End Namespace
 
